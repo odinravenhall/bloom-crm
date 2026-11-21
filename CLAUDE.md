@@ -49,6 +49,19 @@ Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`,
 `getFanAiLogs`, `getScheduledMessages`, `fans.lists.*`, `fans.moderation.*`, `creators.massMessage.*`, `medias.*`,
 `creators.getCreators`, `creators.getUnreadCount`, `creators.getHandoffCount`.
 
+Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
+- Le serveur de Substy accepte `Authorization: Bearer <jeton Clerk>` **sans cookies**. Le jeton dure ~1 min :
+  Bloom le tire de la session du compte agence (cookie `__client` de clerk.substy.ai, gardé chiffré dans `data/`)
+  via `POST https://clerk.substy.ai/v1/client/sessions/<sid>/tokens` (form `organization_id`).
+- Temps réel : `GET /api/trpc/creators.onMessage?input={"json":{"creatorId":…}}` en SSE (`event: connected`, puis
+  `data: {"json":{"type":"connection_ready",…}}` et les messages). Un flux par créatrice, à rouvrir à chaque nouveau jeton.
+- `chats.list` : `{creatorId, limit, listId:null, inboxIds:[], aiStatus:"all", handoffOnly:false, query:"", order:"recent",
+  languages:[], platformFilters:[], withSpend:true, unreadOnly:false, direction:"forward"}` → `{items:[{chatId, platform,
+  fan:{fanId, displayName, name, username, avatar, subscription…}, …}]}`.
+- `chats.messages` : `{creatorId, fanId, limit, isUnread:false, direction:"forward", cursor?}` → `{items:[{id, text,
+  medias, previews, status, isRead, sentByAi, sentByEmployee, isAutomationMessage, automation{id,name}, script,
+  isPurchasedByRecipient, isTip, createdAt, …}], nextCursor}`.
+
 ⚠️ API interne : Substy peut la changer sans prévenir. Toute la couche Substy est isolée dans `bridge/` pour corriger
 à un seul endroit.
 
