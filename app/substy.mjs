@@ -1,0 +1,214 @@
+// Pont Bloom ↔ Substy : la session du compte agence (cookie Clerk « __client ») est gardée chiffrée sur le serveur.
+// Toutes les minutes, Bloom en tire un jeton court (≈ 1 min) et appelle l'API interne de app.substy.ai avec
+// `Authorization: Bearer <jeton>` (vérifié le 21/11/2026 : accepté sans cookies). Rien de Substy ne va au navigateur.
+import { randomUUID } from 'node:crypto';
+
+const APP = 'https://app.substy.ai';
+const FAPI = 'https://clerk.substy.ai';
+const CLERK_Q = '__clerk_api_version=2026-11-18&_clerk_js_version=6.46.2';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36';
+
+export class SubstyError extends Error {
+  constructor(status, message, code = null) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** Nouvelle valeur du cookie __client si Clerk le fait tourner (Set-Cookie). */
+function rotated(res) {
+  const all = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [res.headers.get('set-cookie') || ''];
+  for (const c of all) {
+    const m = /(?:^|\s)__client=([^;]+)/.exec(c);
+    if (m && m[1] && m[1] !== '""') return m[1];
+  }
+  return null;
+}
+
+async function fapi(path, client, { method = 'GET', form = null } = {}) {
+  const res = await fetch(`${FAPI}${path}${path.includes('?') ? '&' : '?'}${CLERK_Q}`, {
+    method,
+    headers: {
+      cookie: `__client=${client}`,
+      origin: APP,
+      referer: `${APP}/`,
+      'user-agent': UA,
+      ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
+    },
+    body: form ? new URLSearchParams(form).toString() : undefined,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const next = rotated(res);
+  let body = null;
+  try { body = await res.json(); } catch {}
+  if (!res.ok) {
+    const msg = body?.errors?.[0]?.long_message || body?.errors?.[0]?.message || `Clerk ${res.status}`;
+    throw new SubstyError(res.status === 401 || res.status === 404 ? 401 : 502, msg, body?.errors?.[0]?.code ?? null);
+  }
+  return { body, next };
+}
+
+/**
+ * Une session Substy. `load()` / `save()` lisent et écrivent le cookie (chiffré) là où le serveur le garde.
+ * Le cookie peut tourner : on enregistre toujours la dernière valeur.
+ */
+export class SubstySession {
+  constructor({ load, save, onState }) {
+    this.load = load;
+    this.save = save;
+    this.onState = onState || (() => {});
+    this.jwt = null;
+    this.jwtExp = 0;
+    this.sid = null;
+    this.org = null;
+    this.user = null;
+    this.inflight = null;
+  }
+
+  /** Lit le client Clerk : session active, organisation (agence), utilisateur. */
+  async inspect(client = this.load()) {
+    if (!client) throw new SubstyError(401, 'Aucun compte Substy relié');
+    const { body, next } = await fapi('/v1/client', client);
+    if (next) this.save(next);
+    const c = body?.response;
+    const sessions = (c?.sessions || []).filter((s) => s.status === 'active');
+    const s = sessions.find((x) => x.id === c?.last_active_session_id) || sessions[0];
+    if (!s) throw new SubstyError(401, 'Session Substy expirée ou déconnectée : relie à nouveau le compte');
+    const u = s.user || {};
+    const email = (u.email_addresses || []).find((e) => e.id === u.primary_email_address_id)?.email_address || u.email_addresses?.[0]?.email_address || null;
+    this.sid = s.id;
+    this.org = s.last_active_organization_id || null;
+    this.user = { id: u.id, email, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || email };
+    return { sid: this.sid, org: this.org, user: this.user };
+  }
+
+  /** Jeton court pour l'API de app.substy.ai (renouvelé un peu avant expiration). */
+  async token() {
+    if (this.jwt && Date.now() < this.jwtExp - 10_000) return this.jwt;
+    if (this.inflight) return this.inflight;
+    this.inflight = (async () => {
+      try {
+        if (!this.sid) await this.inspect();
+        const client = this.load();
+        const { body, next } = await fapi(`/v1/client/sessions/${this.sid}/tokens`, client, {
+          method: 'POST',
+          form: this.org ? { organization_id: this.org } : {},
+        });
+        if (next) this.save(next);
+        const jwt = body?.jwt;
+        if (!jwt) throw new SubstyError(502, 'Clerk n’a pas renvoyé de jeton');
+        const exp = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString()).exp * 1000;
+        this.jwt = jwt;
+        this.jwtExp = exp;
+        this.onState({ ok: true, at: Date.now() });
+        return jwt;
+      } catch (e) {
+        this.jwt = null;
+        if (e.status === 401) this.sid = null;
+        this.onState({ ok: false, at: Date.now(), error: e.message });
+        throw e;
+      } finally {
+        this.inflight = null;
+      }
+    })();
+    return this.inflight;
+  }
+
+  /** Appel tRPC (format batch du site). */
+  async call(proc, input) {
+    const go = async () => {
+      const jwt = await this.token();
+      return fetch(`${APP}/api/trpc/${proc}?batch=1`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json', origin: APP, referer: `${APP}/`, 'user-agent': UA },
+        body: JSON.stringify({ 0: input === undefined ? { json: null, meta: { values: ['undefined'], v: 1 } } : { json: input } }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    };
+    let res = await go();
+    if (res.status === 401) {
+      this.jwt = null;
+      res = await go();
+    }
+    let body = null;
+    try { body = await res.json(); } catch {}
+    const r = Array.isArray(body) ? body[0] : body;
+    if (r?.error) {
+      const e = r.error.json || r.error;
+      throw new SubstyError(e?.data?.httpStatus || res.status || 500, e?.message || 'Erreur Substy', e?.data?.code || null);
+    }
+    if (!res.ok) throw new SubstyError(res.status, `Substy ${res.status}`);
+    return r?.result?.data?.json;
+  }
+
+  // --- Raccourcis (formats relevés sur le site le 21/11/2026) ---
+  me() { return this.call('auth.me'); }
+  creators() { return this.call('creators.getCreators', { fetchSettings: true }); }
+  chats(creatorId, { limit = 30, cursor, query = '', unreadOnly = false, aiStatus = 'all', handoffOnly = false } = {}) {
+    return this.call('chats.list', { creatorId, limit, listId: null, inboxIds: [], aiStatus, handoffOnly, query, order: 'recent', languages: [], platformFilters: [], withSpend: true, unreadOnly, direction: 'forward', ...(cursor ? { cursor } : {}) });
+  }
+  messages(creatorId, fanId, { limit = 30, cursor } = {}) {
+    return this.call('chats.messages', { creatorId, fanId, limit, isUnread: false, direction: 'forward', ...(cursor ? { cursor } : {}) });
+  }
+  fan(creatorId, fanId) { return this.call('fans.get', { creatorId, fanId }); }
+  setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
+  send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {
+    return this.call('messages.send', {
+      creatorId, fanId, message, previews: [], replyId, idempotencyKey: randomUUID(),
+      ...(medias.length ? { medias } : {}), ...(price ? { price } : {}), ...(templateId ? { templateId } : {}),
+    });
+  }
+
+  /**
+   * Flux temps réel d'une créatrice (SSE `creators.onMessage`). Reconnexion automatique.
+   * `onEvent(type, data)` reçoit chaque événement ; renvoie une fonction pour arrêter.
+   */
+  stream(creatorId, onEvent, onStatus = () => {}) {
+    let stop = false;
+    let ctrl = null;
+    const loop = async () => {
+      let wait = 2000;
+      while (!stop) {
+        try {
+          const jwt = await this.token();
+          ctrl = new AbortController();
+          const url = `${APP}/api/trpc/creators.onMessage?input=${encodeURIComponent(JSON.stringify({ json: { creatorId } }))}`;
+          const res = await fetch(url, { headers: { authorization: `Bearer ${jwt}`, accept: 'text/event-stream', origin: APP, 'user-agent': UA }, signal: ctrl.signal });
+          if (!res.ok || !res.body) throw new SubstyError(res.status, `Flux ${res.status}`);
+          onStatus({ live: true, at: Date.now() });
+          wait = 2000;
+          const dec = new TextDecoder();
+          let buf = '';
+          let ev = 'message';
+          for await (const chunk of res.body) {
+            buf += dec.decode(chunk, { stream: true });
+            let i;
+            while ((i = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, i).replace(/\r$/, '');
+              buf = buf.slice(i + 1);
+              if (line.startsWith('event:')) ev = line.slice(6).trim();
+              else if (line.startsWith('data:')) {
+                let data = line.slice(5).trim();
+                try { data = JSON.parse(data); } catch {}
+                try { onEvent(ev, data?.json ?? data); } catch {}
+              } else if (line === '') ev = 'message';
+            }
+          }
+          // Le serveur ferme le flux (le jeton a expiré au bout d'une minute) : on se reconnecte tout de suite.
+          onStatus({ live: false, at: Date.now(), reason: 'fermé' });
+        } catch (e) {
+          if (stop) break;
+          onStatus({ live: false, at: Date.now(), reason: e.message });
+          await new Promise((r) => setTimeout(r, wait));
+          wait = Math.min(wait * 2, 60_000);
+        }
+      }
+    };
+    loop();
+    return () => {
+      stop = true;
+      ctrl?.abort();
+    };
+  }
+}
