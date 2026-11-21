@@ -152,6 +152,17 @@ export class SubstySession {
     return this.call('chats.messages', { creatorId, fanId, limit, isUnread: false, direction: 'forward', ...(cursor ? { cursor } : {}) });
   }
   fan(creatorId, fanId) { return this.call('fans.get', { creatorId, fanId }); }
+  validate(content) { return this.call('agency.bannedWords.validateContent', { content }); }
+  vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }
+  vaultMedias(creatorId, { listId, cursor, limit = 40 } = {}) {
+    return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}) });
+  }
+  /** Image / vidéo via le relais de Substy (chemins « /api/creators/<id>/medias/view?url=… » fournis par leur API). */
+  async media(path) {
+    if (!/^\/api\/creators\/[\w-]+\/medias\/view\?/.test(path)) throw new SubstyError(400, 'Chemin de média invalide');
+    const jwt = await this.token();
+    return fetch(`${APP}${path}`, { headers: { authorization: `Bearer ${jwt}`, 'user-agent': UA }, signal: AbortSignal.timeout(30_000) });
+  }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
   send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {
     return this.call('messages.send', {

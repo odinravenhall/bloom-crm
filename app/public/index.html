@@ -5,51 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Bloom CRM</title>
-<style>
-  :root { color-scheme: dark; --bg: #0d0b10; --card: #16131b; --card2: #1e1a25; --line: #2c2634; --fg: #f6f2f8; --muted: #a79fb0;
-          --a: #e879a6; --b: #a78bfa; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; }
-  * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .glow { position: fixed; inset: -20%; z-index: -1; background:
-          radial-gradient(40% 35% at 25% 20%, color-mix(in oklab, var(--a) 22%, transparent), transparent 70%),
-          radial-gradient(35% 30% at 80% 80%, color-mix(in oklab, var(--b) 18%, transparent), transparent 70%); filter: blur(40px); }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-  .logo { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: linear-gradient(135deg, var(--a), var(--b)); }
-  h1 { margin: 0; font-size: 22px; } h2 { margin: 0 0 4px; font-size: 18px; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .card { background: color-mix(in oklab, var(--card) 92%, transparent); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
-  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
-  input, textarea { width: 100%; background: var(--card2); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; outline: none; }
-  input:focus, textarea:focus { border-color: var(--a); }
-  textarea { min-height: 84px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; resize: vertical; }
-  button { margin-top: 16px; border: 0; border-radius: 12px; padding: 11px 18px; font: inherit; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(135deg, var(--a), var(--b)); }
-  button.ghost { background: var(--card2); border: 1px solid var(--line); color: var(--fg); font-weight: 600; }
-  button:disabled { opacity: .5; cursor: default; }
-  ol { margin: 8px 0 0; padding-left: 20px; } li { margin: 4px 0; }
-  code { background: var(--card2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
-  .err { margin-top: 12px; color: var(--bad); font-size: 13px; font-weight: 600; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-  .row:first-of-type { border-top: 0; }
-  .av { width: 38px; height: 38px; border-radius: 50%; background: var(--card2); object-fit: cover; display: grid; place-items: center; font-weight: 700; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card2); border: 1px solid var(--line); }
-  .tip { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: color-mix(in oklab, var(--warn) 10%, transparent); border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); font-size: 13px; }
-  .hidden { display: none; }
-</style>
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <div class="glow"></div>
-<div class="wrap">
-  <header>
-    <div class="logo">✿</div>
-    <div><h1>Bloom CRM</h1><div class="muted">Chatting OnlyFans via Substy</div></div>
-    <div style="flex:1"></div>
-    <button id="logout" class="ghost hidden" style="margin:0">Se déconnecter</button>
-  </header>
 
-  <!-- Première configuration -->
-  <section id="setup" class="hidden">
+<!-- Première configuration -->
+<section id="setup" class="page hidden">
+  <div class="narrow">
+    <header class="brand"><div class="logo">✿</div><div><h1>Bloom CRM</h1><div class="muted">Chatting OnlyFans via Substy</div></div></header>
     <div class="card">
       <h2>Relier ton compte agence Substy</h2>
       <p class="muted">Bloom garde la session Substy sur le serveur (chiffrée) et s’en sert pour lire et envoyer les messages, comme le site de Substy. Elle n’est jamais montrée aux chatteurs.</p>
@@ -58,103 +22,137 @@
         <li>Appuie sur <b>F12</b> → onglet <b>Application</b> → <b>Cookies</b> → <code>https://clerk.substy.ai</code>.</li>
         <li>Clique sur la ligne <code>__client</code>, copie sa <b>Value</b> et colle-la ci-dessous.</li>
       </ol>
-      <div class="tip">Conseil : utilise un compte Substy dédié à Bloom (un employé « Bloom » dans Team Management) et ne te déconnecte pas de ce navigateur : se déconnecter coupe aussi la session de Bloom. Ne colle jamais cette valeur ailleurs qu’ici.</div>
+      <div class="tip">Conseil : utilise un compte Substy dédié à Bloom et ne te déconnecte pas de ce navigateur : se déconnecter coupe aussi la session de Bloom.</div>
       <label for="client">Session Substy (valeur du cookie __client)</label>
-      <textarea id="client" autocomplete="off" spellcheck="false" placeholder="eyJhbGciOi…"></textarea>
+      <textarea id="client" autocomplete="off" spellcheck="false"></textarea>
       <label for="pw">Ton mot de passe Bloom (admin, 10 caractères minimum)</label>
       <input id="pw" type="password" autocomplete="new-password">
-      <button id="setupBtn">Relier Substy et créer mon compte</button>
+      <button id="setupBtn" class="btn">Relier Substy et créer mon compte</button>
       <div id="setupErr" class="err"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Connexion -->
-  <section id="login" class="hidden">
-    <div class="card" style="max-width:420px;margin:40px auto">
-      <h2>Connexion</h2>
+<!-- Connexion -->
+<section id="login" class="page hidden">
+  <div class="narrow" style="max-width:420px">
+    <header class="brand"><div class="logo">✿</div><div><h1>Bloom CRM</h1><div class="muted">Connexion</div></div></header>
+    <div class="card">
       <label for="email">Email</label><input id="email" type="email" autocomplete="username">
       <label for="lpw">Mot de passe</label><input id="lpw" type="password" autocomplete="current-password">
-      <button id="loginBtn">Se connecter</button>
+      <button id="loginBtn" class="btn">Se connecter</button>
       <div id="loginErr" class="err"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- État de la connexion Substy -->
-  <section id="status" class="hidden">
-    <div class="card">
-      <h2>Connexion à Substy</h2>
-      <div id="acct" class="muted"></div>
-      <div id="tok" style="margin-top:8px"></div>
-      <div id="stErr" class="err"></div>
+<!-- Application -->
+<section id="app" class="hidden">
+  <nav class="top">
+    <div class="logo sm">✿</div>
+    <div id="creatorTabs" class="tabs"></div>
+    <div class="grow"></div>
+    <span id="liveDot" class="live" title="Temps réel"></span>
+    <button id="toSettings" class="btn ghost sm">Réglages</button>
+    <button id="logout" class="btn ghost sm">Se déconnecter</button>
+  </nav>
+
+  <!-- Messagerie -->
+  <div id="inbox" class="inbox">
+    <aside class="list">
+      <div class="listHead">
+        <input id="search" placeholder="Rechercher un fan…" autocomplete="off">
+        <div id="filters" class="chips">
+          <button data-f="all" class="chip on">Tous</button>
+          <button data-f="unread" class="chip">Non lus</button>
+          <button data-f="handoff" class="chip">À reprendre</button>
+          <button data-f="ai_on" class="chip">IA active</button>
+          <button data-f="ai_off" class="chip">IA coupée</button>
+        </div>
+      </div>
+      <div id="chats" class="chats"></div>
+    </aside>
+
+    <main class="chat">
+      <div id="empty" class="empty"><div class="logo big">✿</div><p>Choisis une conversation</p></div>
+      <div id="conv" class="hidden conv">
+        <header class="chatHead">
+          <button id="back" class="iconBtn mobileOnly" title="Retour">‹</button>
+          <div class="av" id="cAv"></div>
+          <div class="grow">
+            <div class="name" id="cName"></div>
+            <div class="muted sm" id="cSub"></div>
+          </div>
+          <span id="aiTyping" class="typing hidden">L’IA écrit…</span>
+          <label class="aiSwitch" title="Couper ou rallumer l’IA sur cette conversation">
+            <span id="aiLabel">IA</span>
+            <button id="aiToggle" class="switch" role="switch" aria-checked="false"><span></span></button>
+          </label>
+        </header>
+        <div id="msgs" class="msgs"></div>
+        <div id="sel" class="selBar hidden"></div>
+        <footer class="composer">
+          <textarea id="text" rows="2" placeholder="Écrire au fan…  (Entrée : envoyer · Maj+Entrée : saut de ligne)"></textarea>
+          <div class="compBar">
+            <button id="ppvBtn" class="btn ghost sm">＋ Médias / PPV</button>
+            <span id="sendErr" class="err inline"></span>
+            <div class="grow"></div>
+            <button id="sendBtn" class="btn">Envoyer</button>
+          </div>
+        </footer>
+      </div>
+    </main>
+
+    <aside id="fanPanel" class="fan hidden"></aside>
+  </div>
+
+  <!-- Réglages : état de la connexion Substy -->
+  <div id="settings" class="hidden settings">
+    <div class="narrow">
+      <div class="card">
+        <h2>Connexion à Substy</h2>
+        <div id="acct" class="muted"></div>
+        <div id="tok" style="margin-top:8px"></div>
+        <div id="stErr" class="err"></div>
+      </div>
+      <div class="card"><h2>Créatrices</h2><div id="creatorsStatus" class="muted">Chargement…</div></div>
+      <div class="card">
+        <h2>Relier à nouveau</h2>
+        <p class="muted">Si la session Substy a expiré ou si tu changes de compte : colle une nouvelle valeur du cookie <code>__client</code>.</p>
+        <textarea id="client2" autocomplete="off" spellcheck="false"></textarea>
+        <button id="relinkBtn" class="btn ghost">Relier</button>
+        <div id="relinkErr" class="err"></div>
+      </div>
+      <button id="toInbox" class="btn ghost">‹ Retour à la messagerie</button>
     </div>
-    <div class="card"><h2>Créatrices</h2><div id="creators" class="muted">Chargement…</div></div>
-    <div class="card"><h2>Derniers événements en direct</h2><div id="events" class="muted">—</div></div>
-    <div class="card">
-      <h2>Relier à nouveau</h2>
-      <p class="muted">Si la session Substy a expiré ou si tu changes de compte : colle une nouvelle valeur du cookie <code>__client</code>.</p>
-      <textarea id="client2" autocomplete="off" spellcheck="false"></textarea>
-      <button id="relinkBtn" class="ghost">Relier</button>
-      <div id="relinkErr" class="err"></div>
+  </div>
+</section>
+
+<!-- Vault : choisir des médias pour un PPV -->
+<div id="vault" class="modal hidden">
+  <div class="modalBox">
+    <header class="modalHead">
+      <b>Vault</b><span id="vaultCount" class="muted sm"></span>
+      <div class="grow"></div>
+      <button id="vaultClose" class="iconBtn">✕</button>
+    </header>
+    <div class="vaultBody">
+      <div id="vaultLists" class="vaultLists"></div>
+      <div class="vaultMain">
+        <div id="vaultGrid" class="vaultGrid"></div>
+        <button id="vaultMore" class="btn ghost sm hidden">Charger plus</button>
+      </div>
     </div>
-    <p class="muted">Étape suivante : la messagerie (conversations, envoi instantané, IA on/off par fan).</p>
-  </section>
+    <footer class="modalFoot">
+      <label class="muted sm">Prix du PPV ($, vide = gratuit)</label>
+      <input id="ppvPrice" type="number" min="0" step="1" placeholder="0">
+      <div class="grow"></div>
+      <button id="vaultOk" class="btn">Ajouter au message</button>
+    </footer>
+  </div>
 </div>
-<script>
-const $ = (id) => document.getElementById(id);
-const api = async (method, url, body) => {
-  const r = await fetch(url, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'Erreur ' + r.status);
-  return j;
-};
-const show = (id) => ['setup', 'login', 'status'].forEach((s) => $(s).classList.toggle('hidden', s !== id));
-const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + ' s' : Math.round(s / 60) + ' min'; };
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-async function boot() {
-  const s = await api('GET', '/api/state');
-  $('logout').classList.toggle('hidden', !s.me);
-  if (!s.setup) return show('setup');
-  if (!s.me) return show('login');
-  show('status');
-  refresh();
-  setInterval(refresh, 10000);
-}
-async function refresh() {
-  try {
-    const s = await api('GET', '/api/status');
-    $('acct').textContent = s.account ? 'Compte Substy : ' + (s.account.name || '') + (s.account.email ? ' · ' + s.account.email : '') : 'Aucun compte relié';
-    const t = s.token;
-    $('tok').innerHTML = t ? (t.ok ? '<span class="dot" style="background:var(--ok)"></span>Connecté · jeton renouvelé il y a ' + ago(t.at) : '<span class="dot" style="background:var(--bad)"></span>Problème : ' + esc(t.error)) : '<span class="dot" style="background:var(--warn)"></span>En attente du premier jeton…';
-    $('stErr').textContent = s.error || '';
-    $('creators').innerHTML = s.creators.length ? s.creators.map((c) => {
-      const st = c.stream;
-      const live = st && st.live;
-      return '<div class="row">' + (c.avatar ? '<img class="av" src="' + esc(c.avatar) + '">' : '<div class="av">' + esc(c.name[0] || '?') + '</div>') +
-        '<div style="flex:1"><b>' + esc(c.name) + '</b> ' + (c.platform ? '<span class="pill">' + esc(c.platform) + '</span>' : '') + '<div class="muted">' + esc(c.username || c.id) + '</div></div>' +
-        '<div class="muted"><span class="dot" style="background:' + (live ? 'var(--ok)' : 'var(--warn)') + '"></span>' + (live ? 'temps réel actif' : 'temps réel : ' + esc(st?.reason || 'connexion…')) + (st && st.events ? ' · ' + st.events + ' événements' : '') + '</div></div>';
-    }).join('') : 'Aucune créatrice trouvée.';
-    $('events').innerHTML = s.recentEvents.length ? s.recentEvents.map((e) => '<div class="row"><span class="pill">' + esc(e.type) + '</span><span class="muted">il y a ' + ago(e.at) + '</span></div>').join('') : 'Aucun pour l’instant (ils arrivent quand un fan écrit).';
-  } catch (e) { $('stErr').textContent = e.message; }
-}
-$('setupBtn').onclick = async () => {
-  $('setupErr').textContent = ''; $('setupBtn').disabled = true;
-  try { await api('POST', '/api/setup', { client: $('client').value, password: $('pw').value }); $('client').value = ''; boot(); }
-  catch (e) { $('setupErr').textContent = e.message; }
-  finally { $('setupBtn').disabled = false; }
-};
-$('loginBtn').onclick = async () => {
-  $('loginErr').textContent = '';
-  try { await api('POST', '/api/login', { email: $('email').value, password: $('lpw').value }); boot(); }
-  catch (e) { $('loginErr').textContent = e.message; }
-};
-$('relinkBtn').onclick = async () => {
-  $('relinkErr').textContent = '';
-  try { await api('POST', '/api/relink', { client: $('client2').value }); $('client2').value = ''; refresh(); }
-  catch (e) { $('relinkErr').textContent = e.message; }
-};
-$('logout').onclick = async () => { await api('POST', '/api/logout'); location.reload(); };
-boot();
-</script>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
 </body>
 </html>

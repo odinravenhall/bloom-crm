@@ -29,6 +29,9 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, creator_id TEXT, type TEXT, data TEXT, at INTEGER NOT NULL);
+  -- Envois faits depuis Bloom (pour afficher le nom du chatteur sur ses messages)
+  CREATE TABLE IF NOT EXISTS sent_log (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', price REAL NOT NULL DEFAULT 0, at INTEGER NOT NULL);
+  CREATE INDEX IF NOT EXISTS sent_fan ON sent_log (creator_id, fan_id, at);
 `);
 
 export const one = (sql, ...p) => db.prepare(sql).get(...p);

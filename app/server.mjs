@@ -6,8 +6,13 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
+import { broadcast, chatRoutes } from './chat.mjs';
 
 const PAGE = readFileSync(new URL('./public/index.html', import.meta.url), 'utf8');
+const STATIC = {
+  '/app.css': { type: 'text/css; charset=utf-8', body: readFileSync(new URL('./public/app.css', import.meta.url)) },
+  '/app.js': { type: 'text/javascript; charset=utf-8', body: readFileSync(new URL('./public/app.js', import.meta.url)) },
+};
 const COOKIE = 'bloom_session';
 
 // ---------------------------------------------------------------- Substy
@@ -39,6 +44,7 @@ async function startStreams() {
             const s = state.streams[id];
             s.events++;
             s.lastEvent = { type: data?.type || type, at: Date.now() };
+            broadcast(id, type, data);
             if (type !== 'connected' && data?.type !== 'connection_ready') {
               run('INSERT INTO events (creator_id, type, data, at) VALUES (?, ?, ?, ?)', id, data?.type || type, JSON.stringify(data).slice(0, 4000), Date.now());
               run('DELETE FROM events WHERE id < (SELECT MAX(id) - 1000 FROM events)');
@@ -176,11 +182,17 @@ const routes = {
   },
 };
 
+Object.assign(routes, chatRoutes({ substy, userFrom, send, body }));
+
 createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
   const h = routes[`${req.method} ${path}`];
   try {
     if (h) return await h(req, res);
+    if (req.method === 'GET' && STATIC[path]) {
+      res.writeHead(200, { 'content-type': STATIC[path].type, 'cache-control': 'no-cache' });
+      return res.end(STATIC[path].body);
+    }
     if (req.method === 'GET' && !path.startsWith('/api/')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
       return res.end(PAGE);
@@ -189,6 +201,7 @@ createServer(async (req, res) => {
   } catch (e) {
     const status = e instanceof SubstyError ? (e.status === 401 ? 400 : 502) : e.status || 500;
     if (status >= 500) console.error(e);
+    if (res.headersSent) return res.end();
     send(res, status, { error: e instanceof SubstyError ? `Substy : ${e.message}` : e.message || 'Erreur serveur' });
   }
 }).listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
