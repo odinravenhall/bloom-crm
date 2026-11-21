@@ -4,7 +4,7 @@ import type { Me } from "./types";
 
 const API = process.env.API_URL || "http://api:3000";
 
-export type State = { setup: boolean; discord: boolean; me: Me | null };
+export type State = { setup: boolean; discord: boolean; oauth?: boolean; me: Me | null };
 
 /** État de Bloom vu par le serveur (cookie de session transmis à l'API). */
 export async function getState(): Promise<State> {

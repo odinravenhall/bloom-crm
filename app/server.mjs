@@ -2,11 +2,11 @@
 // Première configuration : on colle la session Substy (cookie « __client ») ; si Substy l'accepte, le compte admin
 // est créé avec l'email du compte Substy. Ensuite, la connexion se fait par le bot Discord (/connexion).
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes } from './chat.mjs';
-import { discordReady, guildsOfBot, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
+import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
 
@@ -73,7 +73,12 @@ function login(res, userId) {
   const token = randomBytes(32).toString('base64url');
   const days = 30;
   run('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)', token, userId, Date.now() + days * 864e5);
-  res.setHeader('set-cookie', `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${days * 86400}`);
+  res.setHeader('set-cookie', [...[].concat(res.getHeader('set-cookie') || []), `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${days * 86400}`]);
+}
+/** Redirection (303). */
+function redirect(res, location) {
+  res.writeHead(303, { location, 'cache-control': 'no-store' });
+  res.end();
 }
 const hasAdmin = () => !!one("SELECT 1 FROM users WHERE role = 'admin' AND active = 1");
 
@@ -117,7 +122,33 @@ const routes = {
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end('ok');
   },
-  'GET /api/state': async (req, res) => send(res, 200, { setup: hasAdmin() && !!getSetting('substy_client'), discord: discordReady(), me: userFrom(req) }),
+  'GET /api/state': async (req, res) => send(res, 200, { setup: hasAdmin() && !!getSetting('substy_client'), discord: discordReady(), oauth: oauthReady(), me: userFrom(req) }),
+
+  // « Se connecter avec Discord » : départ vers Discord (avec un état anti-falsification gardé en cookie 10 min).
+  'GET /api/auth/discord': async (req, res) => {
+    if (!oauthReady()) return redirect(res, '/connexion?e=off');
+    const state = randomBytes(24).toString('base64url');
+    res.setHeader('set-cookie', [`bloom_oauth=${state}; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=600`]);
+    redirect(res, oauthUrl(state));
+  },
+  // Retour de Discord.
+  'GET /api/auth/callback': async (req, res) => {
+    const p = new URL(req.url, 'http://x').searchParams;
+    const got = Buffer.from(p.get('state') || '');
+    const want = Buffer.from(/(?:^|;\s*)bloom_oauth=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '');
+    const clear = 'bloom_oauth=; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+    res.setHeader('set-cookie', [clear]);
+    if (p.get('error')) return redirect(res, '/connexion?e=cancel');
+    if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) return redirect(res, '/connexion?e=state');
+    try {
+      const u = await oauthFinish(p.get('code'));
+      login(res, u.id);
+      redirect(res, u.role === 'chatter' ? '/app/messagerie' : '/app');
+    } catch (e) {
+      if (!(e instanceof LoginError)) console.error('[oauth]', e);
+      redirect(res, '/connexion?e=' + encodeURIComponent(e instanceof LoginError ? e.message : 'Connexion impossible pour le moment.'));
+    }
+  },
 
   // Lien du bot Discord (/connexion) : usage unique, 5 minutes.
   'GET /api/auth/link': async (req, res) => {
@@ -192,7 +223,7 @@ const routes = {
     const me = userFrom(req);
     if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
     const b = await body(req);
-    const st = await setupBot(b.token, b.guild);
+    const st = await setupBot(b.token, b.guild, b.secret);
     send(res, 200, { ...st, guilds: await guildsOfBot().catch(() => []) });
   },
 

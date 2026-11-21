@@ -1,8 +1,9 @@
-// Bot Discord « Bloom » : seule porte d'entrée du CRM (comme Raven CRM).
-// Un membre du serveur Discord de l'agence tape /connexion → le bot lui répond (à lui seul) avec un lien à usage unique,
-// valable 5 minutes. C'est le rôle Discord qui donne l'accès : Admin → admin, Manager → manager, Chatteur → chatteur.
+// Bot Discord « Bloom » : porte d'entrée du CRM (comme Raven CRM). Deux façons d'entrer :
+//  - bouton « Se connecter avec Discord » sur le site (OAuth2 : identify + guilds.members.read) ;
+//  - /connexion sur le serveur Discord → le bot répond (à la personne seule) avec un lien à usage unique de 5 minutes. C'est le rôle Discord qui donne l'accès : Admin → admin, Manager → manager, Chatteur → chatteur.
 // Sans rôle, ou après avoir quitté le serveur : plus d'accès (revérifié toutes les 10 minutes).
-// Le jeton du bot est collé par un admin dans Réglages → Discord : il est gardé chiffré dans la base (jamais dans le dépôt).
+// Le jeton du bot et le secret OAuth2 sont collés par un admin dans Administration → Substy & Discord :
+// gardés chiffrés dans la base (jamais dans le dépôt ni dans .env).
 import { createHash, randomBytes } from 'node:crypto';
 import { all, getSetting, one, open, run, seal, setSetting } from './store.mjs';
 
@@ -23,6 +24,18 @@ export const botToken = () => {
   }
 };
 export const discordGuild = () => getSetting('discord_guild');
+const clientSecret = () => {
+  const v = getSetting('discord_secret');
+  try {
+    return v ? open(v) : null;
+  } catch {
+    return null;
+  }
+};
+const appId = () => JSON.parse(getSetting('discord_bot') || 'null')?.id || null;
+export const REDIRECT_URI = `${BASE}/api/auth/callback`;
+/** Bouton « Se connecter avec Discord » disponible. */
+export const oauthReady = () => !!(discordReady() && clientSecret() && appId());
 export const discordReady = () => !!(botToken() && discordGuild());
 
 export async function discord(method, path, body, token = botToken()) {
@@ -43,8 +56,14 @@ export async function discord(method, path, body, token = botToken()) {
 
 // ---------------------------------------------------------------- réglage par un admin
 /** Vérifie le jeton, puis l'enregistre. Renvoie le bot et les serveurs où il est invité. */
-export async function setupBot(token, guildId) {
+export async function setupBot(token, guildId, secret) {
+  const sec = String(secret || '').trim();
+  if (sec) {
+    if (!/^[\w-]{20,64}$/.test(sec)) throw Object.assign(new Error('Ce client secret n’a pas le bon format : recopie-le depuis le portail Discord (OAuth2 → Client Secret).'), { status: 400 });
+    setSetting('discord_secret', seal(sec));
+  }
   const t = String(token || '').trim().replace(/^Bot\s+/i, '');
+  if (!t && sec && botToken()) return status();
   const cur = botToken();
   const use = t || cur;
   if (!use) throw Object.assign(new Error('Colle le jeton du bot'), { status: 400 });
@@ -70,6 +89,9 @@ export function status() {
     bot,
     guild: discordGuild(),
     live: gw.ready,
+    oauth: oauthReady(),
+    hasSecret: !!clientSecret(),
+    redirect: REDIRECT_URI,
     invite: bot ? `https://discord.com/oauth2/authorize?client_id=${bot.id}&scope=bot%20applications.commands&permissions=19472` : null,
   };
 }
@@ -107,8 +129,8 @@ async function bloomRole(roleIds = [], isAdmin = false) {
   return best;
 }
 
-/** Membre du serveur avec un rôle Bloom → lien. Premier passage : compte créé avec ce rôle. */
-function linkFor({ discordId, name, avatar, role }) {
+/** Membre du serveur avec un rôle Bloom → compte Bloom (créé au premier passage, rôle recalé sur Discord ensuite). */
+function upsertUser({ discordId, name, avatar, role }) {
   let u = one('SELECT id, active, role FROM users WHERE discord_id = ?', discordId);
   if (!u) {
     const r = run(
@@ -121,7 +143,50 @@ function linkFor({ discordId, name, avatar, role }) {
   }
   if (!u.active) throw new Error('Ton compte Bloom est désactivé. Vois avec un admin.');
   run('UPDATE users SET discord_checked = ? WHERE id = ?', Date.now(), u.id);
+  return u;
+}
+function linkFor(who) {
+  const u = upsertUser(who);
   return { url: mint(u.id), firstTime: !one('SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1', u.id) };
+}
+
+// ---------------------------------------------------------------- OAuth2 (« Se connecter avec Discord »)
+export function oauthUrl(state) {
+  const p = new URLSearchParams({ client_id: appId(), response_type: 'code', redirect_uri: REDIRECT_URI, scope: 'identify guilds.members.read', state, prompt: 'none' });
+  return `https://discord.com/oauth2/authorize?${p}`;
+}
+
+export class LoginError extends Error {}
+
+/** Retour de Discord : code → membre du serveur → rôle Bloom → compte. Lève LoginError (message lisible) sinon. */
+export async function oauthFinish(code) {
+  if (!oauthReady()) throw new LoginError('La connexion par Discord n’est pas encore branchée.');
+  const tr = await fetch(`${API}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: appId(), client_secret: clientSecret(), grant_type: 'authorization_code', code: String(code || ''), redirect_uri: REDIRECT_URI }),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  if (!tr?.ok) throw new LoginError('Discord n’a pas validé la connexion. Réessaie.');
+  const { access_token } = await tr.json();
+  const mr = await fetch(`${API}/users/@me/guilds/${discordGuild()}/member`, { headers: { Authorization: `Bearer ${access_token}` }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  if (mr?.status === 404 || mr?.status === 403) throw new LoginError('Tu n’es pas sur le serveur Discord de l’agence. Demande une invitation à un admin.');
+  if (!mr?.ok) throw new LoginError('Discord ne répond pas. Réessaie dans une minute.');
+  const m = await mr.json();
+  const u = m.user || {};
+  const owner = (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id;
+  const role = await bloomRole(m.roles, u.id === owner);
+  if (!role) throw new LoginError('Tu n’as pas encore accès à Bloom : demande à un admin de te donner le rôle Chatteur sur Discord.');
+  try {
+    return upsertUser({
+      discordId: u.id,
+      name: m.nick || u.global_name || u.username,
+      avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null,
+      role,
+    });
+  } catch (e) {
+    throw new LoginError(e.message);
+  }
 }
 
 /** Lien cliqué : renvoie l'utilisateur si le lien est bon (usage unique). */

@@ -83,6 +83,8 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 
 - Serveur Discord « Bloom CRM ». Rôles **Admin** / **Manager** / **Chatteur** = rôles Bloom (admin / lead / chatter).
   Sans rôle Bloom (ou hors du serveur) : pas d'accès, sessions fermées (revérifié toutes les 10 min).
+- Bouton « Se connecter avec Discord » (OAuth2, `/api/auth/discord` → `/api/auth/callback`, scopes identify + guilds.members.read ;
+  client secret collé dans les réglages, redirect à déclarer dans le portail Discord).
 - `/connexion` dans #connexion → le bot répond (en privé) avec un lien à usage unique de 5 min (`/api/auth/link`).
 - Le jeton du bot est collé par un admin dans **Administration → Substy & Discord** : gardé chiffré dans la base,
   jamais dans le dépôt ni dans `.env`. Une fois le bot branché, la connexion par mot de passe est refusée.

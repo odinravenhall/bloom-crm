@@ -12,7 +12,17 @@ type Status = {
   creators: { id: string; name: string; avatar: string | null; platform: string | null; stream: { live: boolean; reason?: string } | null }[];
   error: string | null;
 };
-type Discord = { ready: boolean; bot: { id: string; name: string } | null; guild: string | null; live: boolean; invite: string | null; guilds: { id: string; name: string }[] };
+type Discord = {
+  ready: boolean;
+  bot: { id: string; name: string } | null;
+  guild: string | null;
+  live: boolean;
+  invite: string | null;
+  guilds: { id: string; name: string }[];
+  oauth: boolean;
+  hasSecret: boolean;
+  redirect: string;
+};
 
 /** Administration : connexion au compte agence Substy et bot Discord « Bloom ». */
 export function Settings() {
@@ -41,14 +51,16 @@ export function Settings() {
   };
 
   const [token, setToken] = useState("");
+  const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const saveBot = async (guild?: string) => {
     setBusy(true);
     try {
-      const r = await api<Discord>("POST", "/api/discord", { token, guild });
+      const r = await api<Discord>("POST", "/api/discord", { token, guild, secret });
       setDc(r);
       setToken("");
-      toast(r.ready ? "Bot Discord branché : /connexion est prêt" : "Jeton enregistré : choisis le serveur");
+      setSecret("");
+      toast(r.oauth ? "Discord branché : bouton de connexion et /connexion prêts" : r.ready ? "Bot Discord branché : /connexion est prêt" : "Enregistré : choisis le serveur");
     } catch (e) {
       toast((e as Error).message, "err");
     } finally {
@@ -121,11 +133,21 @@ export function Settings() {
               )}
             </div>
           ) : null}
-          <div className="mt-5 border-t pt-4">
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            Bouton « Se connecter avec Discord » :{" "}
+            {dc?.oauth ? <Pill tone="good">actif</Pill> : <Pill tone="warn">{dc?.hasSecret ? "en attente du bot" : "client secret manquant"}</Pill>}
+          </p>
+          <div className="mt-5 flex flex-col gap-2 border-t pt-4">
             <p className="text-sm font-semibold">{dc?.bot ? "Changer le jeton du bot" : "Jeton du bot"}</p>
-            <p className="mt-1 text-xs text-muted">Portail Discord → ton application → Bot → Reset Token. Il est gardé chiffré sur le serveur de Bloom, jamais sur GitHub.</p>
-            <input className={cn(inputCls, "mt-2")} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Jeton du bot" />
-            <button className={cn(btnCls.primary, "mt-2")} disabled={busy || !token.trim()} onClick={() => saveBot()}>
+            <p className="text-xs text-muted">Portail Discord → ton application → Bot → Reset Token.</p>
+            <input className={inputCls} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Jeton du bot" />
+            <p className="mt-2 text-sm font-semibold">{dc?.hasSecret ? "Changer le client secret" : "Client secret (bouton de connexion)"}</p>
+            <p className="text-xs text-muted">
+              Portail Discord → OAuth2 → Client Secret (Reset Secret). Dans OAuth2 → Redirects, ajoute aussi : <code className="rounded bg-card-2 px-1.5 py-0.5 text-[11px] text-fg select-all">{dc?.redirect ?? "https://bloom.ravencrm.xyz/api/auth/callback"}</code>
+            </p>
+            <input className={inputCls} type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="Client secret" />
+            <p className="text-xs text-muted">Les deux sont gardés chiffrés sur le serveur de Bloom, jamais sur GitHub.</p>
+            <button className={cn(btnCls.primary, "self-start")} disabled={busy || (!token.trim() && !secret.trim())} onClick={() => saveBot()}>
               Enregistrer
             </button>
           </div>
