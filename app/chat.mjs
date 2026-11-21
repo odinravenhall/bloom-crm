@@ -136,11 +136,22 @@ async function crawl(cid) {
   try {
     let cursor;
     let pages = 0;
+    let stale = 0;
+    const seen = new Set();
     do {
-      const r = await SUB.chats(cid, { limit: 100, cursor });
-      for (const it of r?.items || []) put(b, chatView(it));
+      // Pages de 30 comme le site de Substy : au-delà, sa pagination tourne en boucle.
+      const r = await SUB.chats(cid, { limit: 30, cursor });
+      let fresh = 0;
+      for (const it of r?.items || []) {
+        const c = chatView(it);
+        if (!seen.has(c.fanId)) fresh++;
+        seen.add(c.fanId);
+        put(b, c);
+      }
+      // Sécurité : 3 pages de suite sans nouveau fan = la pagination tourne en rond, on s'arrête.
+      stale = fresh ? 0 : stale + 1;
       cursor = r?.nextCursor || undefined;
-    } while (cursor && ++pages < 1000);
+    } while (cursor && stale < 3 && ++pages < 2000);
     b.complete = true;
     b.crawledAt = Date.now();
     console.log(`[bloom] conversations de ${cid} : ${b.map.size} en ${Math.round((Date.now() - t0) / 1000)} s`);
@@ -154,7 +165,7 @@ async function refreshTop(cid) {
   if (!SUB) return;
   const b = inboxOf(cid);
   try {
-    const r = await SUB.chats(cid, { limit: 100 });
+    const r = await SUB.chats(cid, { limit: 30 });
     for (const it of r?.items || []) put(b, chatView(it));
   } catch {}
 }
@@ -351,8 +362,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     'GET /api/chats': async (req, res) => {
       if (!auth(req, res)) return;
       const p = q(req);
-      // Jusqu'à 100 conversations par page (la messagerie charge toutes les pages d'un coup).
-      const limit = Math.min(100, Math.max(10, Number(p.get('limit')) || 30));
+      const limit = Math.min(30, Math.max(10, Number(p.get('limit')) || 30)); // au-delà de 30, la pagination de Substy tourne en boucle
       const r = await substy.chats(p.get('creatorId'), {
         limit,
         cursor: p.get('cursor') || undefined,
