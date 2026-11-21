@@ -1,0 +1,23 @@
+# Bloom CRM sur le VPS Zèbre. Le Caddy existant (/root/zebre) sert bloom.ravencrm.xyz -> bloom-web:3000.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      TZ: Europe/Paris
+      PORT: "3000"
+    volumes:
+      - ./data:/data
+    mem_limit: 256m
+    networks:
+      default: {}
+      edge:
+        aliases: [bloom-web]
+
+networks:
+  edge:
+    external: true
+    name: zebre_default
