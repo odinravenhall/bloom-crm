@@ -182,7 +182,7 @@ const routes = {
   },
 };
 
-Object.assign(routes, chatRoutes({ substy, userFrom, send, body }));
+Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 
 createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];

@@ -48,21 +48,97 @@
 
 <!-- Application -->
 <section id="app" class="hidden">
-  <nav class="top">
-    <div class="logo sm">✿</div>
-    <div id="creatorTabs" class="tabs"></div>
-    <div class="grow"></div>
-    <span id="liveDot" class="live" title="Temps réel"></span>
-    <button id="toSettings" class="btn ghost sm">Réglages</button>
-    <button id="logout" class="btn ghost sm">Se déconnecter</button>
-  </nav>
+  <!-- Menu de gauche : sections en accordéon (une ouverte à la fois) -->
+  <aside id="side" class="side">
+    <div class="sideHead"><div class="logo sm">✿</div><b>Bloom</b><span id="liveDot" class="live" title="Temps réel"></span></div>
+    <nav id="nav" class="nav"></nav>
+    <div class="sideFoot">
+      <div class="me"><div class="av" id="meAv"></div><div class="grow"><b id="meName"></b><div class="muted sm" id="meRole"></div></div></div>
+      <button id="logout" class="btn ghost sm">Se déconnecter</button>
+    </div>
+  </aside>
+  <div id="sideShade" class="sideShade"></div>
 
-  <!-- Messagerie -->
-  <div id="inbox" class="inbox">
-    <aside class="list">
-      <div class="listHead">
-        <input id="search" placeholder="Rechercher un fan…" autocomplete="off">
-        <div id="filters" class="chips">
+  <div class="mainCol">
+    <nav class="top">
+      <button id="burger" class="iconBtn burger" title="Menu">☰</button>
+      <b id="pageTitle" class="pageTitle"></b>
+      <div id="creatorTabs" class="tabs"></div>
+    </nav>
+
+    <!-- Dashboard -->
+    <div id="pg-dashboard" class="hidden view">
+      <div class="pageHead"><div><h1>Dashboard</h1><div class="muted sm" id="dashSince"></div></div><div class="grow"></div>
+        <div id="dashPeriod" class="chips"><button data-p="today" class="chip on">Aujourd’hui</button><button data-p="7d" class="chip">7 jours</button><button data-p="30d" class="chip">30 jours</button></div>
+        <button id="dashRefresh" class="btn ghost sm">Actualiser</button>
+      </div>
+      <div id="dashTiles" class="tiles"></div>
+      <div class="dashRow">
+        <div class="card"><div class="cardHead"><b>Revenus par jour</b><span id="dashChartTotal" class="muted sm"></span></div><div id="dashChart" class="bars"></div></div>
+        <div class="card"><div class="cardHead"><b>Ventes en direct</b><span class="live on"></span></div><div id="dashSales" class="sales"></div></div>
+      </div>
+      <h2 class="secTitle">Créatrices</h2>
+      <div id="dashCreators" class="cgrid"></div>
+    </div>
+
+    <!-- Messagerie -->
+    <div id="inbox" class="inbox">
+      <aside class="list">
+        <div class="listHead">
+          <input id="search" placeholder="Rechercher un fan…" autocomplete="off">
+          <div id="filters" class="chips">
+            <button data-f="all" class="chip on">Tous</button>
+            <button data-f="unread" class="chip">Non lus</button>
+            <button data-f="handoff" class="chip">À reprendre</button>
+            <button data-f="ai_on" class="chip">IA active</button>
+            <button data-f="ai_off" class="chip">IA coupée</button>
+          </div>
+        </div>
+        <div id="chats" class="chats"></div>
+      </aside>
+
+      <main class="chat">
+        <div id="empty" class="empty"><div class="logo big">✿</div><p>Choisis une conversation</p></div>
+        <div id="conv" class="hidden conv">
+          <header class="chatHead">
+            <button id="back" class="iconBtn mobileOnly" title="Retour">‹</button>
+            <div class="av" id="cAv"></div>
+            <div class="grow">
+              <div class="name" id="cName"></div>
+              <div class="muted sm" id="cSub"></div>
+            </div>
+            <span id="aiTyping" class="typing hidden">L’IA écrit…</span>
+            <label class="aiSwitch" title="Couper ou rallumer l’IA sur cette conversation">
+              <span id="aiLabel">IA</span>
+              <button id="aiToggle" class="switch" role="switch" aria-checked="false"><span></span></button>
+            </label>
+          </header>
+          <div id="msgs" class="msgs"></div>
+          <div id="sel" class="selBar hidden"></div>
+          <footer class="composer">
+            <textarea id="text" rows="2" placeholder="Écrire au fan…  (Entrée : envoyer · Maj+Entrée : saut de ligne)"></textarea>
+            <div class="compBar">
+              <button id="ppvBtn" class="btn ghost sm">＋ Médias / PPV</button>
+              <span id="sendErr" class="err inline"></span>
+              <div class="grow"></div>
+              <button id="sendBtn" class="btn">Envoyer</button>
+            </div>
+          </footer>
+        </div>
+      </main>
+
+      <aside id="fanPanel" class="fanPanel hidden"></aside>
+    </div>
+
+
+    <!-- Fans -->
+    <div id="pg-fans" class="hidden view">
+      <div class="pageHead"><h1>Fans</h1><div class="grow"></div>
+        <select id="fansSort"><option value="recent">Les plus récents</option><option value="spent">Les plus gros dépensiers</option><option value="unread">Non lus d’abord</option></select>
+      </div>
+      <div class="toolbar">
+        <input id="fansQ" placeholder="Rechercher un fan…" autocomplete="off">
+        <div id="fansFilters" class="chips">
           <button data-f="all" class="chip on">Tous</button>
           <button data-f="unread" class="chip">Non lus</button>
           <button data-f="handoff" class="chip">À reprendre</button>
@@ -70,44 +146,32 @@
           <button data-f="ai_off" class="chip">IA coupée</button>
         </div>
       </div>
-      <div id="chats" class="chats"></div>
-    </aside>
+      <div class="card tableCard"><table class="tbl"><thead><tr><th>Fan</th><th>Abonnement</th><th class="r">Dépensé</th><th>IA</th><th>Dernier message</th><th></th></tr></thead><tbody id="fansBody"></tbody></table></div>
+      <button id="fansMore" class="btn ghost sm more hidden">Charger plus</button>
+    </div>
 
-    <main class="chat">
-      <div id="empty" class="empty"><div class="logo big">✿</div><p>Choisis une conversation</p></div>
-      <div id="conv" class="hidden conv">
-        <header class="chatHead">
-          <button id="back" class="iconBtn mobileOnly" title="Retour">‹</button>
-          <div class="av" id="cAv"></div>
-          <div class="grow">
-            <div class="name" id="cName"></div>
-            <div class="muted sm" id="cSub"></div>
-          </div>
-          <span id="aiTyping" class="typing hidden">L’IA écrit…</span>
-          <label class="aiSwitch" title="Couper ou rallumer l’IA sur cette conversation">
-            <span id="aiLabel">IA</span>
-            <button id="aiToggle" class="switch" role="switch" aria-checked="false"><span></span></button>
-          </label>
-        </header>
-        <div id="msgs" class="msgs"></div>
-        <div id="sel" class="selBar hidden"></div>
-        <footer class="composer">
-          <textarea id="text" rows="2" placeholder="Écrire au fan…  (Entrée : envoyer · Maj+Entrée : saut de ligne)"></textarea>
-          <div class="compBar">
-            <button id="ppvBtn" class="btn ghost sm">＋ Médias / PPV</button>
-            <span id="sendErr" class="err inline"></span>
-            <div class="grow"></div>
-            <button id="sendBtn" class="btn">Envoyer</button>
-          </div>
-        </footer>
+    <!-- Créatrices -->
+    <div id="pg-creators" class="hidden view">
+      <div class="pageHead"><h1>Créatrices</h1></div>
+      <div id="creatorsGrid" class="cgrid"></div>
+    </div>
+
+    <!-- Vault -->
+    <div id="pg-vault" class="hidden view vaultPage">
+      <div class="pageHead"><h1>Vault</h1><span id="vpCount" class="muted"></span></div>
+      <div class="card vaultBody vpBody">
+        <div id="vpLists" class="vaultLists"></div>
+        <div class="vaultMain"><div id="vpGrid" class="vaultGrid"></div><button id="vpMore" class="btn ghost sm more hidden">Charger plus</button></div>
       </div>
-    </main>
+    </div>
 
-    <aside id="fanPanel" class="fanPanel hidden"></aside>
-  </div>
+    <!-- Pages à venir -->
+    <div id="pg-soon" class="hidden view">
+      <div class="narrow"><div class="card soonCard"><div class="logo big">✿</div><h2 id="soonTitle"></h2><p class="muted" id="soonText"></p><span class="pill">Bientôt</span></div></div>
+    </div>
 
-  <!-- Réglages : état de la connexion Substy -->
-  <div id="settings" class="hidden settings">
+    <!-- Réglages : état de la connexion Substy -->
+    <div id="settings" class="hidden view">
     <div class="narrow">
       <div class="card">
         <h2>Connexion à Substy</h2>
@@ -123,8 +187,8 @@
         <button id="relinkBtn" class="btn ghost">Relier</button>
         <div id="relinkErr" class="err"></div>
       </div>
-      <button id="toInbox" class="btn ghost">‹ Retour à la messagerie</button>
     </div>
+  </div>
   </div>
 </section>
 

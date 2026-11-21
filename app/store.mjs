@@ -32,6 +32,9 @@ db.exec(`
   -- Envois faits depuis Bloom (pour afficher le nom du chatteur sur ses messages)
   CREATE TABLE IF NOT EXISTS sent_log (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', price REAL NOT NULL DEFAULT 0, at INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS sent_fan ON sent_log (creator_id, fan_id, at);
+  -- Chaque message vu passer en temps réel (pour le dashboard et, plus tard, les statistiques)
+  CREATE TABLE IF NOT EXISTS msg_log (id TEXT PRIMARY KEY, creator_id TEXT NOT NULL, fan_id TEXT, at INTEGER NOT NULL, from_fan INTEGER NOT NULL, kind TEXT, price REAL NOT NULL DEFAULT 0, tip INTEGER NOT NULL DEFAULT 0, medias INTEGER NOT NULL DEFAULT 0);
+  CREATE INDEX IF NOT EXISTS msg_creator_at ON msg_log (creator_id, at);
 `);
 
 export const one = (sql, ...p) => db.prepare(sql).get(...p);

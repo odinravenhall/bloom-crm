@@ -43,6 +43,9 @@ Procédures relevées sur de vrais envois (21/11/2026) :
 | `creators.fans.getFanScripts`, `fans.scripts` | `creatorId, fanId` |
 | `creators.fans.getFanPpvStats` | `creatorId, fanId` |
 | `creators.fans.getFanGallery` | `creatorId, fanId, limit, creatorOnly, cursor, direction` |
+| `revenue.overview` (dashboard) | `creatorIds: [] (vide = agence), startDate, endDate (AAAA-MM-JJ), earningsMode: "net"` → `total, messages, tips, subscriptions, posts, totalNewSubs` (+ `…Delta` en %, `…Charts` par jour) |
+| `agency.getRecentSales` | aucune entrée → `[{id, type: ppv/tip/post, createdAt, price: "€11.29", userId, userName, creatorId, creatorName}]` |
+| `creators.fans.getFanAiLogs` | `creatorId, fanId, limit` → `{items: [{action, reason, employee{name}, createdAt}]}` |
 
 Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`, `messages.markRead|markUnread|unsend`,
 `creators.onMessage` (abonnement temps réel — transport à confirmer), `creators.fans.getHandoffSummaries`,

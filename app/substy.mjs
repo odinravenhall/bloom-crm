@@ -163,6 +163,10 @@ export class SubstySession {
     const jwt = await this.token();
     return fetch(`${APP}${path}`, { headers: { authorization: `Bearer ${jwt}`, 'user-agent': UA }, signal: AbortSignal.timeout(30_000) });
   }
+  /** Revenus d'une période (dates AAAA-MM-JJ ; creatorIds vide = toute l'agence). */
+  revenue(creatorIds, startDate, endDate, earningsMode = 'net') { return this.call('revenue.overview', { creatorIds, startDate, endDate, earningsMode }); }
+  /** Dernières ventes de l'agence (PPV, pourboires, posts), comme « Live latest purchases » de Substy. */
+  recentSales() { return this.call('agency.getRecentSales'); }
   aiLogs(creatorId, fanId, limit = 50) { return this.call('creators.fans.getFanAiLogs', { creatorId, fanId, limit }); }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
   send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {

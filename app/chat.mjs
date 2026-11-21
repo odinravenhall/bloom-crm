@@ -1,5 +1,5 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
-import { all, run } from './store.mjs';
+import { all, one, run } from './store.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -19,6 +19,8 @@ function aiLogView(l) {
   const on = /disabl|pause|stop|deactiv|handoff|(^|[^a-z])off/.test(a) ? false : /enabl|resum|activ|start|(^|[^a-z])on($|[^a-z])/.test(a) ? true : null;
   return { id: l.id, at: l.createdAt, on, action: l.action || '', reason: l.reason || '', by: l.employee?.name || null };
 }
+/** Images de Substy : les chemins « /api/creators/… » passent par le relais de Bloom. */
+const img = (u) => (!u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : u);
 const mediaView = (m) => ({
   id: m.id,
   type: (m.type || '').toLowerCase(),
@@ -61,7 +63,7 @@ function chatView(c) {
     fanId: f.fanId || c.chatId,
     name: f.displayName || f.name || f.username || 'Fan',
     username: f.username || null,
-    avatar: f.avatar || null,
+    avatar: img(f.avatar),
     unread: c.unreadCount || 0,
     ai: !!f.aiEnabled,
     handoff: !!f.needsHandoff,
@@ -78,7 +80,7 @@ function fanView(f) {
     fanId: f.fanId,
     name: f.displayName || f.name || f.username || 'Fan',
     username: f.username || null,
-    avatar: f.avatar || null,
+    avatar: img(f.avatar),
     ai: !!f.aiEnabled,
     platform: f.platform || null,
     subscription: f.subscription ? { status: f.subscription.status, since: f.subscription.subscribedAt, renews: f.subscription.renewsAt, canceled: !!f.subscription.isCanceledAtPeriodEnd, price: money(f.subscription.price) } : null,
@@ -99,9 +101,40 @@ export function broadcast(creatorId, type, data) {
   if (kind === 'new_message' && data?.data) {
     payload.fanId = data.data.fanId;
     payload.message = messageView(data.data, bloomSenderOf(data.data));
+    logMessage(creatorId, data.data.fanId, payload.message);
   } else if (data?.data) payload.data = data.data;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const c of clients) c.write(line);
+}
+
+/** Journal des messages vus en temps réel (un message n'est compté qu'une fois). */
+let pruned = 0;
+function logMessage(creatorId, fanId, m) {
+  try {
+    run('INSERT OR IGNORE INTO msg_log (id, creator_id, fan_id, at, from_fan, kind, price, tip, medias) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      String(m.id), creatorId, fanId ? String(fanId) : null, Date.parse(m.at) || Date.now(), m.fromFan ? 1 : 0, m.fromFan ? 'fan' : m.by?.kind || null, m.price || 0, m.tip ? 1 : 0, m.medias.length);
+    if (Date.now() - pruned > 3600_000) {
+      pruned = Date.now();
+      run('DELETE FROM msg_log WHERE at < ?', Date.now() - 120 * 864e5);
+    }
+  } catch (e) {
+    console.warn('[bloom] journal des messages :', e.message);
+  }
+}
+
+/** Compteurs d'une période, par créatrice. */
+function periodStats(since) {
+  const rows = all(`SELECT creator_id AS c,
+      SUM(from_fan = 1 AND tip = 0) AS fanIn,
+      SUM(from_fan = 0 AND kind = 'ai') AS ai,
+      SUM(from_fan = 0 AND kind IN ('bloom', 'employee', 'creator')) AS team,
+      SUM(from_fan = 0 AND kind IN ('auto', 'script')) AS auto,
+      SUM(from_fan = 0 AND price > 0) AS ppv,
+      SUM(CASE WHEN from_fan = 0 AND price > 0 THEN price ELSE 0 END) AS ppvValue,
+      SUM(tip = 1) AS tips,
+      COUNT(DISTINCT CASE WHEN from_fan = 1 THEN fan_id END) AS fans
+    FROM msg_log WHERE at >= ? GROUP BY creator_id`, since);
+  return Object.fromEntries(rows.map((r) => [r.c, r]));
 }
 
 /** Qui, dans Bloom, a envoyé ce message (même fan, même texte, envoyé dans la minute). */
@@ -113,7 +146,7 @@ function bloomSenderOf(m) {
 }
 
 // ---------------------------------------------------------------- routes
-export function chatRoutes({ substy, userFrom, send, body }) {
+export function chatRoutes({ substy, userFrom, send, body, streams }) {
   const auth = (req, res) => {
     const u = userFrom(req);
     if (!u) send(res, 401, { error: 'Connecte-toi' });
@@ -121,11 +154,89 @@ export function chatRoutes({ substy, userFrom, send, body }) {
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
 
+  const creatorOf = (c) => ({
+    id: c.id || c.creatorId,
+    name: c.name || c.pseudo || c.displayName || c.username || 'Créatrice',
+    username: c.username || c.platformUsername || null,
+    platform: c.platform || null,
+    avatar: img(c.avatar || c.avatarUrl || c.profilePicture || null),
+    ai: c.setting?.enable ?? null,
+  });
+
+  // Nombre de conversations qui correspondent à un filtre (Substy ne donne pas de total : on compte une grande page).
+  async function countChats(creatorId, opts) {
+    for (const limit of [100, 50]) {
+      try {
+        const r = await substy.chats(creatorId, { limit, ...opts });
+        return { n: (r?.items || []).length, more: !!r?.nextCursor };
+      } catch (e) {
+        if (limit === 50) return { n: null, more: false, error: e.message };
+      }
+    }
+  }
+  let dashCache = null;
+  // Revenus Substy : montants en dollars, « …Delta » = évolution en % par rapport à la période précédente.
+  const revenueView = (r) => {
+    if (!r) return null;
+    const part = (k) => ({ v: Number(r[k]) || 0, d: r[k + 'Delta'] ?? null });
+    return {
+      total: part('total'), messages: part('messages'), tips: part('tips'), subscriptions: part('subscriptions'), posts: part('posts'),
+      newSubs: { v: Number(r.totalNewSubs) || 0, d: r.totalNewSubsDelta ?? null },
+      chart: (r.totalCharts || []).map((x) => ({ date: x.date, v: Number(x.count) || 0 })),
+      currency: r.currency || 'USD',
+    };
+  };
+  const salesView = () =>
+    substy.recentSales()
+      .then((list) => (list || []).map((x) => ({ id: String(x.id), type: x.type, at: x.createdAt, price: x.price, fan: x.userName || null, fanId: x.userId ? String(x.userId) : null, creatorId: x.creatorId, creator: x.creatorName })))
+      .catch(() => []);
+
   return {
+    // Ventes en direct (rafraîchies souvent, sans recalculer tout le dashboard).
+    'GET /api/sales': async (req, res) => {
+      if (!auth(req, res)) return;
+      send(res, 200, await salesView());
+    },
+
     'GET /api/creators': async (req, res) => {
       if (!auth(req, res)) return;
       const list = (await substy.creators()) || [];
-      send(res, 200, list.map((c) => ({ id: c.id, name: c.name || c.pseudo || 'Créatrice', platform: c.platform, ai: c.setting?.enable ?? null })));
+      send(res, 200, list.map(creatorOf));
+    },
+
+    // Dashboard : l'état en direct de chaque créatrice + ce que Bloom a vu passer aujourd'hui et sur 7 jours.
+    'GET /api/dashboard': async (req, res) => {
+      if (!auth(req, res)) return;
+      const period = ['today', '7d', '30d'].includes(q(req).get('period')) ? q(req).get('period') : 'today';
+      if (dashCache?.[period] && Date.now() - dashCache[period].at < 20_000) return send(res, 200, dashCache[period].data);
+      const creators = ((await substy.creators()) || []).map(creatorOf);
+      // Dates à l'heure de Paris, comme le dashboard de Substy (7 jours = du J-7 à aujourd'hui).
+      const ymd = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(d);
+      const end = ymd(new Date());
+      const start = ymd(new Date(Date.now() - (period === '7d' ? 7 : period === '30d' ? 30 : 0) * 864e5));
+      const rev = (ids) => substy.revenue(ids, start, end).then(revenueView).catch((e) => ({ error: e.message }));
+      const day0 = new Date();
+      day0.setHours(0, 0, 0, 0);
+      const today = periodStats(day0.getTime());
+      const week = periodStats(Date.now() - 7 * 864e5);
+      const st = streams();
+      const items = await Promise.all(
+        creators.map(async (c) => {
+          const [unread, handoff, aiOff, recent, revenue] = await Promise.all([
+            countChats(c.id, { unreadOnly: true }),
+            countChats(c.id, { handoffOnly: true }),
+            countChats(c.id, { aiStatus: 'disabled' }),
+            substy.chats(c.id, { limit: 6 }).then((r) => (r?.items || []).map(chatView)).catch(() => []),
+            rev([c.id]),
+          ]);
+          return { ...c, live: !!st[c.id]?.live, unread, handoff, aiOff, recent, revenue, today: today[c.id] || null, week: week[c.id] || null };
+        }),
+      );
+      const [revenue, sales] = await Promise.all([rev([]), salesView()]);
+      const since = one('SELECT MIN(at) AS t FROM msg_log')?.t || null;
+      const data = { period, start, end, revenue, sales, creators: items, since, at: Date.now() };
+      dashCache = { ...dashCache, [period]: { at: Date.now(), data } };
+      send(res, 200, data);
     },
 
     'GET /api/chats': async (req, res) => {

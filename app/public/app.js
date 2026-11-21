@@ -35,7 +35,69 @@ const S = {
   fan: null,            // conversation ouverte : { fanId, name, ... }
   msgs: [], older: null,
   selMedias: [], price: 0,
+  page: 'dashboard', me: null,
 };
+
+// ---------------------------------------------------------------- menu et pages
+const NAV = [
+  { g: 'Accueil', items: [['dashboard', 'Dashboard', '◈']] },
+  { g: 'Chatting', items: [['inbox', 'Messagerie', '💬'], ['fans', 'Fans', '♥'], ['mass', 'Messages de masse', '📣', 1], ['scheduled', 'Messages programmés', '⏱', 1]] },
+  { g: 'Contenu', items: [['vault', 'Vault', '🖼'], ['creators', 'Créatrices', '✿']] },
+  { g: 'Équipe', items: [['team', 'Chatteurs', '👥', 1], ['planning', 'Planning', '📅', 1], ['clock', 'Pointage', '⏲', 1]] },
+  { g: 'Résultats', items: [['stats', 'Statistiques', '📈', 1], ['pay', 'Paies', '💶', 1]] },
+  { g: 'Réglages', items: [['settings', 'Connexion Substy', '⚙']] },
+];
+const SOON = {
+  mass: 'Envoyer un message ou un PPV à une liste de fans, et suivre combien l’ont acheté.',
+  scheduled: 'Voir, créer et annuler les messages programmés de chaque fan.',
+  team: 'Les comptes des chatteurs, leur rôle (admin, manager, chatteur) et les créatrices auxquelles ils ont accès.',
+  planning: 'Les shifts de chaque chatteur par créatrice, avec une alerte avant le début.',
+  clock: 'Pointage obligatoire avant d’entrer dans la messagerie, pauses et heures faites.',
+  stats: 'Le chiffre par créatrice, par chatteur et par période : PPV, pourboires, abonnements.',
+  pay: 'Le calcul des paies à partir des ventes et des heures de chacun.',
+};
+const PER_CREATOR = new Set(['inbox', 'fans', 'vault']);
+const navItem = (id) => NAV.flatMap((g) => g.items).find((x) => x[0] === id);
+let openGroup = null;
+function renderNav() {
+  $('nav').innerHTML = NAV.map((g) => `<div class="grp ${g.g === openGroup ? 'open' : ''}">
+      <button class="grpBtn" data-g="${esc(g.g)}">${esc(g.g)}</button>
+      <div class="grpItems">${g.items.map(([id, label, ic, soon]) => `<button class="navItem ${id === S.page ? 'on' : ''}" data-p="${id}"><span class="ic">${ic}</span>${esc(label)}${soon ? '<span class="soon">bientôt</span>' : ''}</button>`).join('')}</div>
+    </div>`).join('');
+  // Accordéon : ouvrir une section ferme les autres.
+  $('nav').querySelectorAll('.grpBtn').forEach((b) => (b.onclick = () => { openGroup = openGroup === b.dataset.g ? null : b.dataset.g; renderNav(); }));
+  $('nav').querySelectorAll('.navItem').forEach((b) => (b.onclick = () => go(b.dataset.p)));
+}
+function go(page, opts = {}) {
+  if (!navItem(page)) page = 'dashboard';
+  S.page = page;
+  openGroup = NAV.find((g) => g.items.some((x) => x[0] === page))?.g;
+  if (location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
+  const it = navItem(page);
+  const viewId = page === 'inbox' ? 'inbox' : page === 'settings' ? 'settings' : it[3] ? 'pg-soon' : 'pg-' + page;
+  document.querySelectorAll('.mainCol > .view, .mainCol > .inbox').forEach((v) => v.classList.toggle('hidden', v.id !== viewId));
+  $('pageTitle').textContent = it[1];
+  $('creatorTabs').classList.toggle('hidden', !PER_CREATOR.has(page));
+  $('side').classList.remove('open');
+  renderNav();
+  if (it[3]) { $('soonTitle').textContent = it[1]; $('soonText').textContent = SOON[page] || ''; }
+  if (page === 'dashboard') loadDash();
+  if (page === 'inbox' && !opts.keep) loadChats(true);
+  if (page === 'fans') loadFans(true);
+  if (page === 'creators') renderCreators();
+  if (page === 'vault') openVaultPage();
+  if (page === 'settings') refreshStatus();
+}
+window.addEventListener('hashchange', () => { const p = location.hash.slice(1); if (p && p !== S.page) go(p); });
+$('burger').onclick = () => $('side').classList.toggle('open');
+$('sideShade').onclick = () => $('side').classList.remove('open');
+const ROLE = { admin: 'Admin', lead: 'Manager', chatter: 'Chatteur' };
+/** Ouvre la messagerie d'une créatrice (et une conversation si on en donne une) depuis une autre page. */
+function openFrom(creatorId, chat) {
+  if (creatorId && creatorId !== S.creator) { S.creator = creatorId; localStorage.setItem('bloom.creator', S.creator); closeChat(); renderTabs(); }
+  go('inbox');
+  if (chat) openChat(chat);
+}
 
 // ---------------------------------------------------------------- démarrage / comptes
 async function boot() {
@@ -44,11 +106,15 @@ async function boot() {
   if (!s.setup) return show('setup');
   if (!s.me) return show('login');
   show('app');
+  S.me = s.me;
+  $('meName').textContent = s.me.name || s.me.email;
+  $('meRole').textContent = ROLE[s.me.role] || s.me.role;
+  $('meAv').textContent = (s.me.name || s.me.email || '?')[0].toUpperCase();
   S.creators = await api('GET', '/api/creators');
   S.creator = localStorage.getItem('bloom.creator');
   if (!S.creators.some((c) => c.id === S.creator)) S.creator = S.creators[0]?.id || null;
   renderTabs();
-  loadChats(true);
+  go(location.hash.slice(1) || 'dashboard');
   live();
 }
 
@@ -67,13 +133,13 @@ $('logout').onclick = async () => { await api('POST', '/api/logout'); location.r
 
 // ---------------------------------------------------------------- créatrices
 function renderTabs() {
-  $('creatorTabs').innerHTML = S.creators.map((c) => `<button class="tab ${c.id === S.creator ? 'on' : ''}" data-id="${esc(c.id)}">${avatar(c.name)}${esc(c.name)}</button>`).join('');
+  $('creatorTabs').innerHTML = S.creators.map((c) => `<button class="tab ${c.id === S.creator ? 'on' : ''}" data-id="${esc(c.id)}">${avatar(c.name, c.avatar)}${esc(c.name)}</button>`).join('');
   $('creatorTabs').querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
     S.creator = b.dataset.id;
     localStorage.setItem('bloom.creator', S.creator);
     closeChat();
     renderTabs();
-    loadChats(true);
+    go(S.page);
   }));
 }
 
@@ -388,11 +454,13 @@ function live() {
   };
 }
 // Filet de sécurité : la liste se rafraîchit toutes les 45 s.
-setInterval(() => { if (!document.hidden && !$('app').classList.contains('hidden') && !$('inbox').classList.contains('hidden')) loadChats(true); }, 45_000);
+setInterval(() => {
+  if (document.hidden || $('app').classList.contains('hidden')) return;
+  if (S.page === 'inbox') loadChats(true);
+  if (S.page === 'dashboard') loadDash();
+}, 60_000);
 
 // ---------------------------------------------------------------- réglages (état de la connexion Substy)
-$('toSettings').onclick = () => { $('inbox').classList.add('hidden'); $('settings').classList.remove('hidden'); refreshStatus(); };
-$('toInbox').onclick = () => { $('settings').classList.add('hidden'); $('inbox').classList.remove('hidden'); };
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + ' s' : Math.round(s / 60) + ' min'; };
 async function refreshStatus() {
   try {
@@ -412,5 +480,184 @@ $('relinkBtn').onclick = async () => {
   try { await api('POST', '/api/relink', { client: $('client2').value }); $('client2').value = ''; refreshStatus(); toast('Compte Substy relié'); }
   catch (e) { $('relinkErr').textContent = e.message; }
 };
+
+// ---------------------------------------------------------------- dashboard
+let dashT = null;
+let dashPeriod = 'today';
+const num = (c) => (c?.n == null ? '–' : c.n + (c.more ? '+' : ''));
+const delta = (d) => (d == null || !isFinite(d) ? '' : `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : ''}${(Math.round(d * 10) / 10).toLocaleString('fr-FR')} %</span>`);
+const PERIOD_TXT = { today: 'vs hier', '7d': 'vs 7 jours d’avant', '30d': 'vs 30 jours d’avant' };
+const SALE = { ppv: ['🔒', 'PPV acheté'], tip: ['💸', 'Pourboire'], post: ['🖼', 'Post acheté'] };
+async function loadDash() {
+  try {
+    const d = await api('GET', '/api/dashboard?period=' + dashPeriod);
+    if (S.page !== 'dashboard' || d.period !== dashPeriod) return;
+    const sum = (f) => d.creators.reduce((a, c) => a + (f(c) || 0), 0);
+    const anyMore = (k) => d.creators.some((c) => c[k]?.more);
+    $('dashSince').textContent = 'Revenus Substy (net, en dollars) · mis à jour à ' + hhmm(d.at);
+    const r = d.revenue && !d.revenue.error ? d.revenue : null;
+    const vs = PERIOD_TXT[d.period];
+    const tile = (k, v, s, cls = '') => `<div class="tile ${cls}"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
+    const rt = (k, p, cls = '') => tile(k, r ? money(p.v) : '–', r && delta(p.d) ? delta(p.d) + ' ' + vs : '', cls);
+    $('dashTiles').innerHTML =
+      (r ? rt('Revenus', r.total, 'hot') + rt('Messages et PPV', r.messages) + rt('Pourboires', r.tips) + rt('Abonnements', r.subscriptions) + rt('Posts', r.posts) +
+        tile('Nouveaux abonnés', r.newSubs.v, delta(r.newSubs.d) ? delta(r.newSubs.d) + ' ' + vs : '')
+        : tile('Revenus', '–', esc(d.revenue?.error || 'indisponible'))) +
+      tile('Conversations non lues', sum((c) => c.unread?.n) + (anyMore('unread') ? '+' : ''), 'en ce moment', 'hot') +
+      tile('À reprendre', sum((c) => c.handoff?.n) + (anyMore('handoff') ? '+' : ''), 'l’IA a passé la main', 'warn');
+    // Graphique des revenus par jour.
+    const ch = r?.chart || [];
+    const max = Math.max(1, ...ch.map((x) => x.v));
+    const lab = (s) => new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    const every = Math.ceil(ch.length / 10);
+    $('dashChart').innerHTML = ch.map((x, i) => `<div class="bar" title="${esc(lab(x.date))} : ${esc(money(x.v))}"><i style="height:${Math.max(1, (x.v / max) * 100)}%"></i><span>${i % every === 0 || i === ch.length - 1 ? esc(lab(x.date)) : '&nbsp;'}</span></div>`).join('') || '<p class="muted">Pas de données</p>';
+    $('dashChartTotal').textContent = r ? 'Total ' + money(r.total.v) : '';
+    renderSales(d.sales);
+    // Une carte par créatrice.
+    $('dashCreators').innerHTML = d.creators.map((c) => {
+      const t = c.today || {};
+      const cr = c.revenue && !c.revenue.error ? c.revenue : null;
+      return `<div class="ccard" data-id="${esc(c.id)}">
+        <div class="head">${avatar(c.name, c.avatar)}<div class="grow"><b>${esc(c.name)}</b><div class="muted sm">${c.username ? '@' + esc(c.username) + ' · ' : ''}<span class="dot" style="background:${c.live ? 'var(--ok)' : 'var(--warn)'}"></span>${c.live ? 'en direct' : 'temps réel en connexion'}</div></div>
+          ${c.ai === false ? '<span class="tag off">IA off</span>' : c.ai ? '<span class="tag ai">IA</span>' : ''}</div>
+        <div class="rev"><span class="big">${cr ? money(cr.total.v) : '–'}</span>${cr ? delta(cr.total.d) : ''}</div>
+        ${cr ? `<div class="stats"><span class="pill">PPV / messages ${money(cr.messages.v)}</span><span class="pill">Pourboires ${money(cr.tips.v)}</span><span class="pill">Abonnements ${money(cr.subscriptions.v)}</span><span class="pill">${cr.newSubs.v} nouveaux abonnés</span></div>` : ''}
+        <div class="nums">
+          <div class="num hot" data-f="unread"><b>${num(c.unread)}</b><span>non lues</span></div>
+          <div class="num warn" data-f="handoff"><b>${num(c.handoff)}</b><span>à reprendre</span></div>
+          <div class="num" data-f="ai_off"><b>${num(c.aiOff)}</b><span>IA coupée</span></div>
+        </div>
+        <h4>Aujourd’hui dans la messagerie</h4>
+        <div class="stats"><span class="pill">${t.fanIn || 0} msg de fans</span><span class="pill">${t.ai || 0} réponses IA</span><span class="pill">${t.team || 0} réponses équipe</span><span class="pill">${t.ppv || 0} PPV envoyés</span></div>
+        <h4>Dernières conversations</h4>
+        <div>${c.recent.map((x, i) => `<div class="mini" data-i="${i}">${avatar(x.name, x.avatar)}<span class="n">${esc(x.name)}</span><span class="p">${esc(x.last ? (x.last.fromCreator ? 'Toi : ' : '') + (x.last.text || (x.last.media ? '📷 Média' : '')) : '')}</span>${x.unread ? `<span class="badge">${x.unread}</span>` : ''}<span class="t">${when(x.last?.at)}</span></div>`).join('') || '<p class="muted sm">Aucune conversation</p>'}</div>
+      </div>`;
+    }).join('') || '<p class="muted">Aucune créatrice</p>';
+    $('dashCreators').querySelectorAll('.ccard').forEach((card) => {
+      const c = d.creators.find((x) => x.id === card.dataset.id);
+      card.querySelectorAll('.num').forEach((n) => (n.onclick = () => { setChatFilter(n.dataset.f); openFrom(c.id, null); }));
+      card.querySelectorAll('.mini').forEach((m) => (m.onclick = () => openFrom(c.id, c.recent[Number(m.dataset.i)])));
+    });
+  } catch (e) { if (S.page === 'dashboard') $('dashCreators').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+let lastSales = [];
+function renderSales(list) {
+  lastSales = list || [];
+  $('dashSales').innerHTML = lastSales.map((s, i) => {
+    const [ic, label] = SALE[s.type] || ['💰', s.type];
+    return `<div class="sale" data-i="${i}"><span class="ic">${ic}</span><div class="w"><b>${esc(label)}${s.fan ? ' · ' + esc(s.fan) : ''}</b><span>${esc(s.creator || '')} · ${when(s.at)}</span></div><span class="pr">${esc(s.price || '')}</span></div>`;
+  }).join('') || '<p class="muted sm">Aucune vente récente</p>';
+  $('dashSales').querySelectorAll('.sale').forEach((el) => (el.onclick = () => {
+    const s = lastSales[Number(el.dataset.i)];
+    if (s.fanId) openFrom(s.creatorId, { fanId: s.fanId, name: s.fan || 'Fan', avatar: null, username: null, ai: false });
+  }));
+}
+setInterval(async () => {
+  if (document.hidden || S.page !== 'dashboard') return;
+  try { renderSales(await api('GET', '/api/sales')); } catch {}
+}, 30_000);
+$('dashRefresh').onclick = loadDash;
+$('dashPeriod').querySelectorAll('.chip').forEach((b) => (b.onclick = () => {
+  dashPeriod = b.dataset.p;
+  $('dashPeriod').querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === b));
+  loadDash();
+}));
+/** Choisit un filtre de la liste des conversations (Tous, Non lus, À reprendre…). */
+function setChatFilter(f) {
+  S.filter = f;
+  $('filters').querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.dataset.f === f));
+}
+
+// ---------------------------------------------------------------- fans
+const F = { filter: 'all', q: '', items: [], cursor: null, sort: 'recent' };
+async function loadFans(reset) {
+  if (!S.creator) return;
+  const p = new URLSearchParams({ creatorId: S.creator, q: F.q });
+  if (F.filter === 'unread') p.set('unread', '1');
+  if (F.filter === 'handoff') p.set('handoff', '1');
+  if (F.filter === 'ai_on') p.set('ai', 'enabled');
+  if (F.filter === 'ai_off') p.set('ai', 'disabled');
+  if (!reset && F.cursor) p.set('cursor', F.cursor);
+  if (reset) $('fansBody').innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
+  try {
+    const r = await api('GET', '/api/chats?' + p);
+    F.items = reset ? r.items : F.items.concat(r.items.filter((x) => !F.items.some((y) => y.fanId === x.fanId)));
+    F.cursor = r.nextCursor;
+    renderFans();
+  } catch (e) { $('fansBody').innerHTML = `<tr><td colspan="6" class="err">${esc(e.message)}</td></tr>`; }
+}
+function renderFans() {
+  const list = F.items.slice();
+  if (F.sort === 'spent') list.sort((a, b) => (b.spent || 0) - (a.spent || 0));
+  if (F.sort === 'unread') list.sort((a, b) => (b.unread || 0) - (a.unread || 0));
+  const sub = (s) => (!s ? '<span class="muted">–</span>' : /active|subscribed/i.test(s) ? '<span class="tag money">abonné</span>' : `<span class="tag off">${esc(s)}</span>`);
+  $('fansBody').innerHTML = list.map((c) => `<tr data-id="${esc(c.fanId)}">
+      <td><div class="fanCell">${avatar(c.name, c.avatar)}<div><b>${esc(c.name)}</b>${c.unread ? ` <span class="badge">${c.unread}</span>` : ''}<div class="muted sm">${c.username ? '@' + esc(c.username) : ''}</div></div></div></td>
+      <td>${sub(c.subscribed)}</td>
+      <td class="r"><b>${money(c.spent)}</b></td>
+      <td>${c.ai ? '<span class="tag ai">IA</span>' : '<span class="tag off">IA off</span>'}${c.handoff ? ' <span class="tag hand">à reprendre</span>' : ''}</td>
+      <td class="last">${esc(c.last ? (c.last.fromCreator ? 'Toi : ' : '') + (c.last.text || (c.last.media ? '📷 Média' : '')) : '')} <span class="muted sm">${when(c.last?.at)}</span></td>
+      <td><button class="btn ghost sm">Ouvrir</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" class="muted">Aucun fan</td></tr>';
+  $('fansBody').querySelectorAll('tr[data-id]').forEach((tr) => (tr.onclick = () => openFrom(S.creator, F.items.find((x) => x.fanId === tr.dataset.id))));
+  $('fansMore').classList.toggle('hidden', !F.cursor);
+}
+$('fansMore').onclick = () => loadFans(false);
+$('fansSort').onchange = () => { F.sort = $('fansSort').value; renderFans(); };
+$('fansFilters').querySelectorAll('.chip').forEach((b) => (b.onclick = () => {
+  F.filter = b.dataset.f;
+  $('fansFilters').querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === b));
+  loadFans(true);
+}));
+let fansQT = null;
+$('fansQ').oninput = () => { clearTimeout(fansQT); fansQT = setTimeout(() => { F.q = $('fansQ').value.trim(); loadFans(true); }, 350); };
+
+// ---------------------------------------------------------------- créatrices
+function renderCreators() {
+  $('creatorsGrid').innerHTML = S.creators.map((c) => `<div class="ccard">
+      <div class="head">${avatar(c.name, c.avatar)}<div class="grow"><b>${esc(c.name)}</b><div class="muted sm">${c.username ? '@' + esc(c.username) : ''}${c.platform ? ' · ' + esc(c.platform) : ''}</div></div>
+        ${c.ai === false ? '<span class="tag off">IA off</span>' : c.ai ? '<span class="tag ai">IA active</span>' : ''}</div>
+      <div class="stats">
+        <button class="btn ghost sm" data-go="inbox" data-id="${esc(c.id)}">💬 Messagerie</button>
+        <button class="btn ghost sm" data-go="fans" data-id="${esc(c.id)}">♥ Fans</button>
+        <button class="btn ghost sm" data-go="vault" data-id="${esc(c.id)}">🖼 Vault</button>
+      </div>
+      <p class="muted sm" style="margin:0">Fiche modèle (infos, style, limites, prix) : bientôt.</p>
+    </div>`).join('') || '<p class="muted">Aucune créatrice</p>';
+  $('creatorsGrid').querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => {
+    S.creator = b.dataset.id; localStorage.setItem('bloom.creator', S.creator); closeChat(); renderTabs(); go(b.dataset.go);
+  }));
+}
+
+// ---------------------------------------------------------------- vault (page)
+const VP = { list: null, items: [], cursor: null };
+async function openVaultPage() {
+  if (!S.creator) return;
+  VP.list = null;
+  $('vpLists').innerHTML = '<p class="muted sm">Chargement…</p>';
+  try {
+    const lists = await api('GET', `/api/vault/lists?creatorId=${encodeURIComponent(S.creator)}`);
+    const btn = (id, name, sub) => `<button class="vl ${VP.list === id ? 'on' : ''}" data-id="${esc(id || '')}">${esc(name)}${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+    $('vpLists').innerHTML = btn(null, 'Tous les médias', '') + lists.map((l) => btn(l.id, l.name, `${l.photos} photos · ${l.videos} vidéos${l.audios ? ' · ' + l.audios + ' vocaux' : ''}`)).join('');
+    $('vpLists').querySelectorAll('.vl').forEach((b) => (b.onclick = () => { VP.list = b.dataset.id || null; $('vpLists').querySelectorAll('.vl').forEach((x) => x.classList.toggle('on', x === b)); loadVaultPage(true); }));
+  } catch (e) { $('vpLists').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  loadVaultPage(true);
+}
+async function loadVaultPage(reset) {
+  try {
+    const p = new URLSearchParams({ creatorId: S.creator });
+    if (VP.list) p.set('listId', VP.list);
+    if (!reset && VP.cursor) p.set('cursor', VP.cursor);
+    if (reset) $('vpGrid').innerHTML = '<p class="muted">Chargement…</p>';
+    const r = await api('GET', '/api/vault/medias?' + p);
+    VP.items = reset ? r.items : VP.items.concat(r.items);
+    VP.cursor = r.nextCursor;
+    $('vpGrid').innerHTML = VP.items.map((m, i) => `<div class="vm" data-i="${i}">${m.thumb ? `<img loading="lazy" src="${esc(m.thumb)}" alt="">` : ''}<span class="ty">${m.type === 'video' ? '▶ vidéo' : m.type === 'audio' ? '🎤' : 'photo'}</span>${m.price ? `<span class="pr">${money(m.price)}</span>` : ''}</div>`).join('') || '<p class="muted">Aucun média</p>';
+    $('vpGrid').querySelectorAll('.vm').forEach((el) => (el.onclick = () => { const m = VP.items[Number(el.dataset.i)]; if (m.full || m.thumb) window.open(m.full || m.thumb, '_blank', 'noreferrer'); }));
+    $('vpCount').textContent = VP.items.length + (VP.cursor ? '+' : '') + ' médias';
+    $('vpMore').classList.toggle('hidden', !VP.cursor);
+  } catch (e) { $('vpGrid').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+$('vpMore').onclick = () => loadVaultPage(false);
 
 boot().catch((e) => toast(e.message, true));
