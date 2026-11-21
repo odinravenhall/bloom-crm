@@ -252,8 +252,10 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     'GET /api/chats': async (req, res) => {
       if (!auth(req, res)) return;
       const p = q(req);
+      // Jusqu'à 100 conversations par page (la messagerie charge toutes les pages d'un coup).
+      const limit = Math.min(100, Math.max(10, Number(p.get('limit')) || 30));
       const r = await substy.chats(p.get('creatorId'), {
-        limit: 30,
+        limit,
         cursor: p.get('cursor') || undefined,
         query: p.get('q') || '',
         unreadOnly: p.get('unread') === '1',

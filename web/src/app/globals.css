@@ -292,3 +292,9 @@ input[type="checkbox"], input[type="radio"], input[type="range"], progress { acc
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+
+/* Listes longues (toutes les conversations) : le navigateur ne dessine que ce qui est à l'écran. */
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
+}

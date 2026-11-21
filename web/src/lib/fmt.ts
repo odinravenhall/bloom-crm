@@ -44,3 +44,17 @@ export function ago(iso: string | number | null | undefined) {
 }
 
 export const num = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString("fr-FR"));
+
+/** Durée à la seconde pour les chronos en direct : « 37 s », « 4 min 07 », puis comme dur(). */
+export function durSec(ms: number | null | undefined) {
+  if (ms === null || ms === undefined) return "—";
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}`;
+  return dur(ms);
+}
+
+/** Couleur de l'attente d'un fan : vert < 5 min, orange < 15 min, rouge au-delà (comme Raven CRM). */
+export function waitTone(ms: number) {
+  return ms < 5 * 60000 ? "good" : ms < 15 * 60000 ? "warn" : "bad";
+}
