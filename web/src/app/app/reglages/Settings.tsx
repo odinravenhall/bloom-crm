@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, toast } from "@/lib/api";
 import { ago, cn } from "@/lib/fmt";
 import { Avatar, Card, Page, PageHeader, Pill, btnCls, inputCls } from "@/components/ui";
+import { Integrations } from "./Integrations";
 
 type Status = {
   linked: boolean;
@@ -71,8 +72,9 @@ export function Settings() {
   const t = st?.token;
   return (
     <Page>
-      <PageHeader eyebrow="Administration" title="Substy & Discord" sub="Les deux branchements de Bloom : le compte agence Substy (messages, IA, ventes) et le bot Discord (connexion de l’équipe, annonces)." />
+      <PageHeader eyebrow="Administration" title="Branchements" sub="Substy (messages, IA, ventes en direct), Infloww et MyPulse (vrais chiffres), et le bot Discord (connexion de l’équipe, annonces)." />
       <div className="grid gap-6 xl:grid-cols-2">
+        <Integrations />
         <Card title="Compte agence Substy">
           <p className="text-sm text-muted">{st?.account ? `Compte : ${st.account.name || ""}${st.account.email ? " · " + st.account.email : ""}` : "Aucun compte relié"}</p>
           <p className="mt-2 flex items-center gap-2 text-sm">

@@ -6,12 +6,13 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
+import { matchLive, parisDay, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
 
 // ---------------------------------------------------------------- Substy
-const state = { token: null, streams: {} };
+const state = { token: null, streams: {}, creators: [] };
 const substy = new SubstySession({
   load: () => {
     const v = getSetting('substy_client');
@@ -28,6 +29,8 @@ async function startStreams() {
   if (!getSetting('substy_client')) return;
   try {
     const list = (await substy.creators()) || [];
+    state.creators = list.map(creatorView);
+    setCreators(state.creators);
     warmInbox(list.map((c) => c.id || c.creatorId).filter(Boolean));
     for (const c of list) {
       const id = c.id || c.creatorId;
@@ -214,6 +217,42 @@ const routes = {
       error,
     });
   },
+  // Revenus officiels (Infloww / MyPulse) d'une période : admins et managers. from / to = jours (AAAA-MM-JJ, heure de Paris).
+  'GET /api/revenue': async (req, res) => {
+    const me = userFrom(req);
+    if (!me) return send(res, 401, { error: 'Connecte-toi' });
+    if (me.role !== 'admin' && me.role !== 'lead') return send(res, 403, { error: 'Réservé aux admins et managers' });
+    const p = new URL(req.url, 'http://x').searchParams;
+    const today = parisDay(Date.now());
+    const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+    let from = ok(p.get('from')) ? p.get('from') : today;
+    let to = ok(p.get('to')) ? p.get('to') : today;
+    if (from > to) [from, to] = [to, from];
+    if (to > today) to = today;
+    if (Date.parse(to) - Date.parse(from) > 400 * 864e5) from = parisDay(Date.parse(to) - 400 * 864e5);
+    send(res, 200, revenue({ from, to, creators: state.creators }));
+  },
+  // Branchements Infloww / MyPulse (admins) : état, clés, créatrices reliées.
+  'GET /api/integrations': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    send(res, 200, { ...revenueStatus(), creators: state.creators });
+  },
+  'POST /api/integrations': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    const b = await body(req);
+    await saveKeys({ ifwKey: b.ifwKey, ifwOid: b.ifwOid, mpKey: b.mpKey });
+    send(res, 200, { ...revenueStatus(), creators: state.creators });
+  },
+  'POST /api/revenue/map': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    const b = await body(req);
+    setMap(String(b.creatorId || ''), b.account ? String(b.account) : null);
+    send(res, 200, { ...revenueStatus(), creators: state.creators });
+  },
+
   // Bot Discord « Bloom » (admins) : état, jeton, serveur.
   'GET /api/discord': async (req, res) => {
     const me = userFrom(req);
@@ -255,4 +294,17 @@ createServer(async (req, res) => {
   console.log('Bloom CRM (API) prêt');
   startStreams();
   startBot();
+  startRevenue();
+  // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
+  const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
+  setTimeout(pollSales, 8_000);
+  setInterval(pollSales, 30_000);
+  // Liste des créatrices rafraîchie toutes les 30 min (une nouvelle modèle est reliée toute seule).
+  setInterval(async () => {
+    try {
+      state.creators = ((await substy.creators()) || []).map(creatorView);
+      setCreators(state.creators);
+      matchLive();
+    } catch {}
+  }, 30 * 60_000);
 });

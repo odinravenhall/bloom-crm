@@ -58,3 +58,12 @@ export function durSec(ms: number | null | undefined) {
 export function waitTone(ms: number) {
   return ms < 5 * 60000 ? "good" : ms < 15 * 60000 ? "warn" : "bad";
 }
+
+/** Montant en euros (centimes → « 1 234,50 € »). */
+export function eur(cents: number | null | undefined, dec?: number) {
+  const n = (cents || 0) / 100;
+  const d = dec ?? (Number.isInteger(n) ? 0 : 2);
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }) + " €";
+}
+/** Montant en centimes dans sa devise (USD → « $ », EUR → « € »). */
+export const moneyC = (cents: number, currency?: string | null, dec?: number) => (currency === "USD" ? usd((cents || 0) / 100, dec) : eur(cents, dec));

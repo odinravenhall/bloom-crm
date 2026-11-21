@@ -79,6 +79,18 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
   `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).
 
+## Chiffres : Infloww (OnlyFans) et MyPulse (MYM) — `app/revenue.mjs`
+
+- Source officielle des ventes = Infloww et MyPulse (clés collées par un admin dans Administration → Branchements,
+  gardées chiffrées dans la base). Ventes récentes toutes les 2-3 min, recalage 14 jours, historique 1 an recopié petit à petit.
+- Une vente = une ligne `rv_sales`, comptée une seule fois. Les ventes en direct de Substy (`rv_live`, lues toutes les 30 s)
+  sont « en attente » puis REMPLACÉES par la vente officielle (même compte, même fan, ≤ 2 min) — jamais ajoutées.
+  Non confirmées après 6 h : plus comptées.
+- Origine d'une vente : message PPV acheté envoyé par l'IA Substy / un chatteur Bloom (via `msg_log`), sinon le chatteur
+  Infloww / MyPulse attribué, sinon « autre ». Abonnements à part.
+- Créatrice Bloom (Substy) ↔ compte Infloww / MyPulse : automatique (même plateforme, même prénom) ou à la main (`rv_map`).
+- Total de l'agence en euros (dollars convertis au taux BCE du jour), chaque créatrice dans sa devise.
+
 ## Connexion de l'équipe : Discord (comme Raven CRM)
 
 - Serveur Discord « Bloom CRM ». Rôles **Admin** / **Manager** / **Chatteur** = rôles Bloom (admin / lead / chatter).

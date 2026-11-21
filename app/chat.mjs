@@ -228,8 +228,9 @@ function onLiveMessage(cid, fanId, m) {
 let pruned = 0;
 function logMessage(creatorId, fanId, m) {
   try {
-    run('INSERT OR IGNORE INTO msg_log (id, creator_id, fan_id, at, from_fan, kind, price, tip, medias) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      String(m.id), creatorId, fanId ? String(fanId) : null, Date.parse(m.at) || Date.now(), m.fromFan ? 1 : 0, m.fromFan ? 'fan' : m.by?.kind || null, m.price || 0, m.tip ? 1 : 0, m.medias.length);
+    run('INSERT OR IGNORE INTO msg_log (id, creator_id, fan_id, at, from_fan, kind, price, tip, medias, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      String(m.id), creatorId, fanId ? String(fanId) : null, Date.parse(m.at) || Date.now(), m.fromFan ? 1 : 0, m.fromFan ? 'fan' : m.by?.kind || null, m.price || 0, m.tip ? 1 : 0, m.medias.length,
+      m.by?.kind === 'bloom' || m.by?.kind === 'employee' ? m.by.name : null);
     if (Date.now() - pruned > 3600_000) {
       pruned = Date.now();
       run('DELETE FROM msg_log WHERE at < ?', Date.now() - 120 * 864e5);
@@ -342,7 +343,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const ymd = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(d);
       const end = ymd(new Date());
       const start = ymd(new Date(Date.now() - (period === '7d' ? 7 : period === '30d' ? 30 : 0) * 864e5));
-      const rev = (ids) => substy.revenue(ids, start, end).then(revenueView).catch((e) => ({ error: e.message }));
+      const rev = async () => null; // revenus : /api/revenue (Infloww / MyPulse)
       const day0 = new Date();
       day0.setHours(0, 0, 0, 0);
       const today = periodStats(day0.getTime());
@@ -355,12 +356,12 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
             countChats(c.id, { handoffOnly: true }),
             countChats(c.id, { aiStatus: 'disabled' }),
             substy.chats(c.id, { limit: 6 }).then((r) => (r?.items || []).slice(0, 6).map(chatView)).catch(() => []),
-            rev([c.id]),
+            rev(),
           ]);
           return { ...c, live: !!st[c.id]?.live, unread, handoff, aiOff, recent, revenue, today: today[c.id] || null, week: week[c.id] || null };
         }),
       );
-      const [revenue, sales] = await Promise.all([rev([]), salesView()]);
+      const [revenue, sales] = await Promise.all([rev(), salesView()]);
       const since = one('SELECT MIN(at) AS t FROM msg_log')?.t || null;
       const data = { period, start, end, revenue, sales, creators: items, since, at: Date.now() };
       dashCache = { ...dashCache, [period]: { at: Date.now(), data } };

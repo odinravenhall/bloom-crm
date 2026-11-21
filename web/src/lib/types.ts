@@ -67,3 +67,34 @@ export type DashCreator = Creator & {
 };
 export type Dashboard = { period: string; start: string; end: string; revenue: Revenue | { error: string } | null; sales: Sale[]; creators: DashCreator[]; at: number };
 export const okRev = (r: Revenue | { error: string } | null | undefined): r is Revenue => !!r && !("error" in r);
+
+/** Revenus officiels (Infloww / MyPulse) d'une période. Montants en centimes ; eur = converti en euros. */
+export type RevenueCreator = {
+  creatorId: string;
+  account: string | null;
+  platform: "onlyfans" | "mym" | null;
+  currency: "USD" | "EUR" | null;
+  net: number;
+  eur: number;
+  prev: number;
+  provisional: number;
+  sales: number;
+  byType: Record<string, number>;
+  byOrigin: Record<string, number>;
+};
+export type RevenueSale = { id: string; creatorId: string; at: string; type: string; net: number; currency: string; fan: string | null; fanId: string | null; origin: string; by: string | null; provisional: boolean };
+export type RevenueR = {
+  from: string;
+  to: string;
+  total: number;
+  prev: number;
+  provisional: number;
+  sales: number;
+  buyers: number;
+  byType: Record<string, number>;
+  byOrigin: Record<string, number>;
+  days: { day: string; onlyfans: number; mym: number; provisional: number }[];
+  creators: RevenueCreator[];
+  recent: RevenueSale[];
+  unmapped: string[];
+};

@@ -78,7 +78,7 @@ const SECTIONS: Section[] = [
     who: "admin",
     items: [
       { href: "/app/creatrices", label: "Créatrices", icon: Flower2, who: "admin" },
-      { href: "/app/reglages", label: "Substy & Discord", icon: Plug, who: "admin" },
+      { href: "/app/reglages", label: "Branchements", icon: Plug, who: "admin" },
     ],
   },
 ];
