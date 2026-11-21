@@ -152,6 +152,15 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     if (!u) send(res, 401, { error: 'Connecte-toi' });
     return u;
   };
+  // Chiffres de l'agence (revenus, ventes) : admins et managers seulement.
+  const boss = (req, res) => {
+    const u = auth(req, res);
+    if (u && u.role !== 'admin' && u.role !== 'lead') {
+      send(res, 403, { error: 'Réservé aux admins et managers' });
+      return null;
+    }
+    return u;
+  };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
 
   const creatorOf = (c) => ({
@@ -195,7 +204,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
   return {
     // Ventes en direct (rafraîchies souvent, sans recalculer tout le dashboard).
     'GET /api/sales': async (req, res) => {
-      if (!auth(req, res)) return;
+      if (!boss(req, res)) return;
       send(res, 200, await salesView());
     },
 
@@ -207,7 +216,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
 
     // Dashboard : l'état en direct de chaque créatrice + ce que Bloom a vu passer aujourd'hui et sur 7 jours.
     'GET /api/dashboard': async (req, res) => {
-      if (!auth(req, res)) return;
+      if (!boss(req, res)) return;
       const period = ['today', '7d', '30d'].includes(q(req).get('period')) ? q(req).get('period') : 'today';
       if (dashCache?.[period] && Date.now() - dashCache[period].at < 20_000) return send(res, 200, dashCache[period].data);
       const creators = ((await substy.creators()) || []).map(creatorOf);

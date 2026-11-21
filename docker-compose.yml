@@ -1,4 +1,6 @@
 # Bloom CRM sur le VPS Zèbre. Le Caddy existant (/root/zebre) sert bloom.ravencrm.xyz -> bloom-web:3000.
+#   app : API (pont Substy, comptes, bot Discord Bloom), non exposée. Données : ./data (SQLite + clé de chiffrement).
+#   web : l'app Next.js (interface). Elle relaie /api et /media vers app.
 services:
   app:
     build:
@@ -11,6 +13,20 @@ services:
     volumes:
       - ./data:/data
     mem_limit: 256m
+    networks:
+      default:
+        aliases: [api]
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Paris
+      API_URL: http://api:3000
+    mem_limit: 384m
+    depends_on: [app]
     networks:
       default: {}
       edge:

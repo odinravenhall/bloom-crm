@@ -35,7 +35,20 @@ db.exec(`
   -- Chaque message vu passer en temps réel (pour le dashboard et, plus tard, les statistiques)
   CREATE TABLE IF NOT EXISTS msg_log (id TEXT PRIMARY KEY, creator_id TEXT NOT NULL, fan_id TEXT, at INTEGER NOT NULL, from_fan INTEGER NOT NULL, kind TEXT, price REAL NOT NULL DEFAULT 0, tip INTEGER NOT NULL DEFAULT 0, medias INTEGER NOT NULL DEFAULT 0);
   CREATE INDEX IF NOT EXISTS msg_creator_at ON msg_log (creator_id, at);
+  -- Liens de connexion du bot Discord (seulement l'empreinte SHA-256 du lien)
+  CREATE TABLE IF NOT EXISTS login_links (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
 `);
+// Colonnes ajoutées après coup (ignorées si déjà là : la base en ligne n'est jamais recréée).
+for (const sql of [
+  'ALTER TABLE users ADD COLUMN discord_id TEXT',
+  'ALTER TABLE users ADD COLUMN avatar TEXT',
+  'ALTER TABLE users ADD COLUMN discord_checked INTEGER',
+]) {
+  try {
+    db.exec(sql);
+  } catch {}
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_discord ON users (discord_id) WHERE discord_id IS NOT NULL');
 
 export const one = (sql, ...p) => db.prepare(sql).get(...p);
 export const all = (sql, ...p) => db.prepare(sql).all(...p);

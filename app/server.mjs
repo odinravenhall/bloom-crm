@@ -1,18 +1,13 @@
-// Bloom CRM — serveur. Étape 1 : relier le compte agence Substy, vérifier la connexion et le temps réel.
+// Bloom CRM — API (pont Substy, comptes, bot Discord). L'interface est l'app Next.js de web/, qui relaie /api et /media ici.
 // Première configuration : on colle la session Substy (cookie « __client ») ; si Substy l'accepte, le compte admin
-// est créé avec l'email du compte Substy. Sans session Substy valide, personne ne peut configurer Bloom.
+// est créé avec l'email du compte Substy. Ensuite, la connexion se fait par le bot Discord (/connexion).
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes } from './chat.mjs';
+import { discordReady, guildsOfBot, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
-const PAGE = readFileSync(new URL('./public/index.html', import.meta.url), 'utf8');
-const STATIC = {
-  '/app.css': { type: 'text/css; charset=utf-8', body: readFileSync(new URL('./public/app.css', import.meta.url)) },
-  '/app.js': { type: 'text/javascript; charset=utf-8', body: readFileSync(new URL('./public/app.js', import.meta.url)) },
-};
 const COOKIE = 'bloom_session';
 
 // ---------------------------------------------------------------- Substy
@@ -72,7 +67,7 @@ const creatorView = (c) => ({
 function userFrom(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.cookie || '');
   if (!m) return null;
-  return one('SELECT u.id, u.email, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
+  return one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
 }
 function login(res, userId) {
   const token = randomBytes(32).toString('base64url');
@@ -122,7 +117,19 @@ const routes = {
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end('ok');
   },
-  'GET /api/state': async (req, res) => send(res, 200, { setup: hasAdmin() && !!getSetting('substy_client'), me: userFrom(req) }),
+  'GET /api/state': async (req, res) => send(res, 200, { setup: hasAdmin() && !!getSetting('substy_client'), discord: discordReady(), me: userFrom(req) }),
+
+  // Lien du bot Discord (/connexion) : usage unique, 5 minutes.
+  'GET /api/auth/link': async (req, res) => {
+    const u = useLink(new URL(req.url, 'http://x').searchParams.get('t') || '');
+    if (!u) {
+      res.writeHead(410, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end('Lien expiré ou déjà utilisé. Tape /connexion sur le serveur Discord pour en recevoir un nouveau.');
+    }
+    login(res, u.id);
+    res.writeHead(303, { location: u.role === 'chatter' ? '/app/messagerie' : '/app', 'cache-control': 'no-store' });
+    res.end();
+  },
 
   // Première configuration : seulement tant qu'aucun admin n'existe.
   'POST /api/setup': async (req, res) => {
@@ -137,6 +144,8 @@ const routes = {
   },
 
   'POST /api/login': async (req, res) => {
+    // Une fois le bot Discord en place, on n'entre plus que par /connexion sur Discord.
+    if (discordReady()) return send(res, 403, { error: 'Connexion par Discord : tape /connexion sur le serveur de l’agence.' });
     const b = await body(req);
     const u = one('SELECT id, pass_hash FROM users WHERE email = ? AND active = 1', String(b.email || '').trim());
     if (!u || !checkPassword(String(b.password || ''), u.pass_hash)) return send(res, 401, { error: 'Email ou mot de passe incorrect' });
@@ -173,6 +182,20 @@ const routes = {
       error,
     });
   },
+  // Bot Discord « Bloom » (admins) : état, jeton, serveur.
+  'GET /api/discord': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    send(res, 200, { ...discordStatus(), guilds: await guildsOfBot().catch(() => []) });
+  },
+  'POST /api/discord': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    const b = await body(req);
+    const st = await setupBot(b.token, b.guild);
+    send(res, 200, { ...st, guilds: await guildsOfBot().catch(() => []) });
+  },
+
   // Relier à nouveau (session expirée, autre compte…).
   'POST /api/relink': async (req, res) => {
     const me = userFrom(req);
@@ -189,14 +212,6 @@ createServer(async (req, res) => {
   const h = routes[`${req.method} ${path}`];
   try {
     if (h) return await h(req, res);
-    if (req.method === 'GET' && STATIC[path]) {
-      res.writeHead(200, { 'content-type': STATIC[path].type, 'cache-control': 'no-cache' });
-      return res.end(STATIC[path].body);
-    }
-    if (req.method === 'GET' && !path.startsWith('/api/')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' });
-      return res.end(PAGE);
-    }
     send(res, 404, { error: 'Introuvable' });
   } catch (e) {
     const status = e instanceof SubstyError ? (e.status === 401 ? 400 : 502) : e.status || 500;
@@ -205,6 +220,7 @@ createServer(async (req, res) => {
     send(res, status, { error: e instanceof SubstyError ? `Substy : ${e.message}` : e.message || 'Erreur serveur' });
   }
 }).listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
-  console.log('Bloom CRM prêt');
+  console.log('Bloom CRM (API) prêt');
   startStreams();
+  startBot();
 });

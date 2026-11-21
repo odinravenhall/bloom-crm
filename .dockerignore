@@ -1,0 +1,7 @@
+.git
+data
+backups
+**/node_modules
+**/.next
+**/deno.lock
+**/*.tsbuildinfo

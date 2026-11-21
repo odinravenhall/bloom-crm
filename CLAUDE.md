@@ -65,16 +65,28 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
   medias, previews, status, isRead, sentByAi, sentByEmployee, isAutomationMessage, automation{id,name}, script,
   isPurchasedByRecipient, isTip, createdAt, …}], nextCursor}`.
 
-⚠️ API interne : Substy peut la changer sans prévenir. Toute la couche Substy est isolée dans `bridge/` pour corriger
+⚠️ API interne : Substy peut la changer sans prévenir. Toute la couche Substy est isolée dans `app/substy.mjs` pour corriger
 à un seul endroit.
 
-## Architecture prévue (même socle que Raven CRM)
+## Architecture (en place depuis le 21/11/2026)
 
-- `bridge/` (Node 24) : garde la session Substy côté serveur (jamais dans le navigateur des chatteurs), appelle l'API
-  interne, écoute le temps réel, met en cache conversations / messages dans SQLite, applique les droits.
-- `web/` (Next.js, Tailwind) : l'interface des chatteurs et des admins (messagerie, IA on/off par fan, scripts, PPV, vault).
-- `docker-compose.yml` sur le VPS Zèbre, derrière le Caddy existant (`bloom.ravencrm.xyz`).
-- Connexion des chatteurs : comme Raven CRM (Discord), à confirmer.
+- `app/` (Node 24, sans dépendance) = l'**API** : garde la session Substy côté serveur (chiffrée dans `data/`), appelle
+  l'API interne de Substy, écoute le temps réel, sert `/api/*` et `/media`, et fait tourner le **bot Discord « Bloom »**.
+- `web/` (Next.js 16 + Tailwind 4, même design que Raven CRM) = l'**interface**. Elle relaie `/api/*` et `/media` vers
+  l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,
+  `/app/fans`, `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
+- `docker-compose.yml` : `app` (API, réseau interne) + `web` (alias `bloom-web` sur le réseau du Caddy de /root/zebre).
+- Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
+  `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).
+
+## Connexion de l'équipe : Discord (comme Raven CRM)
+
+- Serveur Discord « Bloom CRM ». Rôles **Admin** / **Manager** / **Chatteur** = rôles Bloom (admin / lead / chatter).
+  Sans rôle Bloom (ou hors du serveur) : pas d'accès, sessions fermées (revérifié toutes les 10 min).
+- `/connexion` dans #connexion → le bot répond (en privé) avec un lien à usage unique de 5 min (`/api/auth/link`).
+- Le jeton du bot est collé par un admin dans **Administration → Substy & Discord** : gardé chiffré dans la base,
+  jamais dans le dépôt ni dans `.env`. Une fois le bot branché, la connexion par mot de passe est refusée.
+- Chaque déploiement est annoncé dans #mises-a-jour-bloom (`deploy/announce.mjs`, lancé dans le conteneur `app`).
 
 ## Étapes
 
