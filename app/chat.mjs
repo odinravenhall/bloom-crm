@@ -1,5 +1,5 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
-import { all, one, run } from './store.mjs';
+import { all, getSetting, one, run, setSetting } from './store.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -110,22 +110,41 @@ export function broadcast(creatorId, type, data) {
 
 // ---------------------------------------------------------------- toutes les conversations, gardées en mémoire
 // Substy ne renvoie qu'une vingtaine de conversations par page : Bloom les parcourt toutes en tâche de fond,
-// les garde ici à jour (temps réel + haut de liste toutes les 30 s + tour complet toutes les 15 min),
+// les garde ici à jour (temps réel + haut de liste toutes les 30 s + tour complet toutes les heures),
 // et la messagerie les reçoit d'un coup (puis seulement ce qui a changé).
 let SUB = null;
 const INBOX = new Map(); // creatorId -> { map: Map(fanId -> chat + _t), complete, crawling, crawledAt, usedAt }
 let seq = Date.now();
 const stamp = () => (seq = Math.max(seq + 1, Date.now()));
+// La liste est aussi enregistrée dans la base : après une mise à jour du site, elle est là tout de suite.
 function inboxOf(cid) {
   let b = INBOX.get(cid);
-  if (!b) INBOX.set(cid, (b = { map: new Map(), complete: false, crawling: false, crawledAt: 0, usedAt: 0 }));
+  if (!b) {
+    b = { cid, map: new Map(), complete: false, crawling: false, crawledAt: 0, usedAt: 0, resume: undefined };
+    for (const r of all('SELECT data FROM inbox_cache WHERE creator_id = ?', cid)) {
+      try {
+        const c = JSON.parse(r.data);
+        b.map.set(c.fanId, { ...c, _t: stamp() });
+      } catch {}
+    }
+    const done = Number(getSetting(`inbox_done:${cid}`)) || 0;
+    if (done && b.map.size) {
+      b.complete = true;
+      b.crawledAt = done;
+    }
+    INBOX.set(cid, b);
+  }
   return b;
 }
 const strip = ({ _t, ...c }) => c;
 function put(b, chat) {
   const old = b.map.get(chat.fanId);
-  if (old && JSON.stringify(strip(old)) === JSON.stringify(chat)) return;
+  const json = JSON.stringify(chat);
+  if (old && JSON.stringify(strip(old)) === json) return;
   b.map.set(chat.fanId, { ...chat, _t: stamp() });
+  try {
+    run('INSERT INTO inbox_cache (creator_id, fan_id, data) VALUES (?, ?, ?) ON CONFLICT(creator_id, fan_id) DO UPDATE SET data = excluded.data', b.cid, chat.fanId, json);
+  } catch {}
 }
 
 async function crawl(cid) {
@@ -133,8 +152,9 @@ async function crawl(cid) {
   if (b.crawling || !SUB) return;
   b.crawling = true;
   const t0 = Date.now();
+  // Reprise là où un tour interrompu s'était arrêté (erreur passagère de Substy).
+  let cursor = b.resume;
   try {
-    let cursor;
     let pages = 0;
     let stale = 0;
     const seen = new Set();
@@ -151,12 +171,16 @@ async function crawl(cid) {
       // Sécurité : 3 pages de suite sans nouveau fan = la pagination tourne en rond, on s'arrête.
       stale = fresh ? 0 : stale + 1;
       cursor = r?.nextCursor || undefined;
+      b.resume = cursor;
     } while (cursor && stale < 3 && ++pages < 2000);
+    b.resume = undefined;
     b.complete = true;
     b.crawledAt = Date.now();
+    setSetting(`inbox_done:${cid}`, String(b.crawledAt));
     console.log(`[bloom] conversations de ${cid} : ${b.map.size} en ${Math.round((Date.now() - t0) / 1000)} s`);
   } catch (e) {
-    console.warn('[bloom] liste des conversations :', e.message);
+    console.warn('[bloom] liste des conversations (reprise dans 10 s) :', e.message);
+    setTimeout(() => crawl(cid), 10_000);
   } finally {
     b.crawling = false;
   }
@@ -176,7 +200,7 @@ export function warmInbox(ids) {
 setInterval(() => {
   for (const [cid, b] of INBOX) {
     if (b.crawling) continue;
-    if (Date.now() - b.crawledAt > 15 * 60_000) crawl(cid);
+    if (Date.now() - b.crawledAt > 60 * 60_000) crawl(cid);
     else if (Date.now() - b.usedAt < 30 * 60_000) refreshTop(cid);
   }
 }, 30_000);
@@ -351,7 +375,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       if (!cid) return send(res, 400, { error: 'Créatrice manquante' });
       const b = inboxOf(cid);
       b.usedAt = Date.now();
-      if (!b.crawling && (!b.crawledAt || Date.now() - b.crawledAt > 15 * 60_000)) crawl(cid);
+      if (!b.crawling && (!b.crawledAt || Date.now() - b.crawledAt > 60 * 60_000)) crawl(cid);
       const since = Number(p.get('since')) || 0;
       const at = seq;
       const items = [];

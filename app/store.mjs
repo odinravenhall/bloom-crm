@@ -36,6 +36,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS msg_log (id TEXT PRIMARY KEY, creator_id TEXT NOT NULL, fan_id TEXT, at INTEGER NOT NULL, from_fan INTEGER NOT NULL, kind TEXT, price REAL NOT NULL DEFAULT 0, tip INTEGER NOT NULL DEFAULT 0, medias INTEGER NOT NULL DEFAULT 0);
   CREATE INDEX IF NOT EXISTS msg_creator_at ON msg_log (creator_id, at);
   -- Liens de connexion du bot Discord (seulement l'empreinte SHA-256 du lien)
+  -- Toutes les conversations de chaque créatrice (copie de la liste Substy, pour la messagerie)
+  CREATE TABLE IF NOT EXISTS inbox_cache (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (creator_id, fan_id));
   CREATE TABLE IF NOT EXISTS login_links (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
 `);
 // Colonnes ajoutées après coup (ignorées si déjà là : la base en ligne n'est jamais recréée).
