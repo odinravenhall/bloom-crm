@@ -46,7 +46,7 @@ function range(p: P, custom: { from: string; to: string }) {
 const ORIGINS: [string, string, string, typeof Bot][] = [
   ["ai", "IA Substy", "var(--chart-1)", Bot],
   ["bloom", "Chatteurs dans Bloom", "var(--chart-2)", UserRound],
-  ["substy", "Substy (IA ou chatteur)", "var(--chart-5)", Sparkles],
+  ["substy", "Automatisations Substy", "var(--chart-5)", Sparkles],
   ["chatter", "Chatteurs Infloww / MyPulse", "var(--chart-3)", Users],
   ["sub", "Abonnements", "var(--chart-4)", Gift],
   ["other", "Autres ventes", "var(--chart-7)", ImageIcon],
@@ -203,7 +203,7 @@ export function Dashboard() {
             })}
             {rev && !Object.keys(rev.byOrigin).length ? <p className="text-sm text-muted">Aucune vente sur la période.</p> : null}
             <p className="mt-1 text-xs text-muted">
-              « IA Substy » et « Chatteurs dans Bloom » : PPV envoyés depuis Bloom / Substy et achetés. Avant l’arrivée de Bloom, Infloww et MyPulse n’attribuent ces ventes à personne : elles sont dans « Autres ventes ».
+              « IA Substy » et « Chatteurs dans Bloom » : PPV envoyés par l’IA ou depuis Bloom, puis achetés (Bloom connaît l’expéditeur depuis son arrivée). Les ventes plus anciennes gardent l’attribution d’Infloww / MyPulse ; sans chatteur, elles sont dans « Autres ventes ».
             </p>
           </div>
         </Card>

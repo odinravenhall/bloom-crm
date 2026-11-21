@@ -380,14 +380,25 @@ export function recordLive(list) {
   matchLive();
 }
 
-/** D'où vient une vente rapprochée : message PPV acheté envoyé par l'IA, par un chatteur dans Bloom… */
+/**
+ * D'où vient une vente rapprochée. ATTENTION : le flux « ventes » de Substy contient TOUTES les ventes de la créatrice
+ * (même celles faites depuis Infloww). On ne donne donc une origine que si Bloom connaît l'expéditeur du PPV acheté :
+ * l'IA Substy, un chatteur dans Bloom, ou une automatisation / un script Substy. Sinon : null (on garde l'attribution
+ * d'Infloww / MyPulse).
+ */
 function originOfLive(l) {
-  if (!l.message_id) return { origin: 'substy', by: null };
+  if (!l.message_id) return { origin: null, by: null };
   const m = one('SELECT kind, by_name FROM msg_log WHERE id = ?', l.message_id);
-  if (!m) return { origin: 'substy', by: null };
+  if (!m) return { origin: null, by: null };
   if (m.kind === 'ai') return { origin: 'ai', by: null };
   if (m.kind === 'bloom') return { origin: 'bloom', by: m.by_name || null };
-  return { origin: 'substy', by: m.by_name || null };
+  if (m.kind === 'auto' || m.kind === 'script') return { origin: 'substy', by: null };
+  return { origin: null, by: null };
+}
+// Correction (22/11/2026) : les ventes classées « substy » juste parce qu'elles étaient dans le flux Substy.
+if (!getSetting('rv:fix-origin-1')) {
+  run("UPDATE rv_sales SET origin = NULL, origin_by = NULL WHERE origin = 'substy'");
+  setSetting('rv:fix-origin-1', '1');
 }
 
 /** Relie chaque vente Substy à la vente officielle (même compte, même fan, ≤ 2 min d'écart). */
