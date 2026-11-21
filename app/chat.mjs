@@ -168,7 +168,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     for (const limit of [100, 50]) {
       try {
         const r = await substy.chats(creatorId, { limit, ...opts });
-        return { n: (r?.items || []).length, more: !!r?.nextCursor };
+        const n = (r?.items || []).length;
+        return { n, more: n > 0 && !!r?.nextCursor };
       } catch (e) {
         if (limit === 50) return { n: null, more: false, error: e.message };
       }
@@ -188,7 +189,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
   };
   const salesView = () =>
     substy.recentSales()
-      .then((list) => (list || []).map((x) => ({ id: String(x.id), type: x.type, at: x.createdAt, price: x.price, fan: x.userName || null, fanId: x.userId ? String(x.userId) : null, creatorId: x.creatorId, creator: x.creatorName })))
+      .then((list) => (list || []).slice(0, 40).map((x) => ({ id: String(x.id), type: x.type, at: x.createdAt, price: x.price, fan: x.userName || null, fanId: x.userId ? String(x.userId) : null, creatorId: x.creatorId, creator: x.creatorName })))
       .catch(() => []);
 
   return {
@@ -226,7 +227,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
             countChats(c.id, { unreadOnly: true }),
             countChats(c.id, { handoffOnly: true }),
             countChats(c.id, { aiStatus: 'disabled' }),
-            substy.chats(c.id, { limit: 6 }).then((r) => (r?.items || []).map(chatView)).catch(() => []),
+            substy.chats(c.id, { limit: 6 }).then((r) => (r?.items || []).slice(0, 6).map(chatView)).catch(() => []),
             rev([c.id]),
           ]);
           return { ...c, live: !!st[c.id]?.live, unread, handoff, aiOff, recent, revenue, today: today[c.id] || null, week: week[c.id] || null };
