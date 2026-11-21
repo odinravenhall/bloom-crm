@@ -1,14 +1,14 @@
-# Gardn CRM — règles de travail (à lire avant toute modification)
+# Bloom CRM — règles de travail (à lire avant toute modification)
 
 CRM de chatting de l'agence pour les créatrices **OnlyFans gérées via Substy**. Substy (app.substy.ai) est déjà connecté
-aux créatrices et fait tourner son IA ; Gardn remplace seulement leur interface (buggée) par la nôtre.
+aux créatrices et fait tourner son IA ; Bloom remplace seulement leur interface (buggée) par la nôtre.
 Projet **séparé de Raven CRM** (Raven = comptes Reveal ; Substy ne gère pas Reveal).
 
-Adresse prévue : **https://gardn.ravencrm.xyz** (sous-domaine du domaine de Raven CRM, sur le VPS Zèbre).
+Adresse prévue : **https://bloom.ravencrm.xyz** (sous-domaine du domaine de Raven CRM, sur le VPS Zèbre).
 
 ## La règle d'or : GitHub est la seule source du code
 
-- Code de référence : ce dépôt `odinravenhall/gardn-crm`, branche **`main`**.
+- Code de référence : ce dépôt `odinravenhall/bloom-crm`, branche **`main`**.
 - Avant de travailler : `git pull`. Pour publier : `git add -A && git commit -m "…"`, `git pull --rebase`, `git push`.
   Jamais de `git push --force` sur `main`.
 - Interdit : envoyer des fichiers ou une archive sur le VPS, modifier le code directement sur le VPS.
@@ -21,7 +21,7 @@ Adresse prévue : **https://gardn.ravencrm.xyz** (sous-domaine du domaine de Rav
 - `data/` (base SQLite) et `backups/`.
 - Aucun mot de passe, jeton, cookie ou clé dans le code ni dans les messages de commit.
 
-## Comment Gardn parle à Substy
+## Comment Bloom parle à Substy
 
 Substy a deux API :
 
@@ -57,7 +57,7 @@ Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`,
 - `bridge/` (Node 24) : garde la session Substy côté serveur (jamais dans le navigateur des chatteurs), appelle l'API
   interne, écoute le temps réel, met en cache conversations / messages dans SQLite, applique les droits.
 - `web/` (Next.js, Tailwind) : l'interface des chatteurs et des admins (messagerie, IA on/off par fan, scripts, PPV, vault).
-- `docker-compose.yml` sur le VPS Zèbre, derrière le Caddy existant (`gardn.ravencrm.xyz`).
+- `docker-compose.yml` sur le VPS Zèbre, derrière le Caddy existant (`bloom.ravencrm.xyz`).
 - Connexion des chatteurs : comme Raven CRM (Discord), à confirmer.
 
 ## Étapes
@@ -67,4 +67,4 @@ Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`,
 2. Lecture : créatrices, conversations, messages, fiche fan, scripts, IA.
 3. Écriture : envoi texte / PPV instantané, IA on/off, lu / non lu.
 4. Équipe : comptes chatteurs, droits par créatrice, puis tout ce qui marche déjà dans Raven (planning, pointage…).
-5. Mise en ligne : sous-domaine `gardn.ravencrm.xyz`, déploiement automatique depuis GitHub.
+5. Mise en ligne : sous-domaine `bloom.ravencrm.xyz`, déploiement automatique depuis GitHub.
