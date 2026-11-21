@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
-import { broadcast, chatRoutes } from './chat.mjs';
+import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
@@ -28,6 +28,7 @@ async function startStreams() {
   if (!getSetting('substy_client')) return;
   try {
     const list = (await substy.creators()) || [];
+    warmInbox(list.map((c) => c.id || c.creatorId).filter(Boolean));
     for (const c of list) {
       const id = c.id || c.creatorId;
       if (!id) continue;

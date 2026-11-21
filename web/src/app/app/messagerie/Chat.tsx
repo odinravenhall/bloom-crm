@@ -64,8 +64,8 @@ export function Chat({ creatorId, chat, lastEvent, onPatch }: { creatorId: strin
       setMsgs((l) => (l.some((x) => x.id === m.id) ? l : [...l, m]));
       if (!m.fromFan) setTyping(false);
       if (stick.current) toBottom();
-    } else if (e.type === "ai_generation_status" && e.data?.fanId === chat.fanId) {
-      setTyping(/(start|generat|typing|pending|running|processing)/i.test(String(e.data.status || "")));
+    } else if (e.type === "ai_generation_status" && String(e.data?.fanId) === chat.fanId) {
+      setTyping(/(start|generat|typing|pending|running|processing)/i.test(String(e.data?.status || "")));
     }
   }, [lastEvent, creatorId, chat.fanId]);
 

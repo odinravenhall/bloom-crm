@@ -60,7 +60,7 @@ export function messageView(m, bloomBy = null) {
 function chatView(c) {
   const f = c.fan || {};
   return {
-    fanId: f.fanId || c.chatId,
+    fanId: String(f.fanId || c.chatId),
     name: f.displayName || f.name || f.username || 'Fan',
     username: f.username || null,
     avatar: img(f.avatar),
@@ -99,12 +99,94 @@ export function broadcast(creatorId, type, data) {
   const kind = data?.type || type;
   const payload = { creatorId, type: kind };
   if (kind === 'new_message' && data?.data) {
-    payload.fanId = data.data.fanId;
+    payload.fanId = data.data.fanId != null ? String(data.data.fanId) : null;
     payload.message = messageView(data.data, bloomSenderOf(data.data));
     logMessage(creatorId, data.data.fanId, payload.message);
+    onLiveMessage(creatorId, data.data.fanId, payload.message);
   } else if (data?.data) payload.data = data.data;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const c of clients) c.write(line);
+}
+
+// ---------------------------------------------------------------- toutes les conversations, gardées en mémoire
+// Substy ne renvoie qu'une vingtaine de conversations par page : Bloom les parcourt toutes en tâche de fond,
+// les garde ici à jour (temps réel + haut de liste toutes les 30 s + tour complet toutes les 15 min),
+// et la messagerie les reçoit d'un coup (puis seulement ce qui a changé).
+let SUB = null;
+const INBOX = new Map(); // creatorId -> { map: Map(fanId -> chat + _t), complete, crawling, crawledAt, usedAt }
+let seq = Date.now();
+const stamp = () => (seq = Math.max(seq + 1, Date.now()));
+function inboxOf(cid) {
+  let b = INBOX.get(cid);
+  if (!b) INBOX.set(cid, (b = { map: new Map(), complete: false, crawling: false, crawledAt: 0, usedAt: 0 }));
+  return b;
+}
+const strip = ({ _t, ...c }) => c;
+function put(b, chat) {
+  const old = b.map.get(chat.fanId);
+  if (old && JSON.stringify(strip(old)) === JSON.stringify(chat)) return;
+  b.map.set(chat.fanId, { ...chat, _t: stamp() });
+}
+
+async function crawl(cid) {
+  const b = inboxOf(cid);
+  if (b.crawling || !SUB) return;
+  b.crawling = true;
+  const t0 = Date.now();
+  try {
+    let cursor;
+    let pages = 0;
+    do {
+      const r = await SUB.chats(cid, { limit: 100, cursor });
+      for (const it of r?.items || []) put(b, chatView(it));
+      cursor = r?.nextCursor || undefined;
+    } while (cursor && ++pages < 1000);
+    b.complete = true;
+    b.crawledAt = Date.now();
+    console.log(`[bloom] conversations de ${cid} : ${b.map.size} en ${Math.round((Date.now() - t0) / 1000)} s`);
+  } catch (e) {
+    console.warn('[bloom] liste des conversations :', e.message);
+  } finally {
+    b.crawling = false;
+  }
+}
+async function refreshTop(cid) {
+  if (!SUB) return;
+  const b = inboxOf(cid);
+  try {
+    const r = await SUB.chats(cid, { limit: 100 });
+    for (const it of r?.items || []) put(b, chatView(it));
+  } catch {}
+}
+/** Au démarrage : on commence tout de suite à récupérer les conversations de chaque créatrice. */
+export function warmInbox(ids) {
+  for (const id of ids) if (!inboxOf(id).complete) crawl(id);
+}
+setInterval(() => {
+  for (const [cid, b] of INBOX) {
+    if (b.crawling) continue;
+    if (Date.now() - b.crawledAt > 15 * 60_000) crawl(cid);
+    else if (Date.now() - b.usedAt < 30 * 60_000) refreshTop(cid);
+  }
+}, 30_000);
+
+/** Nouveau message en direct : la conversation est mise à jour dans la liste. */
+const topLater = new Map();
+function onLiveMessage(cid, fanId, m) {
+  const b = INBOX.get(cid);
+  if (!b || !fanId) return;
+  const c = b.map.get(String(fanId));
+  if (!c) {
+    // Conversation inconnue (nouveau fan…) : on relit le haut de la liste, au plus une fois toutes les 3 s.
+    if (!topLater.has(cid)) topLater.set(cid, setTimeout(() => (topLater.delete(cid), refreshTop(cid)), 3000));
+    return;
+  }
+  put(b, {
+    ...strip(c),
+    last: { text: m.text, at: m.at, fromCreator: !m.fromFan, media: m.medias.length },
+    unread: m.fromFan ? (c.unread || 0) + 1 : c.unread,
+    handoff: m.fromFan ? c.handoff : false,
+  });
 }
 
 /** Journal des messages vus en temps réel (un message n'est compté qu'une fois). */
@@ -147,6 +229,7 @@ function bloomSenderOf(m) {
 
 // ---------------------------------------------------------------- routes
 export function chatRoutes({ substy, userFrom, send, body, streams }) {
+  SUB = substy;
   const auth = (req, res) => {
     const u = userFrom(req);
     if (!u) send(res, 401, { error: 'Connecte-toi' });
@@ -247,6 +330,22 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const data = { period, start, end, revenue, sales, creators: items, since, at: Date.now() };
       dashCache = { ...dashCache, [period]: { at: Date.now(), data } };
       send(res, 200, data);
+    },
+
+    // Toutes les conversations d'une créatrice (depuis la mémoire de Bloom). since = seulement ce qui a changé depuis.
+    'GET /api/inbox': async (req, res) => {
+      if (!auth(req, res)) return;
+      const p = q(req);
+      const cid = String(p.get('creatorId') || '');
+      if (!cid) return send(res, 400, { error: 'Créatrice manquante' });
+      const b = inboxOf(cid);
+      b.usedAt = Date.now();
+      if (!b.crawling && (!b.crawledAt || Date.now() - b.crawledAt > 15 * 60_000)) crawl(cid);
+      const since = Number(p.get('since')) || 0;
+      const at = seq;
+      const items = [];
+      for (const c of b.map.values()) if (c._t > since) items.push(strip(c));
+      send(res, 200, { items, at, complete: b.complete, total: b.map.size });
     },
 
     'GET /api/chats': async (req, res) => {

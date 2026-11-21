@@ -14,11 +14,10 @@ import { Chat } from "./Chat";
 type Tab = "all" | "todo";
 /** Événement temps réel relayé par Bloom. */
 export type LiveEvent = { creatorId: string; type: string; fanId?: string; message?: Message; data?: { fanId?: string; status?: string } };
-type PageR = { items: ChatT[]; nextCursor: string | null };
+type InboxR = { items: ChatT[]; at: number; complete: boolean; total: number };
 
 // « À répondre » : comme Raven CRM, on ne garde que les fans qui attendent depuis moins de 3 jours.
 const WINDOW_MS = 72 * 3600e3;
-const MAX_PAGES = 60;
 
 /** Le fan attend une réponse : non lu, « à reprendre » (l'IA a passé la main) ou dernier message venu de lui. */
 export const needsReply = (c: ChatT) => !!c.last && (c.handoff || c.unread > 0 || !c.last.fromCreator);
@@ -35,9 +34,10 @@ export function Inbox() {
   const [progress, setProgress] = useState<{ loading: boolean; n: number }>({ loading: false, n: 0 });
   const [open, setOpen] = useState<ChatT | null>(null);
   const [live, setLive] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
   const creatorRef = useRef<string | null>(null);
-  const run = useRef(0);
-  const pageSize = useRef(100);
+  const since = useRef(0);
 
   // Lien venu d'une autre page (?c=créatrice&fan=…)
   const wanted = useRef<string | null>(params.get("fan"));
@@ -46,84 +46,60 @@ export function Inbox() {
     if (c && loaded) setCreator(c);
   }, [params, loaded, setCreator]);
 
-  const page = useCallback(async (cid: string, cursor?: string | null) => {
-    const p = new URLSearchParams({ creatorId: cid, limit: String(pageSize.current) });
-    if (cursor) p.set("cursor", cursor);
-    try {
-      return await api<PageR>("GET", "/api/chats?" + p);
-    } catch (e) {
-      // Substy refuse les pages de 100 ? On repasse à 50.
-      if (pageSize.current === 100) {
-        pageSize.current = 50;
-        p.set("limit", "50");
-        return api<PageR>("GET", "/api/chats?" + p);
-      }
-      throw e;
-    }
-  }, []);
-
-  /** Charge TOUTES les conversations, page après page ; la liste s'affiche dès la première page. */
-  const loadAll = useCallback(
-    async (cid: string) => {
-      const me = ++run.current;
-      setProgress({ loading: true, n: 0 });
-      let cursor: string | null = null;
-      let n = 0;
-      try {
-        for (let i = 0; i < MAX_PAGES; i++) {
-          const r: PageR = await page(cid, cursor);
-          if (run.current !== me) return;
-          n += r.items.length;
-          setChats((old) => (i === 0 ? r.items : old.concat(r.items.filter((x) => !old.some((y) => y.fanId === x.fanId)))));
-          setProgress({ loading: !!r.nextCursor, n });
-          if (i === 0 && wanted.current) {
-            const id = wanted.current;
-            wanted.current = null;
-            setOpen(r.items.find((x) => x.fanId === id) ?? fresh(id));
-          }
-          cursor = r.nextCursor;
-          if (!cursor) break;
-        }
-      } catch {
-      } finally {
-        if (run.current === me) setProgress((p) => ({ ...p, loading: false }));
-      }
-    },
-    [page],
-  );
-
-  /** Rafraîchit le haut de la liste (conversations les plus récentes) sans tout recharger. */
-  const refreshTop = useCallback(async () => {
+  /**
+   * Toutes les conversations viennent de la mémoire de Bloom (le serveur les récupère toutes chez Substy).
+   * Premier appel : la liste entière ; ensuite, seulement ce qui a changé.
+   */
+  const sync = useCallback(async () => {
     const cid = creatorRef.current;
     if (!cid) return;
     try {
-      const r = await page(cid);
+      const r = await api<InboxR>("GET", `/api/inbox?creatorId=${encodeURIComponent(cid)}&since=${since.current}`);
       if (creatorRef.current !== cid) return;
-      setChats((old) => {
-        const ids = new Set(r.items.map((x) => x.fanId));
-        return [...r.items, ...old.filter((x) => !ids.has(x.fanId))];
-      });
+      const first = since.current === 0;
+      since.current = r.at;
+      if (r.items.length || first) {
+        setChats((old) => {
+          const m = new Map(first ? [] : old.map((x) => [x.fanId, x] as const));
+          for (const it of r.items) {
+            const prev = m.get(it.fanId);
+            // Conversation ouverte : on garde « lu » côté écran.
+            m.set(it.fanId, prev && openRef.current?.fanId === it.fanId ? { ...it, unread: 0 } : it);
+          }
+          return [...m.values()].sort((x, y) => (y.last ? Date.parse(y.last.at) : 0) - (x.last ? Date.parse(x.last.at) : 0));
+        });
+      }
+      setProgress({ loading: !r.complete, n: r.total });
+      if (wanted.current && (r.items.length || r.complete)) {
+        const id = wanted.current;
+        const hit = r.items.find((x) => x.fanId === id);
+        if (hit || r.complete) {
+          wanted.current = null;
+          setOpen(hit ?? fresh(id));
+        }
+      }
+      // Bloom est encore en train de tout récupérer : on redemande vite.
+      if (!r.complete) setTimeout(() => creatorRef.current === cid && sync(), 2500);
     } catch {}
-  }, [page]);
+  }, []);
 
-  // Nouvelle créatrice : tout est rechargé.
+  // Nouvelle créatrice : liste entière ; ensuite les changements toutes les 15 s (en plus du temps réel).
   useEffect(() => {
     if (!creatorId) return;
     if (creatorRef.current && creatorRef.current !== creatorId) setOpen(null);
     creatorRef.current = creatorId;
+    since.current = 0;
     setChats([]);
-    loadAll(creatorId);
-  }, [creatorId, loadAll]);
-  // Filet de sécurité : le haut de la liste se rafraîchit toutes les 45 s.
+    setProgress({ loading: true, n: 0 });
+    sync();
+  }, [creatorId, sync]);
   useEffect(() => {
-    const t = setInterval(() => document.visibilityState === "visible" && refreshTop(), 45_000);
+    const t = setInterval(() => document.visibilityState === "visible" && sync(), 15_000);
     return () => clearInterval(t);
-  }, [refreshTop]);
+  }, [sync]);
 
   // Temps réel : un seul flux pour toute la messagerie.
   const [lastEvent, setLastEvent] = useState<LiveEvent | null>(null);
-  const openRef = useRef(open);
-  openRef.current = open;
   useEffect(() => {
     const es = new EventSource("/api/live");
     es.onopen = () => setLive(true);
@@ -141,7 +117,7 @@ export function Inbox() {
       setChats((list) => {
         const c = list.find((x) => x.fanId === e.fanId);
         if (!c) {
-          setTimeout(refreshTop, 300);
+          setTimeout(sync, 3500);
           return list;
         }
         const isOpen = openRef.current?.fanId === e.fanId;
@@ -156,7 +132,7 @@ export function Inbox() {
       });
     };
     return () => es.close();
-  }, [refreshTop]);
+  }, [sync]);
 
   const select = (c: ChatT) => {
     setChats((l) => l.map((x) => (x.fanId === c.fanId ? { ...x, unread: 0 } : x)));
@@ -211,7 +187,7 @@ export function Inbox() {
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
               <input className={cn(inputCls, "pl-9")} placeholder="Rechercher un fan…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {progress.loading ? <p className="text-[11px] text-muted">Chargement de toutes les conversations… {progress.n}</p> : null}
+            {progress.loading ? <p className="text-[11px] text-muted">Bloom récupère toutes les conversations chez Substy… {progress.n}</p> : null}
           </div>
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
             {shown.map((c) => (
