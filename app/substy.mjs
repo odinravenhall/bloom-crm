@@ -163,6 +163,7 @@ export class SubstySession {
     const jwt = await this.token();
     return fetch(`${APP}${path}`, { headers: { authorization: `Bearer ${jwt}`, 'user-agent': UA }, signal: AbortSignal.timeout(30_000) });
   }
+  aiLogs(creatorId, fanId, limit = 50) { return this.call('creators.fans.getFanAiLogs', { creatorId, fanId, limit }); }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
   send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {
     return this.call('messages.send', {

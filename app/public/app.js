@@ -130,7 +130,7 @@ $('filters').querySelectorAll('.chip').forEach((b) => (b.onclick = () => {
 async function openChat(c) {
   if (!c) return;
   S.fan = c;
-  S.msgs = []; S.older = null; S.selMedias = []; S.price = 0;
+  S.msgs = []; S.aiLog = []; S.older = null; S.selMedias = []; S.price = 0;
   c.unread = 0;
   renderChats();
   $('empty').classList.add('hidden');
@@ -146,7 +146,7 @@ async function openChat(c) {
   try {
     const r = await api('GET', `/api/messages?creatorId=${encodeURIComponent(S.creator)}&fanId=${encodeURIComponent(c.fanId)}`);
     if (S.fan !== c) return;
-    S.msgs = r.items; S.older = r.olderCursor;
+    S.msgs = r.items; S.aiLog = r.aiLog || []; S.older = r.olderCursor;
     renderMsgs(true);
   } catch (e) { $('msgs').innerHTML = `<p class="err" style="text-align:center">${esc(e.message)}</p>`; }
   loadFan(c);
@@ -170,15 +170,37 @@ function msgHtml(m) {
   const by = m.by ? `<span class="by ${esc(m.by.kind)}">${esc(m.by.kind === 'bloom' ? m.by.name + ' · Bloom' : m.by.name)}</span>` : '';
   return `<div class="bubble ${cls}" data-id="${esc(m.id)}">${m.tip ? '💸 Pourboire<br>' : ''}${esc(m.text)}${medias}${ppv}<div class="meta">${by}<span>${hhmm(m.at)}</span>${!m.fromFan && m.read ? '<span>· vu</span>' : ''}</div></div>`;
 }
+// Ligne « IA coupée / rallumée par … » dans le fil (historique IA de Substy).
+function aiLogHtml(l) {
+  const what = l.on === false ? 'IA coupée' : l.on === true ? 'IA rallumée' : 'IA : ' + l.action;
+  const why = l.reason && !/manual/i.test(l.reason) ? ` (${l.reason})` : '';
+  return `<div class="sys ${l.on === false ? 'off' : l.on === true ? 'on' : ''}">${esc(what + (l.by ? ' par ' + l.by : '') + why)} · ${hhmm(l.at)}</div>`;
+}
+async function refreshAiLog() {
+  const c = S.fan;
+  if (!c) return;
+  try {
+    const r = await api('GET', `/api/ailog?creatorId=${encodeURIComponent(S.creator)}&fanId=${encodeURIComponent(c.fanId)}`);
+    if (S.fan !== c) return;
+    S.aiLog = r;
+    renderMsgs(false);
+  } catch {}
+}
 function renderMsgs(toBottom) {
   const box = $('msgs');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   let html = S.older ? '<button id="older" class="btn ghost sm more">Charger les messages plus anciens</button>' : '';
   let day = null;
-  for (const m of S.msgs) {
-    const k = dayKey(m.at);
+  // Messages et changements d'IA, dans l'ordre du temps (sans remonter avant le plus vieux message chargé).
+  const from = S.older && S.msgs.length ? Date.parse(S.msgs[0].at) : -Infinity;
+  const rows = S.msgs.map((m) => ({ t: Date.parse(m.at), m }))
+    .concat((S.aiLog || []).filter((l) => Date.parse(l.at) >= from).map((l) => ({ t: Date.parse(l.at), l })))
+    .sort((a, b) => a.t - b.t);
+  for (const x of rows) {
+    const at = x.m ? x.m.at : x.l.at;
+    const k = dayKey(at);
     if (k !== day) { html += `<div class="day">${esc(k)}</div>`; day = k; }
-    html += msgHtml(m);
+    html += x.m ? msgHtml(x.m) : aiLogHtml(x.l);
   }
   if (!S.msgs.length) html += '<p class="muted" style="text-align:center">Pas encore de message</p>';
   box.innerHTML = html;
@@ -216,6 +238,7 @@ $('aiToggle').onclick = async () => {
     c.ai = on;
     renderChats();
     toast(on ? 'IA rallumée sur cette conversation' : 'IA coupée : tu chattes à la main');
+    refreshAiLog();
   } catch (e) { setAi(!on); toast(e.message, true); }
 };
 

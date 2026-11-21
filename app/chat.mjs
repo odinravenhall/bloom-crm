@@ -2,6 +2,23 @@
 import { all, run } from './store.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+/** Les textes de Substy arrivent parfois en HTML (« <p>Oui</p> ») : on garde le texte, avec les retours à la ligne. */
+export const plain = (s) =>
+  String(s || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li)>\s*/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (all, e) => (e[0] === '#' ? String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e.toLowerCase()] ?? all))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/** Historique IA d'un fan (coupée / rallumée, par qui) → lignes à glisser dans la conversation. */
+function aiLogView(l) {
+  const a = String(l.action || '').toLowerCase();
+  const on = /disabl|pause|stop|deactiv|handoff|(^|[^a-z])off/.test(a) ? false : /enabl|resum|activ|start|(^|[^a-z])on($|[^a-z])/.test(a) ? true : null;
+  return { id: l.id, at: l.createdAt, on, action: l.action || '', reason: l.reason || '', by: l.employee?.name || null };
+}
 const mediaView = (m) => ({
   id: m.id,
   type: (m.type || '').toLowerCase(),
@@ -25,7 +42,7 @@ export function messageView(m, bloomBy = null) {
   const price = money(m.price);
   return {
     id: m.id,
-    text: m.text || '',
+    text: plain(m.text),
     at: m.createdAt,
     fromFan,
     by,
@@ -51,7 +68,7 @@ function chatView(c) {
     spent: money(f.spend?.net),
     subscribed: f.subscription?.status || null,
     canSend: c.canSendMessage !== false,
-    last: c.lastMessage ? { text: c.lastMessage.text || '', at: c.lastMessage.sentAt, fromCreator: !!c.lastMessage.isFromCreator, media: c.lastMessage.mediaCount || 0 } : null,
+    last: c.lastMessage ? { text: plain(c.lastMessage.text), at: c.lastMessage.sentAt, fromCreator: !!c.lastMessage.isFromCreator, media: c.lastMessage.mediaCount || 0 } : null,
   };
 }
 
@@ -91,7 +108,7 @@ export function broadcast(creatorId, type, data) {
 function bloomSenderOf(m) {
   if (!m?.isSentByCreator) return null;
   const at = Date.parse(m.createdAt || '') || Date.now();
-  const r = all('SELECT u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND s.text = ? AND ABS(s.at - ?) < 90000 ORDER BY s.at DESC LIMIT 1', m.creatorId, m.fanId, m.text || '', at);
+  const r = all('SELECT u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND s.text = ? AND ABS(s.at - ?) < 90000 ORDER BY s.at DESC LIMIT 1', m.creatorId, m.fanId, plain(m.text), at);
   return r[0]?.name || null;
 }
 
@@ -130,21 +147,32 @@ export function chatRoutes({ substy, userFrom, send, body }) {
       const p = q(req);
       const creatorId = p.get('creatorId');
       const fanId = p.get('fanId');
-      const r = await substy.messages(creatorId, fanId, { limit: 30, cursor: p.get('cursor') || undefined });
+      const cursor = p.get('cursor') || undefined;
+      const [r, ai] = await Promise.all([
+        substy.messages(creatorId, fanId, { limit: 30, cursor }),
+        cursor ? null : substy.aiLogs(creatorId, fanId).catch((e) => (console.warn('[bloom] historique IA :', e.message), null)),
+      ]);
       const logs = all('SELECT s.text, s.at, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? ORDER BY s.at DESC LIMIT 200', creatorId, fanId);
       const who = (m) => {
         if (!m.isSentByCreator) return null;
         const at = Date.parse(m.createdAt);
-        return logs.find((l) => l.text === (m.text || '') && Math.abs(l.at - at) < 90000)?.name || null;
+        return logs.find((l) => l.text.trim() === plain(m.text) && Math.abs(l.at - at) < 90000)?.name || null;
       };
       const items = (r?.items || []).map((m) => messageView(m, who(m))).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-      send(res, 200, { items, olderCursor: r?.nextCursor || null });
+      send(res, 200, { items, olderCursor: r?.nextCursor || null, ...(ai ? { aiLog: (ai.items || []).map(aiLogView) } : {}) });
     },
 
     'GET /api/fan': async (req, res) => {
       if (!auth(req, res)) return;
       const p = q(req);
       send(res, 200, fanView((await substy.fan(p.get('creatorId'), p.get('fanId'))) || {}));
+    },
+
+    'GET /api/ailog': async (req, res) => {
+      if (!auth(req, res)) return;
+      const p = q(req);
+      const r = await substy.aiLogs(p.get('creatorId'), p.get('fanId'));
+      send(res, 200, (r?.items || []).map(aiLogView));
     },
 
     'POST /api/ai': async (req, res) => {
