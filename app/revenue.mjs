@@ -505,7 +505,7 @@ function netRatio(account, platform) {
 
 /**
  * Chiffres de [from, to] (jours de Paris, inclus) pour les créatrices de Bloom.
- * Ventes officielles + ventes Substy pas encore arrivées d'Infloww / MyPulse (« provisoires », moins de 6 h).
+ * Ventes officielles + ventes Substy pas encore arrivées d'Infloww / MyPulse (« provisoires », moins de 24 h).
  */
 export function revenue({ from, to, creators }) {
   const start = parisMidnight(from);
@@ -519,14 +519,14 @@ export function revenue({ from, to, creators }) {
   if (!accounts.length) return empty;
   const ph = accounts.map(() => '?').join(',');
   const rows = all(`SELECT id, account, platform, fan_id, fan_name, at, type, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
-  // Ventes Substy pas encore confirmées (récentes uniquement : au-delà de 6 h, une vente non confirmée n'est pas comptée).
+  // Ventes Substy pas encore confirmées (récentes uniquement : au-delà de 24 h (MyPulse peut avoir plusieurs heures de retard), une vente non confirmée n'est pas comptée).
   const live = all(
     `SELECT l.*, m.account, a.platform FROM rv_live l JOIN rv_map m ON m.creator_id = l.creator_id JOIN rv_accounts a ON a.id = m.account
      WHERE l.matched IS NULL AND m.account IN (${ph}) AND l.at >= ? AND l.at < ? AND l.at > ?`,
     ...accounts,
     start,
     end,
-    Date.now() - 6 * 3600_000,
+    Date.now() - 24 * 3600_000,
   );
   const sellers = new Map(all('SELECT id, name FROM rv_sellers').map((s) => [s.id, s.name]));
   const out = { ...empty, unmapped: empty.unmapped };
