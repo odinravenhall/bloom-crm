@@ -118,7 +118,7 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
               <XAxis dataKey="label" tickFormatter={dateLabel} tickLine={false} axisLine={{ stroke: "var(--of-line)" }} tick={{ fill: "var(--of-muted)", fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--of-muted)", fontSize: 12 }} allowDecimals={false} />
               <Tooltip
-                cursor={{ stroke: "var(--of-text)", strokeDasharray: "4 4", fill: "transparent" }}
+                cursor={<BarCursor />}
                 content={({ active, payload }) => {
                   const x = active && payload?.[0]?.payload;
                   if (!x) return null;
@@ -255,6 +255,13 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
       </div>
     </div>
   );
+}
+
+/** Curseur d'Infloww sur les barres : une seule ligne verticale pointillée au milieu de la barre (pas un cadre). */
+function BarCursor(p: { x?: number; y?: number; width?: number; height?: number }) {
+  if (p.x == null || p.y == null || p.width == null || p.height == null) return null;
+  const x = p.x + p.width / 2;
+  return <line x1={x} x2={x} y1={p.y} y2={p.y + p.height} stroke="var(--of-text)" strokeWidth={1} strokeDasharray="4 3" />;
 }
 
 function Title({ children, tip }: { children: React.ReactNode; tip: string }) {
