@@ -1,5 +1,6 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
+import { canSee, creatorsOf, onCreator, ping, setAccess, setActive, teamView } from './team.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -93,7 +94,7 @@ function fanView(f) {
 }
 
 // ---------------------------------------------------------------- temps réel vers les navigateurs (SSE)
-const clients = new Set();
+const clients = new Map(); // réponse SSE -> personne connectée
 export function broadcast(creatorId, type, data) {
   if (type === 'ping' || type === 'connected' || data?.type === 'connection_ready') return;
   const kind = data?.type || type;
@@ -105,7 +106,7 @@ export function broadcast(creatorId, type, data) {
     onLiveMessage(creatorId, data.data.fanId, payload.message);
   } else if (data?.data) payload.data = data.data;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
-  for (const c of clients) c.write(line);
+  for (const [c, u] of clients) if (canSee(u, creatorId)) c.write(line);
 }
 
 // ---------------------------------------------------------------- toutes les conversations, gardées en mémoire
@@ -281,6 +282,16 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     return u;
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
+  // Connexion + accès à la créatrice demandée (un chatteur ne voit que ses créatrices).
+  const authC = (req, res, creatorId) => {
+    const u = auth(req, res);
+    if (!u) return null;
+    if (!canSee(u, creatorId)) {
+      send(res, 403, { error: 'Tu n’as pas accès à cette créatrice. Demande à un manager.' });
+      return null;
+    }
+    return u;
+  };
 
   const creatorOf = (c) => ({
     id: c.id || c.creatorId,
@@ -328,9 +339,45 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
 
     'GET /api/creators': async (req, res) => {
-      if (!auth(req, res)) return;
-      const list = (await substy.creators()) || [];
-      send(res, 200, list.map(creatorOf));
+      const u = auth(req, res);
+      if (!u) return;
+      const list = ((await substy.creators()) || []).map(creatorOf);
+      const allowed = creatorsOf(u);
+      send(res, 200, allowed === null ? list : list.filter((c) => allowed.has(String(c.id))));
+    },
+
+    // ------------------------------------------------ équipe
+    // Présence : la messagerie signale la conversation ouverte (toutes les 20 s) ; réponse = qui d'autre est sur la créatrice.
+    'POST /api/presence': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const cid = b.creatorId && canSee(u, b.creatorId) ? String(b.creatorId) : null;
+      ping(u, { creatorId: cid, fanId: cid ? b.fanId : null, page: b.page });
+      send(res, 200, { others: cid ? onCreator(cid).filter((x) => x.userId !== u.id) : [] });
+    },
+    'GET /api/team': async (req, res) => {
+      if (!boss(req, res)) return;
+      send(res, 200, teamView());
+    },
+    'POST /api/team/access': async (req, res) => {
+      const u = boss(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const target = one('SELECT id, role FROM users WHERE id = ?', Number(b.userId));
+      if (!target) return send(res, 404, { error: 'Personne inconnue' });
+      if (target.role === 'admin') return send(res, 400, { error: 'Un admin voit déjà toutes les créatrices.' });
+      setAccess(target.id, { all: !!b.all, creators: Array.isArray(b.creators) ? b.creators.map(String) : [] });
+      send(res, 200, teamView());
+    },
+    'POST /api/team/active': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (u.role !== 'admin') return send(res, 403, { error: 'Réservé aux admins' });
+      const b = await body(req);
+      if (Number(b.userId) === u.id) return send(res, 400, { error: 'Tu ne peux pas te désactiver toi-même.' });
+      setActive(Number(b.userId), !!b.active);
+      send(res, 200, teamView());
     },
 
     // Dashboard : l'état en direct de chaque créatrice + ce que Bloom a vu passer aujourd'hui et sur 7 jours.
@@ -370,9 +417,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
 
     // Toutes les conversations d'une créatrice (depuis la mémoire de Bloom). since = seulement ce qui a changé depuis.
     'GET /api/inbox': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
       const cid = String(p.get('creatorId') || '');
+      if (!authC(req, res, cid)) return;
       if (!cid) return send(res, 400, { error: 'Créatrice manquante' });
       const b = inboxOf(cid);
       b.usedAt = Date.now();
@@ -385,8 +432,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
 
     'GET /api/chats': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
       const limit = Math.min(30, Math.max(10, Number(p.get('limit')) || 30)); // au-delà de 30, la pagination de Substy tourne en boucle
       const r = await substy.chats(p.get('creatorId'), {
         limit,
@@ -400,8 +447,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
 
     'GET /api/messages': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
       const creatorId = p.get('creatorId');
       const fanId = p.get('fanId');
       const cursor = p.get('cursor') || undefined;
@@ -420,29 +467,29 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
 
     'GET /api/fan': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
       send(res, 200, fanView((await substy.fan(p.get('creatorId'), p.get('fanId'))) || {}));
     },
 
     'GET /api/ailog': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
       const r = await substy.aiLogs(p.get('creatorId'), p.get('fanId'));
       send(res, 200, (r?.items || []).map(aiLogView));
     },
 
     'POST /api/ai': async (req, res) => {
-      if (!auth(req, res)) return;
       const b = await body(req);
+      if (!authC(req, res, b.creatorId)) return;
       await substy.setAi(String(b.creatorId), String(b.fanId), !!b.on);
       send(res, 200, { ok: true, ai: !!b.on });
     },
 
     'POST /api/send': async (req, res) => {
-      const u = auth(req, res);
-      if (!u) return;
       const b = await body(req);
+      const u = authC(req, res, b.creatorId);
+      if (!u) return;
       const message = String(b.message || '').slice(0, 5000);
       const medias = Array.isArray(b.medias) ? b.medias.map(String).slice(0, 50) : [];
       const price = Number(b.price) > 0 ? Math.round(Number(b.price) * 100) / 100 : 0;
@@ -460,24 +507,28 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
 
     'GET /api/vault/lists': async (req, res) => {
-      if (!auth(req, res)) return;
+      if (!authC(req, res, q(req).get('creatorId'))) return;
       const r = await substy.vaultLists(q(req).get('creatorId'));
       send(res, 200, (r?.lists || []).map((l) => ({ id: l.id, name: l.name, photos: l.photosCount || 0, videos: l.videosCount || 0, audios: l.audiosCount || 0 })));
     },
     'GET /api/vault/medias': async (req, res) => {
-      if (!auth(req, res)) return;
       const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
       const r = await substy.vaultMedias(p.get('creatorId'), { listId: p.get('listId') || undefined, cursor: p.get('cursor') || undefined });
       send(res, 200, { items: (r?.medias || []).map((m) => ({ ...mediaView(m), price: money(m.price) })), nextCursor: r?.hasMore ? r.nextCursor : null });
     },
 
     // Images / vidéos (relayées par Bloom : le navigateur ne parle jamais à Substy directement).
     'GET /media': async (req, res) => {
-      if (!userFrom(req)) {
-        res.writeHead(401);
+      const u = userFrom(req);
+      const path = q(req).get('p') || '';
+      // Le chemin d'un média contient la créatrice : « /api/creators/<id>/medias/view?… »
+      const cid = /^\/api\/creators\/([\w-]+)\//.exec(path)?.[1];
+      if (!u || !cid || !canSee(u, cid)) {
+        res.writeHead(u ? 403 : 401);
         return res.end();
       }
-      const r = await substy.media(q(req).get('p') || '');
+      const r = await substy.media(path);
       res.writeHead(r.status, { 'content-type': r.headers.get('content-type') || 'application/octet-stream', 'cache-control': 'private, max-age=3600' });
       if (!r.body) return res.end();
       for await (const chunk of r.body) res.write(chunk);
@@ -486,11 +537,12 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
 
     // Flux temps réel vers le navigateur.
     'GET /api/live': async (req, res) => {
-      if (!auth(req, res)) return;
+      const u = auth(req, res);
+      if (!u) return;
       // content-encoding « identity » : le Caddy du serveur ne compresse pas (et donc ne retient pas) ce flux.
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no', 'content-encoding': 'identity' });
       res.write('retry: 3000\n\n');
-      clients.add(res);
+      clients.set(res, u);
       const t = setInterval(() => res.write(': ok\n\n'), 25_000);
       req.on('close', () => {
         clearInterval(t);

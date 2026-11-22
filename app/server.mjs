@@ -93,7 +93,7 @@ const creatorView = (c) => ({
 function userFrom(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.cookie || '');
   if (!m) return null;
-  return one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
+  return one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
 }
 function login(res, userId) {
   const token = randomBytes(32).toString('base64url');

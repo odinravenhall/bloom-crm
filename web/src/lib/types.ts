@@ -98,3 +98,23 @@ export type RevenueR = {
   recent: RevenueSale[];
   unmapped: string[];
 };
+
+/** Page Équipe. */
+export type Member = {
+  id: number;
+  name: string;
+  role: Role;
+  avatar: string | null;
+  discord: boolean;
+  active: boolean;
+  allCreators: boolean;
+  creators: string[];
+  online: boolean;
+  seenAt: number | null;
+  on: { creatorId: string | null; fanId: string | null; page: string | null } | null;
+  today: { msgs: number; ppv: number; ppvValue: number; last: number | null };
+  lastSent: number | null;
+  sold: { currency: string; n: number; net: number }[];
+};
+/** Quelqu'un d'autre sur la même créatrice (messagerie). */
+export type Presence = { userId: number; name: string; avatar: string | null; fanId: string | null };

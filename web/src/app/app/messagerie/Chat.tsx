@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ImagePlus, Lock, Send, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, dayLabel, hhmm, usd } from "@/lib/fmt";
-import type { AiLog, Chat as ChatT, Media, Message } from "@/lib/types";
+import type { AiLog, Chat as ChatT, Media, Message, Presence } from "@/lib/types";
 import { Avatar, btnCls } from "@/components/ui";
 import type { LiveEvent } from "./Inbox";
 import { FanPanel } from "./FanPanel";
@@ -13,7 +13,7 @@ import { VaultPicker } from "./VaultPicker";
 type Page = { items: Message[]; olderCursor: string | null; aiLog?: AiLog[] };
 
 /** Une conversation : messages (avec l'historique IA coupée / rallumée), IA on/off, envoi texte ou PPV. */
-export function Chat({ creatorId, chat, lastEvent, onPatch }: { creatorId: string; chat: ChatT; lastEvent: LiveEvent | null; onPatch: (fanId: string, p: Partial<ChatT>) => void }) {
+export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { creatorId: string; chat: ChatT; lastEvent: LiveEvent | null; onPatch: (fanId: string, p: Partial<ChatT>) => void; watchers?: Presence[] }) {
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [aiLog, setAiLog] = useState<AiLog[]>([]);
   const [older, setOlder] = useState<string | null>(null);
@@ -162,6 +162,11 @@ export function Chat({ creatorId, chat, lastEvent, onPatch }: { creatorId: strin
           </button>
         </header>
 
+        {watchers.length ? (
+          <div className="border-b bg-sky-500/10 px-4 py-1.5 text-xs font-semibold text-sky-300">
+            👀 {watchers.map((w) => w.name).join(", ")} {watchers.length > 1 ? "sont" : "est"} aussi sur cette conversation : mettez-vous d’accord avant de répondre.
+          </div>
+        ) : null}
         <div
           ref={box}
           onScroll={(e) => {

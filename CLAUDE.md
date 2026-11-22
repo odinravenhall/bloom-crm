@@ -80,6 +80,15 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
   `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).
 
+## Équipe — `app/team.mjs`, page `/app/equipe`
+
+- Accès par créatrice : admin = tout ; manager / chatteur = seulement les créatrices données dans Équipe
+  (ou « toutes »). Un nouveau chatteur ne voit RIEN tant qu'on ne lui a rien donné. Contrôlé côté API sur chaque route
+  (conversations, messages, envoi, IA, vault, médias, temps réel), pas seulement dans l'interface.
+- Présence : la messagerie signale la conversation ouverte toutes les 20 s (`POST /api/presence`) ; les autres pages
+  toutes les 30 s. En ligne = signe de vie depuis moins de 45 s. Deux personnes sur le même fan se voient (badge 👀 + bandeau).
+- Activité du jour par personne : messages et PPV envoyés depuis Bloom (`sent_log`), ventes confirmées venues de Bloom.
+
 ## Chiffres : Infloww (OnlyFans) et MyPulse (MYM) — `app/revenue.mjs`
 
 - Source officielle des ventes = Infloww et MyPulse (clés collées par un admin dans Administration → Branchements,

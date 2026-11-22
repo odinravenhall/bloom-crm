@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { cn, durSec, usd, waitTone, when } from "@/lib/fmt";
 import { CreatorTabs, useCreators } from "@/lib/creators";
 import { useNow } from "@/lib/useNow";
-import type { Chat as ChatT, Message } from "@/lib/types";
+import type { Chat as ChatT, Message, Presence } from "@/lib/types";
 import { Avatar, Pill, inputCls } from "@/components/ui";
 import { Chat } from "./Chat";
 
@@ -27,7 +27,7 @@ const fresh = (fanId: string): ChatT => ({ fanId, name: "Fan", username: null, a
 /** Messagerie : toutes les conversations de la créatrice choisie (chargées d'un coup) + conversation ouverte. */
 export function Inbox() {
   const params = useSearchParams();
-  const { creatorId, setCreator, loaded } = useCreators();
+  const { creatorId, setCreator, loaded, creators } = useCreators();
   const [tab, setTab] = useState<Tab>(() => (["todo", "unread", "handoff"].includes(params.get("f") || "") ? "todo" : "all"));
   const [q, setQ] = useState("");
   const [chats, setChats] = useState<ChatT[]>([]);
@@ -134,6 +134,20 @@ export function Inbox() {
     return () => es.close();
   }, [sync]);
 
+  // Présence : Bloom sait quelle conversation chacun a ouverte ; on voit qui d'autre est sur un fan (pour ne pas répondre à deux).
+  const [others, setOthers] = useState<Presence[]>([]);
+  useEffect(() => {
+    if (!creatorId) return;
+    const ping = () =>
+      api<{ others: Presence[] }>("POST", "/api/presence", { creatorId, fanId: open?.fanId ?? null, page: "messagerie" })
+        .then((r) => setOthers(r.others))
+        .catch(() => {});
+    ping();
+    const t = setInterval(() => document.visibilityState === "visible" && ping(), 20_000);
+    return () => clearInterval(t);
+  }, [creatorId, open?.fanId]);
+  const othersOn = (fanId: string) => others.filter((o) => o.fanId === fanId);
+
   const select = (c: ChatT) => {
     setChats((l) => l.map((x) => (x.fanId === c.fanId ? { ...x, unread: 0 } : x)));
     setOpen({ ...c, unread: 0 });
@@ -191,9 +205,12 @@ export function Inbox() {
           </div>
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
             {shown.map((c) => (
-              <Row key={c.fanId} c={c} on={open?.fanId === c.fanId} onClick={() => select(c)} />
+              <Row key={c.fanId} c={c} on={open?.fanId === c.fanId} onClick={() => select(c)} watchers={othersOn(c.fanId)} />
             ))}
-            {!shown.length ? (
+            {loaded && !creators.length ? (
+              <p className="p-6 text-center text-sm text-muted">Tu n’as encore accès à aucune créatrice. Demande à un manager de t’en donner dans Équipe.</p>
+            ) : null}
+            {!shown.length && creators.length ? (
               <p className="p-6 text-center text-sm text-muted">
                 {progress.loading || !creatorId ? "Chargement…" : tab === "todo" ? "Personne n’attend de réponse 🎉" : q ? "Aucun fan trouvé" : "Aucune conversation"}
               </p>
@@ -208,7 +225,7 @@ export function Inbox() {
               <button onClick={() => setOpen(null)} className="flex items-center gap-1 border-b px-3 py-2 text-sm text-muted md:hidden">
                 <ChevronLeft className="size-4" /> Conversations
               </button>
-              <Chat key={creatorId + open.fanId} creatorId={creatorId} chat={open} lastEvent={lastEvent} onPatch={patchChat} />
+              <Chat key={creatorId + open.fanId} creatorId={creatorId} chat={open} lastEvent={lastEvent} onPatch={patchChat} watchers={othersOn(open.fanId)} />
             </>
           ) : (
             <div className="grid flex-1 place-items-center text-center text-sm text-muted">
@@ -224,7 +241,7 @@ export function Inbox() {
   );
 }
 
-function Row({ c, on, onClick }: { c: ChatT; on: boolean; onClick: () => void }) {
+function Row({ c, on, onClick, watchers }: { c: ChatT; on: boolean; onClick: () => void; watchers: Presence[] }) {
   const waiting = needsReply(c);
   return (
     <button onClick={onClick} className={cn("cv-row relative flex w-full items-start gap-3 border-b border-line/50 px-3 py-2.5 text-left transition-colors", on ? "bg-petal/60" : "hover:bg-white/[0.03]")}>
@@ -240,6 +257,7 @@ function Row({ c, on, onClick }: { c: ChatT; on: boolean; onClick: () => void })
           {c.last ? (c.last.fromCreator ? "Toi : " : "") + (c.last.text || (c.last.media ? "📷 Média" : "")) : ""}
         </span>
         <span className="mt-1 flex flex-wrap gap-1">
+          {watchers.length ? <Pill tone="info">👀 {watchers.map((w) => w.name).join(", ")}</Pill> : null}
           {c.handoff ? <Pill tone="warn">à reprendre</Pill> : null}
           {c.ai ? <Pill tone="accent">IA</Pill> : <Pill>IA off</Pill>}
           {c.spent > 0 ? <Pill tone="good">{usd(c.spent, 0)}</Pill> : null}

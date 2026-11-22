@@ -56,7 +56,7 @@ const GROUPS: Group[] = [
     title: "Équipe",
     who: "boss",
     items: [
-      { href: "/app/chatteurs", label: "Chatteurs", icon: UsersRound, who: "boss", soon: true },
+      { href: "/app/equipe", label: "Équipe", icon: UsersRound, who: "boss" },
       { href: "/app/stats", label: "Statistiques", icon: BarChart3, who: "boss", soon: true },
       { href: "/app/paies", label: "Paies", icon: Wallet, who: "boss", soon: true },
     ],
