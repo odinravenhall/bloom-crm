@@ -11,13 +11,13 @@ const DAY = 864e5;
 const REFUND = /refund|chargeback|revers|rembours|annul/i;
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
-/** Bornes de la période (heure de Paris). La semaine commence le dimanche, comme Infloww. */
-function bounds(period) {
+/** Bornes de la période (heure de Paris). La semaine commence le dimanche (comme Infloww) ou le lundi (réglage). */
+function bounds(period, weekStart = 0) {
   const today = parisDay(Date.now());
   if (period === 'yesterday') return { from: addDay(today, -1), to: addDay(today, -1) };
   if (period === 'week') {
     const dow = new Date(`${today}T12:00:00Z`).getUTCDay(); // 0 = dimanche
-    const from = addDay(today, -dow);
+    const from = addDay(today, -((dow - weekStart + 7) % 7));
     return { from, to: addDay(from, 6) };
   }
   if (period === 'month') {
@@ -39,7 +39,7 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       const p = new URL(req.url, 'http://x').searchParams;
       const period = ['yesterday', 'today', 'week', 'month'].includes(p.get('period')) ? p.get('period') : 'week';
       const gross = p.get('mode') === 'gross';
-      const { from, to } = bounds(period);
+      const { from, to } = bounds(period, p.get('weekStart') === '1' ? 1 : 0);
       const start = parisMidnight(from);
       const end = parisMidnight(addDay(to, 1));
       const ofCreators = creators().filter((c) => /onlyfans/i.test(c.platform || '') && canSee({ ...u, pf: null }, c.id));

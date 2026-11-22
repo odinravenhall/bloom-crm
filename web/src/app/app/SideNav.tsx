@@ -31,6 +31,7 @@ import { cn } from "@/lib/fmt";
 import { PlatformSwitch } from "./PlatformSwitch";
 import { useCreators } from "@/lib/creators";
 import { OfManagerNav } from "./OfManagerNav";
+import { OfSideNav } from "./OfSideNav";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
@@ -220,7 +221,11 @@ export function SideNav({ me }: { me: Me }) {
           {mobile ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>
       </div>
-      {mobile ? (
+      {mobile && pf === "of" ? (
+        <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col overflow-y-auto bg-bg px-4 py-4 md:hidden">
+          <OfSideNav me={me} narrow={false} onToggle={() => setMobile(false)} />
+        </div>
+      ) : mobile ? (
         <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col justify-between overflow-y-auto bg-bg px-4 py-4 md:hidden">
           {HOME.roles!.includes(me.role) ? <nav className="mb-2">{item(HOME, false)}</nav> : null}
           <div className="mb-4">
@@ -231,8 +236,13 @@ export function SideNav({ me }: { me: Me }) {
         </div>
       ) : null}
 
-      {/* ordinateur : menu à gauche */}
-      <aside className={cn("no-scrollbar hidden h-dvh shrink-0 flex-col gap-6 overflow-y-auto border-r bg-panel-strong py-5 md:flex", narrow ? "w-[72px] px-3" : "w-60 px-4")}>
+      {/* ordinateur : menu à gauche (sur OnlyFans : copie de la barre d'Infloww) */}
+      {pf === "of" ? (
+        <aside className={cn("hidden h-dvh shrink-0 flex-col border-r border-white/[0.06] bg-black py-4 md:flex", narrow ? "w-[72px] px-3" : "w-[252px] px-3")}>
+          <OfSideNav me={me} narrow={narrow} onToggle={toggleNav} />
+        </aside>
+      ) : null}
+      <aside className={cn("no-scrollbar hidden h-dvh shrink-0 flex-col gap-6 overflow-y-auto border-r bg-panel-strong py-5", pf === "of" ? "" : "md:flex", narrow ? "w-[72px] px-3" : "w-60 px-4")}>
         <div className={cn("flex items-center", narrow ? "flex-col gap-3" : "justify-between pl-1")}>
           {narrow ? <BloomMark className="size-9" /> : <Logo href={homeOf(me.role)} />}
           <button onClick={toggleNav} title={narrow ? "Agrandir le menu" : "Réduire le menu"} className="grid size-8 place-items-center rounded-full text-muted hover:bg-card hover:text-fg">

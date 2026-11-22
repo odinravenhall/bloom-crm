@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { BadgePlus, ChevronDown, FileText, Info, Lightbulb, MessageCircleMore, Rows3, UserRoundPlus, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
+import { readUserPrefs } from "../settings/Settings";
 
 type Period = "yesterday" | "today" | "week" | "month";
 type Mode = "net" | "gross";
@@ -59,7 +60,7 @@ export function OfDashboard() {
   useEffect(() => {
     let live = true;
     const load = () =>
-      api<Data>("GET", `/api/of-dashboard?period=${period}&mode=${mode}`)
+      api<Data>("GET", `/api/of-dashboard?period=${period}&mode=${mode}&weekStart=${readUserPrefs().weekStart}`)
         .then((d) => live && setData(d))
         .catch(() => {});
     load();
