@@ -17,6 +17,7 @@ export function Scripts() {
   const [steps, setSteps] = useState<ScriptStep[] | null>(null);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     if (!creatorId) return;
@@ -33,6 +34,7 @@ export function Scripts() {
   useEffect(() => {
     if (!open || !creatorId) return;
     setSteps(null);
+    setMore(false);
     api<ScriptStep[]>("GET", `/api/scripts/steps?creatorId=${encodeURIComponent(creatorId)}&scriptId=${encodeURIComponent(open.id)}`)
       .then(setSteps)
       .catch(() => setSteps([]));
@@ -86,7 +88,16 @@ export function Scripts() {
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-3xl">{open.name}</h2>
-                  {open.description ? <p className="mt-1 text-sm text-muted">{open.description}</p> : null}
+                  {open.description ? (
+                    <>
+                      <p className={cn("mt-1 text-sm whitespace-pre-wrap text-muted", !more && "line-clamp-3")}>{open.description}</p>
+                      {open.description.length > 240 ? (
+                        <button onClick={() => setMore((m) => !m)} className="mt-1 text-xs font-semibold text-primary-soft">
+                          {more ? "Voir moins" : "Voir plus"}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
                 <a href={`https://app.substy.ai/scripts?creatorId=${creatorId}&scriptId=${open.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border bg-card px-4 py-2 text-sm font-semibold hover:border-primary/60">
                   Modifier sur Substy <ExternalLink className="size-3.5" />
