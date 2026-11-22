@@ -55,7 +55,14 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       const points = [];
       if (hourly) for (let h = 0; h < 24; h++) points.push({ key: String(h), label: `${String(h).padStart(2, '0')}:00`, at: start + h * 3600_000, v: 0 });
       else for (let d = from; d <= to; d = addDay(d, 1)) points.push({ key: d, label: d, at: parisMidnight(d), v: 0 });
-      const slot = (at) => (hourly ? points[Math.floor((at - start) / 3600_000)] : points.find((x) => x.key === parisDay(at)));
+      // Point de la courbe d'une vente : calcul direct (pas de conversion de date par vente : trop lent sur un mois).
+      const slot = (at) => {
+        let i = Math.floor((at - start) / (hourly ? 3600_000 : DAY));
+        i = Math.max(0, Math.min(points.length - 1, i));
+        while (i + 1 < points.length && points[i + 1].at <= at) i++;
+        while (i > 0 && points[i].at > at) i--;
+        return points[i];
+      };
       let total = 0;
       let provisional = 0;
       let sales = 0;
