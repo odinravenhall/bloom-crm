@@ -3,7 +3,7 @@ import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { libItemOf } from './library.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
-const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
+export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 /** Les textes de Substy arrivent parfois en HTML (« <p>Oui</p> ») : on garde le texte, avec les retours à la ligne. */
 export const plain = (s) =>
@@ -16,14 +16,14 @@ export const plain = (s) =>
     .trim();
 
 /** Historique IA d'un fan (coupée / rallumée, par qui) → lignes à glisser dans la conversation. */
-function aiLogView(l) {
+export function aiLogView(l) {
   const a = String(l.action || '').toLowerCase();
   const on = /disabl|pause|stop|deactiv|handoff|(^|[^a-z])off/.test(a) ? false : /enabl|resum|activ|start|(^|[^a-z])on($|[^a-z])/.test(a) ? true : null;
   return { id: l.id, at: l.createdAt, on, action: l.action || '', reason: l.reason || '', by: l.employee?.name || null };
 }
 /** Images de Substy : les chemins « /api/creators/… » passent par le relais de Bloom. */
-const img = (u) => (!u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : u);
-const mediaView = (m) => ({
+export const img = (u) => (!u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : u);
+export const mediaView = (m) => ({
   id: m.id,
   type: (m.type || '').toLowerCase(),
   thumb: m.files?.thumb ? `/media?p=${encodeURIComponent(m.files.thumb)}` : null,
@@ -59,7 +59,7 @@ export function messageView(m, bloomBy = null) {
   };
 }
 
-function chatView(c) {
+export function chatView(c) {
   const f = c.fan || {};
   return {
     fanId: String(f.fanId || c.chatId),
@@ -77,7 +77,7 @@ function chatView(c) {
   };
 }
 
-function fanView(f) {
+export function fanView(f) {
   const b = f.spendBreakdown || {};
   return {
     fanId: f.fanId,
@@ -141,6 +141,10 @@ function inboxOf(cid) {
 }
 const strip = ({ _t, ...c }) => c;
 /** Pour la file de la messagerie (toutes créatrices) : les conversations en mémoire d'une créatrice ; relance la récupération si besoin. */
+/** Une conversation de la mémoire (ou null). */
+export function inboxChat(cid, fanId) {
+  return INBOX.get(cid)?.map.get(String(fanId)) ?? inboxOf(cid).map.get(String(fanId)) ?? null;
+}
 export function inboxChats(cid) {
   const b = inboxOf(cid);
   b.usedAt = Date.now();

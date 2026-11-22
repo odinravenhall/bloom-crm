@@ -1,16 +1,11 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { CHAT_ROLES, requireMe } from "@/lib/server";
-import { Inbox } from "./Inbox";
+import { RvMessagerie } from "@/rv/RvMessagerie";
 
 export const metadata: Metadata = { title: "Messagerie" };
 export const dynamic = "force-dynamic";
 
 export default async function Messagerie() {
-  const me = await requireMe(CHAT_ROLES);
-  return (
-    <Suspense>
-      <Inbox boss={me.role !== "chatter"} />
-    </Suspense>
-  );
+  await requireMe(CHAT_ROLES);
+  return <RvMessagerie />;
 }

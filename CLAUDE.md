@@ -72,7 +72,7 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 
 - `app/` (Node 24, sans dépendance) = l'**API** : garde la session Substy côté serveur (chiffrée dans `data/`), appelle
   l'API interne de Substy, écoute le temps réel, sert `/api/*` et `/media`, et fait tourner le **bot Discord « Bloom »**.
-- `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec SA direction artistique « floraison » (thème clair crème / prune / rose pétale / sauge, titres Fraunces, texte Manrope, aucune animation décorative) — ne pas recopier le look de Raven. Elle relaie `/api/*` et `/media` vers
+- `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec la MÊME direction artistique que Raven CRM depuis le 22/11/2026 (demande de l'agence : `app/globals.css`, fond `components/Backdrop.tsx` et police Plus Jakarta repris de Raven ; sombre par défaut, clair / onyx en option). Elle relaie `/api/*` et `/media` vers
   l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,
   `/app/scripts`, `/app/envoi` (envoi groupé : historique, listes, envoi / programmation), `/app/stats` (performances par chatteur et créatrice, `performance()` dans `revenue.mjs`), `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
   Menu à GAUCHE (`app/app/SideNav.tsx`) : tout visible, petits titres en serif, réductible en icônes — pas l'accordéon de Raven. Thèmes clair / sombre / onyx (`lib/theme.ts`, variables dans `globals.css`).
@@ -103,19 +103,18 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   déjà envoyées à ce fan (pas un index : réordonner ne casse rien).
 - `{prenom}` est remplacé par le prénom du fan. L'onglet « IA Substy » montre en lecture les scripts de l'IA de Substy.
 
-## Messagerie (comme Raven CRM) — `app/inbox.mjs`, `web/src/app/app/messagerie/`
+## Messagerie = celle de Raven CRM — `web/src/rv/`, `app/rvapi.mjs`
 
-- Barre des créatrices à gauche (« Tous » + chaque créatrice, OnlyFans puis MYM, nombre de fans à répondre ; clic droit pour masquer).
-- File calculée par le serveur (`GET /api/queue`) depuis la mémoire des conversations : une créatrice ou toutes, onglets
-  à répondre / épinglés / actifs (fan a écrit < 10 min : Substy ne donne pas « en ligne ») / nouveaux (abonnés < 3 j) /
-  relances (notre dernier message = PPV non payé, 5 min à 24 h, via `msg_log` + `rv_live`) / tous ; tri plus anciens /
-  récents / dépense ; fenêtre de temps ; recherche nom ou tag ; 300 lignes au plus.
-- Ce que Bloom garde en plus (`fan_meta`, par créatrice + fan) : épingle (toute l'équipe), tags, notes, « non lu » remis
-  à la main, dernier message vu par l'équipe (ligne en gras tant que personne ne l'a ouvert).
-- Boxes (`creator_boxes`, `user_boxes`) comme Raven : Box 1..N, seuls les fans à répondre sont distribués à tour de rôle (parts égales,
-  ordre fixe par empreinte du fanId) ; chaque chatteur coche les siennes. Pas de noms. Réglage : boss.
-- Onglets multi-conversations (10 au plus, gardés sur l'ordinateur), point quand le fan a écrit.
-- Cloche : ventes, pourboires, abonnements des 2 derniers jours (`GET /api/notifs`). Alt+↓ fan suivant, « Enchaîner après un envoi ».
+- Les écrans de la messagerie de Raven (file, chat, fiche fan, scripts, vault, boxes, cloche, multi-chat) sont repris tels
+  quels dans `web/src/rv/` (avec leurs composants et utilitaires), et appellent « /api/rv/… » (`rv/lib/client.ts` préfixe).
+- `app/rvapi.mjs` répond à ces adresses EXACTEMENT au format de Raven, avec les données de Substy : une conversation =
+  « <creatorId>~<fanId> », montants en centimes ($ OnlyFans, € MYM : `rv/lib/fmt.ts`). Temps réel : `/api/live` traduit
+  en événements « conv » (`rv/lib/liveClient.ts`).
+- File : `computeQueue()` de `app/inbox.mjs` (onglets, fenêtre, tri, boxes Box 1..N à parts égales, épingles, tags, notes,
+  non lu, vu par l'équipe dans `fan_meta`). « En ligne » = le fan a écrit il y a peu (Substy ne donne pas la présence).
+- En plus de Raven : bouton IA (couper / rallumer l'IA de Substy), lignes « IA coupée par … » dans le fil.
+- Pas possible via Substy (boutons cachés) : réactions, supprimer un message. Pas repris : pointage, Raven Score réel.
+- Pour modifier la messagerie : partir du code de Raven (`raven-crm/web/src/app/app/inbox`) et garder les mêmes formats.
 
 ## Configuration IA — page `/app/ia` (admins, managers)
 

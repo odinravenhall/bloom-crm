@@ -46,7 +46,7 @@ const boxName = (i) => `Box ${i + 1}`;
  * Comme Raven : seuls les fans « à répondre » (dans la fenêtre) sont répartis, distribués à tour de rôle
  * (1, 2, 1, 2…) dans un ordre fixe (empreinte du fan) : chaque boîte a le même nombre de fans.
  */
-function balanced(list, count) {
+export function balanced(list, count) {
   const keyed = list.map((c) => ({ id: c.fanId, k: boxOf(c.fanId, 2147483647) })).sort((a, b) => a.k - b.k || a.id.localeCompare(b.id));
   return new Map(keyed.map((r, i) => [r.id, i % count]));
 }
@@ -59,12 +59,12 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const WINDOWS = { '6h': 6 * HOUR, '24h': 24 * HOUR, '3j': 72 * HOUR, '7j': 168 * HOUR, tout: 0 };
 const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active'];
-const tagsOf = (s) => String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
+export const tagsOf = (s) => String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 /** Le fan attend une réponse : dernier message de lui, non lu chez Substy, « à reprendre » (l'IA a passé la main), ou remis « non lu » dans Bloom. */
-const waiting = (c, m) => !!c.last && c.canSend !== false && (c.handoff || c.unread > 0 || !c.last.fromCreator || !!m?.unread);
+export const waiting = (c, m) => !!c.last && c.canSend !== false && (c.handoff || c.unread > 0 || !c.last.fromCreator || !!m?.unread);
 
-function metaMap(cids) {
+export function metaMap(cids) {
   if (!cids.length) return new Map();
   const rows = all(`SELECT * FROM fan_meta WHERE creator_id IN (${cids.map(() => '?').join(',')})`, ...cids);
   return new Map(rows.map((r) => [`${r.creator_id}:${r.fan_id}`, r]));
@@ -92,6 +92,81 @@ function relances(cands) {
   return out;
 }
 
+/**
+ * La file de la messagerie pour un utilisateur : o = { scope, tab, winMs, sort, q, paying, activeOnly, hide }.
+ * Sert à la file de Bloom et à la messagerie façon Raven (`rvapi.mjs`).
+ */
+export function computeQueue(u, list, o = {}) {
+  const hide = new Set(o.hide || []);
+  const visible = list.filter((c) => canSee(u, c.id) && !hide.has(c.id)).map((c) => c.id);
+  const scope = o.scope && o.scope !== 'all' && visible.includes(o.scope) ? [o.scope] : visible;
+  const tab = TABS.includes(o.tab) ? o.tab : 'reply';
+  const win = o.winMs ?? WINDOWS['3j'];
+  const sort = ['old', 'recent', 'spent'].includes(o.sort) ? o.sort : tab === 'reply' ? 'old' : 'recent';
+  const s = String(o.q || '').trim().toLowerCase();
+  const paying = !!o.paying;
+  const now = Date.now();
+  const metas = metaMap(visible);
+  const boxes = boxConfig(visible);
+  const mine = myBoxes(u.id);
+
+  const perCreator = {};
+  const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0, unread: 0, pinnedReply: 0 };
+  const rows = [];
+  const relCands = [];
+  let loading = false;
+  for (const cid of visible) {
+    const inb = inboxChats(cid);
+    if (!inb.complete) loading = true;
+    let n = 0;
+    const inScope = scope.includes(cid);
+    const cfg = boxes.get(cid);
+    const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
+    const chats = [...inb.chats];
+    const isReply = (c) => {
+      const at = c.last ? Date.parse(c.last.at) || 0 : 0;
+      return waiting(c, metas.get(`${cid}:${c.fanId}`)) && (!win || at >= now - win);
+    };
+    // Boîtes : les fans à répondre sont partagés à parts égales ; le chatteur ne garde que ceux de ses boîtes.
+    const split = cfg ? balanced(chats.filter(isReply), cfg.count) : null;
+    for (const c of chats) {
+      const m = metas.get(`${cid}:${c.fanId}`);
+      const at = c.last ? Date.parse(c.last.at) || 0 : 0;
+      const reply = isReply(c);
+      const box = split?.get(c.fanId) ?? null;
+      if (reply && sel.length && sel.length < cfg.count && !sel.includes(box)) continue;
+      if (reply) n++;
+      if (!inScope) continue;
+      if (paying && !(c.spent > 0)) continue;
+      if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
+      const row = { c, m, cid, at, reply, boxIdx: box, box: box != null ? boxName(box) : null };
+      row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
+      row.active = !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
+      counts.all++;
+      if (reply) counts.reply++;
+      if (m?.pinned) counts.pinned++;
+      if (m?.pinned && reply) counts.pinnedReply++;
+      if (c.unread > 0 || m?.unread) counts.unread++;
+      if (row.isNew) counts.new++;
+      if (row.active) counts.active++;
+      if (c.last?.fromCreator && c.last.id && at <= now - 5 * MIN && at >= now - 24 * HOUR) relCands.push(c), (row.relCand = true);
+      if (o.activeOnly && !row.active) continue;
+      rows.push(row);
+    }
+    perCreator[cid] = n;
+  }
+  const rel = relances(relCands);
+  counts.relance = rows.filter((r) => r.relCand && rel.has(r.c.last.id)).length;
+
+  const keep = rows.filter((r) =>
+    tab === 'reply' ? r.reply : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
+  );
+  keep.sort((a, b) => (sort === 'spent' ? (b.c.spent || 0) - (a.c.spent || 0) || a.at - b.at : sort === 'old' ? a.at - b.at : b.at - a.at));
+  // Épinglés toujours en haut (sauf tri par dépense).
+  if (sort !== 'spent') keep.sort((a, b) => (b.m?.pinned || 0) - (a.m?.pinned || 0));
+  return { keep, counts, perCreator, rel, loading, boxes, mine, visible, scope };
+}
+
 export function inboxRoutes({ userFrom, send, body, creators }) {
   const auth = (req, res) => {
     const u = userFrom(req);
@@ -112,70 +187,15 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       const u = auth(req, res);
       if (!u) return;
       const p = new URL(req.url, 'http://x').searchParams;
-      const hide = new Set(String(p.get('hide') || '').split(',').filter(Boolean));
-      const visible = creators().filter((c) => canSee(u, c.id) && !hide.has(c.id)).map((c) => c.id);
-      const scope = p.get('scope') && p.get('scope') !== 'all' && visible.includes(p.get('scope')) ? [p.get('scope')] : visible;
-      const tab = TABS.includes(p.get('tab')) ? p.get('tab') : 'reply';
-      const win = WINDOWS[p.get('win')] ?? WINDOWS['3j'];
-      const sort = ['old', 'recent', 'spent'].includes(p.get('sort')) ? p.get('sort') : tab === 'reply' ? 'old' : 'recent';
-      const s = String(p.get('q') || '').trim().toLowerCase();
-      const paying = p.get('paying') === '1';
-      const now = Date.now();
-      const metas = metaMap(visible);
-      const boxes = boxConfig(visible);
-      const mine = myBoxes(u.id);
-
-      const perCreator = {};
-      const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0 };
-      const rows = [];
-      const relCands = [];
-      let loading = false;
-      for (const cid of visible) {
-        const inb = inboxChats(cid);
-        if (!inb.complete) loading = true;
-        let n = 0;
-        const inScope = scope.includes(cid);
-        const cfg = boxes.get(cid);
-        const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
-        const chats = [...inb.chats];
-        const isReply = (c) => {
-          const at = c.last ? Date.parse(c.last.at) || 0 : 0;
-          return waiting(c, metas.get(`${cid}:${c.fanId}`)) && (!win || at >= now - win);
-        };
-        // Boîtes : les fans à répondre sont partagés à parts égales ; le chatteur ne garde que ceux de ses boîtes.
-        const split = cfg ? balanced(chats.filter(isReply), cfg.count) : null;
-        for (const c of chats) {
-          const m = metas.get(`${cid}:${c.fanId}`);
-          const at = c.last ? Date.parse(c.last.at) || 0 : 0;
-          const reply = isReply(c);
-          const box = split?.get(c.fanId) ?? null;
-          if (reply && sel.length && sel.length < cfg.count && !sel.includes(box)) continue;
-          if (reply) n++;
-          if (!inScope) continue;
-          if (paying && !(c.spent > 0)) continue;
-          if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
-          const row = { c, m, cid, at, reply, box: box != null ? boxName(box) : null };
-          row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
-          row.active = !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
-          counts.all++;
-          if (reply) counts.reply++;
-          if (m?.pinned) counts.pinned++;
-          if (row.isNew) counts.new++;
-          if (row.active) counts.active++;
-          if (c.last?.fromCreator && c.last.id && at <= now - 5 * MIN && at >= now - 24 * HOUR) relCands.push(c), (row.relCand = true);
-          rows.push(row);
-        }
-        perCreator[cid] = n;
-      }
-      const rel = relances(relCands);
-      counts.relance = rows.filter((r) => r.relCand && rel.has(r.c.last.id)).length;
-
-      const keep = rows.filter((r) =>
-        tab === 'reply' ? r.reply : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
-      );
-      keep.sort((a, b) => (sort === 'spent' ? (b.c.spent || 0) - (a.c.spent || 0) || a.at - b.at : sort === 'old' ? a.at - b.at : b.at - a.at));
-      // Épinglés toujours en haut (sauf tri par dépense).
-      if (sort !== 'spent') keep.sort((a, b) => (b.m?.pinned || 0) - (a.m?.pinned || 0));
+      const { keep, counts, perCreator, rel, loading } = computeQueue(u, creators(), {
+        hide: String(p.get('hide') || '').split(',').filter(Boolean),
+        scope: p.get('scope'),
+        tab: p.get('tab'),
+        winMs: WINDOWS[p.get('win')] ?? WINDOWS['3j'],
+        sort: p.get('sort'),
+        q: p.get('q'),
+        paying: p.get('paying') === '1',
+      });
       const items = keep.slice(0, 300).map(({ c, m, cid, reply, isNew, active, relCand, box }) => ({
         ...c,
         creatorId: cid,
