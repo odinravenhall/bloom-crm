@@ -19,7 +19,7 @@ type Data = {
   provisional: number;
   sales: number;
   blocks: { subscriptions: number; posts: number; messages: number; tips: number; referrals: number; streams: number };
-  employeeSales: { label: string; v: number; future: boolean }[];
+  employeeSales: { label: string; v: number; msgs: number; tips: number; future: boolean }[];
   hourly: boolean;
   unmapped: string[];
 };
@@ -76,8 +76,14 @@ export function OfDashboard() {
   // Comme Infloww : les jours (ou heures) à venir sont à 0 sur la courbe.
   const chart = (data?.employeeSales ?? []).map((p) => ({ ...p, name: data?.hourly ? p.label : short(p.label, lang) }));
   const max = Math.max(1, ...chart.map((p) => p.v));
-  const step = max > 4000 ? Math.ceil(max / 4 / 1000) * 1000 : max > 400 ? 1000 : max > 40 ? 100 : 10;
+  // Graduations « rondes » comme Infloww (environ 5 intervalles de 1, 2 ou 5 × 10ⁿ : 0 → 10 000 par 2 000…).
+  const step = (() => {
+    const raw = max / 5;
+    const pow = 10 ** Math.floor(Math.log10(raw));
+    return [1, 2, 5, 10].map((k) => k * pow).find((x) => x >= raw) ?? 10 * pow;
+  })();
   const top = Math.max(step, Math.ceil(max / step) * step);
+  const [hover, setHover] = useState<number | null>(null);
 
   return (
     <div className="min-h-full p-4 md:p-5" style={{ background: C.page, color: C.text }}>
@@ -98,7 +104,7 @@ export function OfDashboard() {
               </button>
               {modeOpen ? (
                 <div className="absolute top-full right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border py-1" style={{ borderColor: C.line, background: C.card }}>
-                  {(["net", "gross"] as Mode[]).map((m) => (
+                  {(["gross", "net"] as Mode[]).map((m) => (
                     <button key={m} onClick={() => (setMode(m), setModeOpen(false))} className="block w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/5" style={{ color: m === mode ? C.blue : C.text }}>
                       {t(m === "net" ? "Net earnings" : "Gross earnings")}
                     </button>
@@ -176,7 +182,7 @@ export function OfDashboard() {
           <Title>{t("Employee sales")}</Title>
           <div className="mt-4 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chart} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+              <AreaChart data={chart} margin={{ top: 10, right: 24, left: 0, bottom: 0 }} onMouseMove={(e) => setHover(typeof e?.activeTooltipIndex === "number" ? e.activeTooltipIndex : null)} onMouseLeave={() => setHover(null)}>
                 <defs>
                   <linearGradient id="of-emp" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" style={{ stopColor: "var(--of-area)", stopOpacity: 0.9 }} />
@@ -184,15 +190,47 @@ export function OfDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke={C.line} strokeDasharray="4 4" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: C.muted, fontSize: 12 }} dy={8} interval="preserveStartEnd" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: C.muted, fontSize: 12 }} dy={8} interval={chart.length > 14 ? 1 : 0} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: C.muted, fontSize: 11 }} width={48} domain={[0, top]} ticks={Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step)} tickFormatter={(v: number) => v.toLocaleString("en-US")} />
                 <Tooltip
-                  cursor={{ stroke: C.line }}
-                  contentStyle={{ background: C.page, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 12 }}
-                  labelStyle={{ color: C.muted }}
-                  formatter={(v) => [usd(Number(v)), t("Employee sales")]}
+                  cursor={{ stroke: C.muted, strokeDasharray: "4 4", strokeWidth: 1 }}
+                  content={({ active, label }) => {
+                    if (!active || hover == null) return null;
+                    const pt = chart[hover];
+                    if (!pt) return null;
+                    const prev = hover > 0 ? chart[hover - 1].v : 0;
+                    const growth = prev > 0 ? ((pt.v - prev) / prev) * 100 : null;
+                    return (
+                      <div className="rounded-md border px-3 py-2 text-[13px] leading-[1.45] text-white shadow-xl" style={{ background: "rgba(48,48,50,.94)", borderColor: "rgba(255,255,255,.12)" }}>
+                        <p>{label}</p>
+                        <p>
+                          {t("Earnings")}: ${pt.v.toFixed(2)}
+                          {growth != null ? ` ${t("Growth")}: ${growth.toFixed(2)}%` : ""}
+                        </p>
+                        <p className="pl-2">
+                          {t("From Messages")}: ${pt.msgs.toFixed(2)}
+                        </p>
+                        <p className="pl-2">
+                          {t("From Tips")}: ${pt.tips.toFixed(2)}
+                        </p>
+                      </div>
+                    );
+                  }}
                 />
-                <Area type="monotone" dataKey="v" stroke={C.blue} strokeWidth={3} fill="url(#of-emp)" dot={{ r: 4, fill: "var(--of-card)", stroke: C.blue, strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={C.blue}
+                  strokeWidth={3}
+                  fill="url(#of-emp)"
+                  // Survol : le remplissage s'éclaircit et les autres points s'estompent (comme Infloww).
+                  fillOpacity={hover == null ? 1 : 0.45}
+                  dot={(d: { cx?: number; cy?: number; index?: number }) => (
+                    <circle key={d.index} cx={d.cx} cy={d.cy} r={4} strokeWidth={2} style={{ fill: "var(--of-card)", stroke: C.blue, opacity: hover == null || hover === d.index ? 1 : 0.35 }} />
+                  )}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: C.blue, fill: "var(--of-card)" }}
+                  isAnimationActive={false}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>

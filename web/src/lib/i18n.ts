@@ -120,6 +120,9 @@ const D: Record<string, [es: string, fr: string]> = {
   "Employee sales": ["Ventas de empleados", "Ventes des employés"],
   "Scheduled hours": ["Horas programadas", "Heures planifiées"],
   "No data": ["Sin datos", "Aucune donnée"],
+  Earnings: ["Ganancias", "Gains"],
+  "From Messages": ["De mensajes", "Des messages"],
+  "From Tips": ["De propinas", "Des pourboires"],
   "incl. {v} provisional (Substy sales not confirmed yet)": ["incl. {v} provisional (ventas de Substy aún no confirmadas)", "dont {v} provisoire (ventes Substy pas encore confirmées)"],
   "Not linked to Infloww yet (not counted): {v}.": ["Aún no vinculadas a Infloww (no contadas): {v}.", "Pas encore reliées à Infloww (non comptées) : {v}."],
   // settings

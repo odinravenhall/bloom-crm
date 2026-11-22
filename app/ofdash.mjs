@@ -1,6 +1,6 @@
 // Dashboard OnlyFans (comme celui d'Infloww) : « Creator earnings overview » (net ou brut ; hier, aujourd'hui, cette
 // semaine, ce mois), réparti en abonnements, posts, messages, pourboires, parrainages et lives, et « Employee sales »
-// (ventes faites par l'équipe, jour par jour ou heure par heure).
+// (comme Infloww : messages + pourboires en net, jour par jour ou heure par heure).
 // Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, de toutes les modèles OnlyFans d'Infloww, plus les ventes Substy des dernières 24 h pas
 // encore confirmées (provisoires). Heure de Paris.
 import { all } from './store.mjs';
@@ -53,8 +53,8 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       // Courbe : heure par heure pour un seul jour, sinon jour par jour.
       const hourly = from === to;
       const points = [];
-      if (hourly) for (let h = 0; h < 24; h++) points.push({ key: String(h), label: `${String(h).padStart(2, '0')}:00`, at: start + h * 3600_000, v: 0 });
-      else for (let d = from; d <= to; d = addDay(d, 1)) points.push({ key: d, label: d, at: parisMidnight(d), v: 0 });
+      if (hourly) for (let h = 0; h < 24; h++) points.push({ key: String(h), label: `${String(h).padStart(2, '0')}:00`, at: start + h * 3600_000, msgs: 0, tips: 0 });
+      else for (let d = from; d <= to; d = addDay(d, 1)) points.push({ key: d, label: d, at: parisMidnight(d), msgs: 0, tips: 0 });
       // Point de la courbe d'une vente : calcul direct (pas de conversion de date par vente : trop lent sur un mois).
       const slot = (at) => {
         let i = Math.floor((at - start) / (hourly ? 3600_000 : DAY));
@@ -75,10 +75,10 @@ export function ofDashRoutes({ userFrom, send, creators }) {
           if (b) blocks[b] += v;
           total += v;
           sales++;
-          // Vente de l'équipe : vendeur connu (Infloww) ou chatteur de Bloom.
-          if (r.seller || r.origin === 'bloom' || r.origin === 'chatter') {
-            const s = slot(r.at);
-            if (s) s.v += v;
+          // Courbe « Employee sales » (comme Infloww) : messages + pourboires, toujours en net, quel que soit le choix brut / net.
+          if (r.type === 'ppv' || r.type === 'tip') {
+            const sl = slot(r.at);
+            if (sl) sl[r.type === 'tip' ? 'tips' : 'msgs'] += r.net / 100;
           }
         }
       }
@@ -103,7 +103,7 @@ export function ofDashRoutes({ userFrom, send, creators }) {
         provisional: round(provisional),
         sales,
         blocks: Object.fromEntries(Object.entries(blocks).map(([k, v]) => [k, round(v)])),
-        employeeSales: points.map((x) => ({ label: x.label, v: round(x.v), future: x.at > Date.now() })),
+        employeeSales: points.map((x) => ({ label: x.label, v: round(x.msgs + x.tips), msgs: round(x.msgs), tips: round(x.tips), future: x.at > Date.now() })),
         hourly,
         creators: ofCreators.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, mapped: maps.some((m) => m.creator_id === c.id) || !ids.has(c.id) })),
         accounts: accounts.length,
