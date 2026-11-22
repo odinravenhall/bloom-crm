@@ -385,7 +385,7 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
-Object.assign(routes, ofReportRoutes({ userFrom, send, creators: () => state.creators }));
+Object.assign(routes, ofReportRoutes({ userFrom, send, creators: () => state.creators, substy }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
 Object.assign(routes, ofb.routes);

@@ -39,8 +39,38 @@ function accountsFor(u, creators) {
     .filter((a) => seesAll(u) || (a.creatorId && canSee({ ...u, pf: null }, a.creatorId)));
 }
 
+/** Nouveaux abonnés par créatrice Substy sur la période (revenue.overview → totalNewSubs, avec l'évolution en %). */
+const subsCache = new Map();
+async function newSubsFor(substy, cids, from, to) {
+  const out = new Map();
+  await Promise.all(cids.map(async (cid) => {
+    const key = `${cid}|${from}|${to}`;
+    const hit = subsCache.get(key);
+    if (hit && hit.t > Date.now() - 10 * 60_000) return out.set(cid, hit.v);
+    try {
+      const r = await Promise.race([substy.revenue([cid], from, to), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15_000))]);
+      const n = Number(r?.totalNewSubs);
+      if (!Number.isFinite(n)) return;
+      const d = Number(r?.totalNewSubsDelta);
+      const v = { v: n, change: Number.isFinite(d) ? round(d) : null };
+      subsCache.set(key, { t: Date.now(), v });
+      out.set(cid, v);
+    } catch {}
+  }));
+  return out;
+}
+
+/** Période demandée (comme report()), pour aller chercher les nouveaux abonnés avant de calculer. */
+function periodOf(p) {
+  const today = parisDay(Date.now());
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(p.get('to') || '') ? p.get('to') : addDay(today, -1);
+  let from = /^\d{4}-\d{2}-\d{2}$/.test(p.get('from') || '') ? p.get('from') : addDay(to, -6);
+  if (from > to) from = to;
+  return { from, to };
+}
+
 /** Toutes les données du rapport. */
-function report(u, creators, p) {
+function report(u, creators, p, newSubs = null) {
   const today = parisDay(Date.now());
   const to = /^\d{4}-\d{2}-\d{2}$/.test(p.get('to') || '') ? p.get('to') : addDay(today, -1);
   let from = /^\d{4}-\d{2}-\d{2}$/.test(p.get('from') || '') ? p.get('from') : addDay(to, -6);
@@ -79,7 +109,7 @@ function report(u, creators, p) {
 
   const cur = zero();
   const prev = zero();
-  const per = new Map(accs.map((a) => [a.id, { ...a, cur: zero(), prev: zero(), total: 0, prevTotal: 0, refunds: 0, newSubs: 0, renewals: 0, subNew: 0, subRecurring: 0, tx: 0, spenders: new Set() }]));
+  const per = new Map(accs.map((a) => [a.id, { ...a, cur: zero(), prev: zero(), total: 0, prevTotal: 0, refunds: 0, newSubs: 0, renewals: 0, subNew: 0, subRecurring: 0, tx: 0, prevTx: 0, spenders: new Set(), prevSpenders: new Set() }]));
   let refunded = 0;
   if (accs.length) {
     const ph = accs.map(() => '?').join(',');
@@ -96,6 +126,8 @@ function report(u, creators, p) {
         prev[ch] += v;
         c.prev[ch] += v;
         c.prevTotal += v;
+        c.prevTx++;
+        if (r.fan_id || r.fan_name) c.prevSpenders.add(r.fan_id || r.fan_name);
         continue;
       }
       cur[ch] += v;
@@ -114,6 +146,7 @@ function report(u, creators, p) {
   }
   // Messages vus par Bloom (créatrices branchées sur Substy).
   const msg = new Map();
+  const prevMsg = new Map();
   const cids = accs.filter((a) => a.creatorId).map((a) => a.creatorId);
   if (cids.length) {
     const ph = cids.map(() => '?').join(',');
@@ -122,6 +155,11 @@ function report(u, creators, p) {
       ...cids, start, end,
     ))
       msg.set(r.creator_id, r);
+    for (const r of all(
+      `SELECT creator_id, COUNT(*) AS sent, SUM(price > 0) AS ppv, COUNT(DISTINCT fan_id) AS fans, AVG(reply_ms) AS reply FROM msg_log WHERE creator_id IN (${ph}) AND from_fan = 0 AND at >= ? AND at < ? GROUP BY creator_id`,
+      ...cids, prevStart, start,
+    ))
+      prevMsg.set(r.creator_id, r);
   }
 
   const sum = (o) => CHANNELS.reduce((a, k) => a + o[k], 0);
@@ -142,7 +180,14 @@ function report(u, creators, p) {
     kpi: { creators: accs.length, messages: round(cur.messages), total: round(total), refunded: round(refunded) },
     creators: [...per.values()].map((c) => {
       const m = c.creatorId ? msg.get(c.creatorId) : null;
+      const pm = c.creatorId ? prevMsg.get(c.creatorId) : null;
       const spenders = c.spenders.size;
+      const prevSpenders = c.prevSpenders.size;
+      const ns = c.creatorId ? newSubs?.get(c.creatorId) : null;
+      const avgSp = spenders ? c.total / spenders : 0;
+      const prevAvgSp = prevSpenders ? c.prevTotal / prevSpenders : 0;
+      const avgTx = c.tx ? c.total / c.tx : 0;
+      const prevAvgTx = c.prevTx ? c.prevTotal / c.prevTx : 0;
       return {
         id: c.id,
         name: c.name,
@@ -161,15 +206,25 @@ function report(u, creators, p) {
         contributionChange: prevAll && total ? round((c.total / total) * 100 - (c.prevTotal / prevAll) * 100) : null,
         refunds: round(c.refunds),
         avgHourly: round(c.total / hours),
-        newSubs: c.newSubs,
+        // Nouveaux abonnés : comptés par Substy (OnlyFans), les abonnements gratuits n'étant pas des ventes Infloww.
+        newSubs: ns ? ns.v : c.newSubs,
+        newSubsChange: ns ? ns.change : null,
+        newSubLtv: ns?.v ? round(c.total / ns.v) : null,
         renewals: c.renewals,
         spenders,
-        avgPerSpender: spenders ? round(c.total / spenders) : 0,
-        avgPerTx: c.tx ? round(c.total / c.tx) : 0,
+        spendersChange: pct(spenders, prevSpenders),
+        avgPerSpender: round(avgSp),
+        avgPerSpenderChange: pct(avgSp, prevAvgSp),
+        avgPerTx: round(avgTx),
+        avgPerTxChange: pct(avgTx, prevAvgTx),
         replyMs: m?.reply != null ? Math.round(m.reply) : null,
+        replyMsChange: m?.reply != null && pm?.reply != null ? pct(m.reply, pm.reply) : null,
         fansChatted: m ? m.fans : null,
+        fansChattedChange: m ? pct(m.fans, pm?.fans || 0) : null,
         messagesSent: m ? m.sent : null,
+        messagesSentChange: m ? pct(m.sent, pm?.sent || 0) : null,
         ppvSent: m ? m.ppv || 0 : null,
+        ppvSentChange: m ? pct(m.ppv || 0, pm?.ppv || 0) : null,
       };
     }),
     // Pour l'export « par jour ».
@@ -201,7 +256,13 @@ function csv(u, creators, p) {
   return '﻿' + lines.map((l) => l.map(esc).join(',')).join('\n');
 }
 
-export function ofReportRoutes({ userFrom, send, creators }) {
+export function ofReportRoutes({ userFrom, send, creators, substy }) {
+  const subs = async (u, p) => {
+    if (!substy) return null;
+    const { from, to } = periodOf(p);
+    const cids = accountsFor(u, creators).map((a) => a.creatorId).filter(Boolean);
+    return newSubsFor(substy, cids, from, to);
+  };
   const auth = (req, res) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
@@ -212,7 +273,8 @@ export function ofReportRoutes({ userFrom, send, creators }) {
     'GET /api/of-reports/creators': async (req, res) => {
       const u = auth(req, res);
       if (!u) return;
-      const r = report(u, creators, new URL(req.url, 'http://x').searchParams);
+      const p = new URL(req.url, 'http://x').searchParams;
+      const r = report(u, creators, p, await subs(u, p));
       delete r._byDay;
       send(res, 200, r);
     },

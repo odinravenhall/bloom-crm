@@ -19,6 +19,8 @@ type Row = {
   id: string; name: string; avatar: string | null; subscriptions: number; subscriptionsChange: Change; subNew: number; subRecurring: number; tips: number; messages: number; posts: number; streams: number;
   total: number; totalChange: Change; contribution: number; contributionChange: Change; refunds: number; avgHourly: number; newSubs: number; renewals: number; spenders: number; avgPerSpender: number;
   avgPerTx: number; replyMs: number | null; fansChatted: number | null; messagesSent: number | null; ppvSent: number | null;
+  newSubsChange?: Change; newSubLtv?: number | null; spendersChange?: Change; avgPerSpenderChange?: Change; avgPerTxChange?: Change;
+  replyMsChange?: Change; fansChattedChange?: Change; messagesSentChange?: Change; ppvSentChange?: Change;
 };
 type Channel = "subscriptions" | "tips" | "posts" | "messages" | "referrals" | "streams";
 type Report = {
@@ -55,6 +57,12 @@ const withChange = (v: number, c: Change, pct = false) => (
     {pct ? `${v.toFixed(2)}%` : usd(v)} <ChangeTxt c={c} />
   </span>
 );
+// Nombre (ou texte) suivi de son évolution, comme Infloww (« 443 -3.70% »).
+const numChange = (v: React.ReactNode, c: Change | undefined) => (
+  <span className="font-mono whitespace-nowrap">
+    {v} <ChangeTxt c={c ?? null} />
+  </span>
+);
 const METRICS: Metric[] = [
   { key: "subscriptions", label: "Total subscription earnings", on: true, tip: "New and recurring subscriptions", get: (r) => withChange(r.subscriptions, r.subscriptionsChange), sort: (r) => r.subscriptions },
   { key: "subNew", label: "Subscription earnings", on: false, get: (r) => money(r.subNew), sort: (r) => r.subNew },
@@ -75,22 +83,22 @@ const METRICS: Metric[] = [
   { key: "visitors", label: "Profile visitors", on: true, get: null },
   { key: "guestVisitors", label: "Guest profile visitors", on: false, get: null },
   { key: "userVisitors", label: "User profile visitors", on: false, get: null },
-  { key: "newSubs", label: "New subscribers", on: true, get: (r) => <span className="font-mono">{r.newSubs}</span>, sort: (r) => r.newSubs },
-  { key: "renewals", label: "Subscriber renewals", on: true, get: (r) => <span className="font-mono">{r.renewals}</span>, sort: (r) => r.renewals },
-  { key: "ltv", label: "New subscriber LTV", on: true, get: null },
+  { key: "newSubs", label: "New subscribers", on: true, get: (r) => numChange(r.newSubs, r.newSubsChange), sort: (r) => r.newSubs },
+  { key: "renewals", label: "Subscriber renewals", on: true, get: (r) => numChange(r.renewals, null), sort: (r) => r.renewals },
+  { key: "ltv", label: "New subscriber LTV", on: true, get: (r) => (r.newSubLtv == null ? <span className="font-mono">- -</span> : money(r.newSubLtv)), sort: (r) => r.newSubLtv ?? -1 },
   { key: "conversion", label: "New subscriber conversion", on: true, get: null },
   { key: "activeFans", label: "Active fans", on: true, get: null },
   { key: "expiredChange", label: "Change in expired fan count", on: false, get: null },
-  { key: "spenders", label: "Number of spenders", on: true, get: (r) => <span className="font-mono">{r.spenders}</span>, sort: (r) => r.spenders },
-  { key: "avgPerSpender", label: "Avg spend per spender", on: true, get: (r) => money(r.avgPerSpender), sort: (r) => r.avgPerSpender },
-  { key: "avgPerTx", label: "Avg spend per transaction", on: false, get: (r) => money(r.avgPerTx), sort: (r) => r.avgPerTx },
+  { key: "spenders", label: "Number of spenders", on: true, get: (r) => numChange(r.spenders, r.spendersChange), sort: (r) => r.spenders },
+  { key: "avgPerSpender", label: "Avg spend per spender", on: true, get: (r) => numChange(usd(r.avgPerSpender), r.avgPerSpenderChange), sort: (r) => r.avgPerSpender },
+  { key: "avgPerTx", label: "Avg spend per transaction", on: false, get: (r) => numChange(usd(r.avgPerTx), r.avgPerTxChange), sort: (r) => r.avgPerTx },
   { key: "totalFans", label: "Total number of fans", on: false, get: null },
   { key: "avgPerFan", label: "Avg earnings per fan", on: false, get: null },
   { key: "avgSubLength", label: "Avg subscription length", on: false, get: null },
-  { key: "replyMs", label: "Reply time", on: true, get: (r) => <span className="font-mono">{r.replyMs == null ? "- -" : fmtMs(r.replyMs)}</span>, sort: (r) => r.replyMs ?? -1 },
-  { key: "fansChatted", label: "Fans chatted", on: true, get: (r) => <span className="font-mono">{r.fansChatted ?? "- -"}</span>, sort: (r) => r.fansChatted ?? -1 },
-  { key: "messagesSent", label: "Messages sent", on: true, get: (r) => <span className="font-mono">{r.messagesSent ?? "- -"}</span>, sort: (r) => r.messagesSent ?? -1 },
-  { key: "ppvSent", label: "PPVs sent", on: true, get: (r) => <span className="font-mono">{r.ppvSent ?? "- -"}</span>, sort: (r) => r.ppvSent ?? -1 },
+  { key: "replyMs", label: "Reply time", on: true, get: (r) => numChange(r.replyMs == null ? "- -" : fmtMs(r.replyMs), r.replyMsChange), sort: (r) => r.replyMs ?? -1 },
+  { key: "fansChatted", label: "Fans chatted", on: true, get: (r) => numChange(r.fansChatted ?? "- -", r.fansChattedChange), sort: (r) => r.fansChatted ?? -1 },
+  { key: "messagesSent", label: "Messages sent", on: true, get: (r) => numChange(r.messagesSent ?? "- -", r.messagesSentChange), sort: (r) => r.messagesSent ?? -1 },
+  { key: "ppvSent", label: "PPVs sent", on: true, get: (r) => numChange(r.ppvSent ?? "- -", r.ppvSentChange), sort: (r) => r.ppvSent ?? -1 },
 ];
 const fmtMs = (ms: number) => (ms < 60000 ? `${Math.round(ms / 1000)}s` : ms < 3600e3 ? `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s` : `${(ms / 3600e3).toFixed(1)}h`);
 const MKEY = "bloom.of.creator-metrics";
