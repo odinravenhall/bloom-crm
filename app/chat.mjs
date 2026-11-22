@@ -1,7 +1,7 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { libItemOf } from './library.mjs';
-import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
+import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -72,7 +72,8 @@ function chatView(c) {
     spent: money(f.spend?.net),
     subscribed: f.subscription?.status || null,
     canSend: c.canSendMessage !== false,
-    last: c.lastMessage ? { text: plain(c.lastMessage.text), at: c.lastMessage.sentAt, fromCreator: !!c.lastMessage.isFromCreator, media: c.lastMessage.mediaCount || 0 } : null,
+    since: f.subscription?.subscribedAt || null,
+    last: c.lastMessage ? { id: c.lastMessage.id != null ? String(c.lastMessage.id) : null, text: plain(c.lastMessage.text), at: c.lastMessage.sentAt, fromCreator: !!c.lastMessage.isFromCreator, media: c.lastMessage.mediaCount || 0 } : null,
   };
 }
 
@@ -139,6 +140,13 @@ function inboxOf(cid) {
   return b;
 }
 const strip = ({ _t, ...c }) => c;
+/** Pour la file de la messagerie (toutes créatrices) : les conversations en mémoire d'une créatrice ; relance la récupération si besoin. */
+export function inboxChats(cid) {
+  const b = inboxOf(cid);
+  b.usedAt = Date.now();
+  if (!b.crawling && (!b.crawledAt || Date.now() - b.crawledAt > 60 * 60_000)) crawl(cid);
+  return { chats: b.map.values(), complete: b.complete, total: b.map.size };
+}
 function put(b, chat) {
   const old = b.map.get(chat.fanId);
   const json = JSON.stringify(chat);
@@ -220,7 +228,7 @@ function onLiveMessage(cid, fanId, m) {
   }
   put(b, {
     ...strip(c),
-    last: { text: m.text, at: m.at, fromCreator: !m.fromFan, media: m.medias.length },
+    last: { id: String(m.id), text: m.text, at: m.at, fromCreator: !m.fromFan, media: m.medias.length },
     unread: m.fromFan ? (c.unread || 0) + 1 : c.unread,
     handoff: m.fromFan ? c.handoff : false,
   });
@@ -636,7 +644,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const b = await body(req);
       const cid = b.creatorId && canSee(u, b.creatorId) ? String(b.creatorId) : null;
       ping(u, { creatorId: cid, fanId: cid ? b.fanId : null, page: b.page });
-      send(res, 200, { others: cid ? onCreator(cid).filter((x) => x.userId !== u.id) : [] });
+      // scope « all » : la messagerie en vue « Tous » veut savoir qui est sur quel fan, toutes créatrices confondues.
+      const others = b.scope === 'all' ? onVisible(u) : cid ? onCreator(cid) : [];
+      send(res, 200, { others: others.filter((x) => x.userId !== u.id) });
     },
     'GET /api/team': async (req, res) => {
       if (!boss(req, res)) return;
@@ -795,6 +805,10 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       // Script de la bibliothèque de Bloom envoyé (pour ses statistiques et l'avancement du fan dans la séquence).
       const lib = libItemOf(String(b.creatorId), b.libItemId);
       run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at, lib_item) VALUES (?, ?, ?, ?, ?, ?, ?)', u.id, String(b.creatorId), String(b.fanId), message, price, Date.now(), lib);
+      // Répondu depuis Bloom : le fan n'est plus « non lu » à la main.
+      try {
+        run('UPDATE fan_meta SET unread = 0 WHERE creator_id = ? AND fan_id = ?', String(b.creatorId), String(b.fanId));
+      } catch {}
       const r = await substy.send(String(b.creatorId), String(b.fanId), { message, medias, price: price || undefined, replyId: b.replyId || null, templateId: b.templateId ? String(b.templateId) : undefined });
       send(res, 200, { ok: true, result: r ?? null });
     },

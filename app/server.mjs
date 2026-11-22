@@ -7,6 +7,7 @@ import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, set
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
 import { libraryRoutes } from './library.mjs';
+import { inboxRoutes } from './inbox.mjs';
 import { matchLive, parisDay, performance, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -315,6 +316,7 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
+Object.assign(routes, inboxRoutes({ userFrom, send, body, creators: () => state.creators }));
 
 createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];

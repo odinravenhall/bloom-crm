@@ -21,8 +21,25 @@ export type Chat = {
   spent: number;
   subscribed: string | null;
   canSend: boolean;
-  last: { text: string; at: string; fromCreator: boolean; media: number } | null;
+  since?: string | null;
+  last: { id?: string | null; text: string; at: string; fromCreator: boolean; media: number } | null;
 };
+
+/** Une ligne de la file de la messagerie (toutes créatrices). */
+export type QueueItem = Chat & {
+  creatorId: string;
+  waiting: boolean;
+  isNew: boolean;
+  active: boolean;
+  pinned: boolean;
+  pinnedBy: string | null;
+  tags: string[];
+  fresh: boolean;
+  relance: { price: number; at: number; script: string | null } | null;
+};
+export type QueueTab = "reply" | "all" | "pinned" | "new" | "relance" | "active";
+export type Queue = { items: QueueItem[]; counts: Record<QueueTab, number>; perCreator: Record<string, number>; replyTotal: number; more: boolean; loading: boolean };
+export type FanMeta = { pinned: boolean; pinnedBy: string | null; tags: string[]; notes: string; notesBy: string | null; notesAt: number | null };
 
 export type Media = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; price?: number };
 
@@ -122,7 +139,7 @@ export type Member = {
   sold: { currency: string; n: number; net: number }[];
 };
 /** Quelqu'un d'autre sur la même créatrice (messagerie). */
-export type Presence = { userId: number; name: string; avatar: string | null; fanId: string | null };
+export type Presence = { userId: number; name: string; avatar: string | null; fanId: string | null; creatorId?: string | null };
 
 /** Scripts de Substy (séquences d'étapes, partagées avec l'IA). */
 export type QuickReply = { id: number; title: string; text: string; all: boolean; uses: number; by: string | null; mine: boolean };

@@ -103,6 +103,17 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   déjà envoyées à ce fan (pas un index : réordonner ne casse rien).
 - `{prenom}` est remplacé par le prénom du fan. L'onglet « IA Substy » montre en lecture les scripts de l'IA de Substy.
 
+## Messagerie (comme Raven CRM) — `app/inbox.mjs`, `web/src/app/app/messagerie/`
+
+- Barre des créatrices à gauche (« Tous » + chaque créatrice, OnlyFans puis MYM, nombre de fans à répondre ; clic droit pour masquer).
+- File calculée par le serveur (`GET /api/queue`) depuis la mémoire des conversations : une créatrice ou toutes, onglets
+  à répondre / épinglés / actifs (fan a écrit < 10 min : Substy ne donne pas « en ligne ») / nouveaux (abonnés < 3 j) /
+  relances (notre dernier message = PPV non payé, 5 min à 24 h, via `msg_log` + `rv_live`) / tous ; tri plus anciens /
+  récents / dépense ; fenêtre de temps ; recherche nom ou tag ; 300 lignes au plus.
+- Ce que Bloom garde en plus (`fan_meta`, par créatrice + fan) : épingle (toute l'équipe), tags, notes, « non lu » remis
+  à la main, dernier message vu par l'équipe (ligne en gras tant que personne ne l'a ouvert).
+- Cloche : ventes, pourboires, abonnements des 2 derniers jours (`GET /api/notifs`). Alt+↓ fan suivant, « Enchaîner après un envoi ».
+
 ## Configuration IA — page `/app/ia` (admins, managers)
 
 - Lecture : `settings.getSettings`, `settings.voicePreset.getAll`, fiche = item de `creators.getCreators`.

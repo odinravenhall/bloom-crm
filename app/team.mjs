@@ -59,7 +59,13 @@ export function ping(u, { creatorId, fanId, page }) {
 /** Personnes en ligne sur une créatrice (et le fan qu'elles ont ouvert). */
 export function onCreator(creatorId) {
   const out = [];
-  for (const [userId, p] of presence) if (Date.now() - p.at < ONLINE_MS && p.creatorId === String(creatorId)) out.push({ userId, name: p.name, avatar: p.avatar, fanId: p.fanId });
+  for (const [userId, p] of presence) if (Date.now() - p.at < ONLINE_MS && p.creatorId === String(creatorId)) out.push({ userId, name: p.name, avatar: p.avatar, fanId: p.fanId, creatorId: p.creatorId });
+  return out;
+}
+/** Personnes en ligne sur l'une des créatrices que l'utilisateur voit (vue « Tous » de la messagerie). */
+export function onVisible(u) {
+  const out = [];
+  for (const [userId, p] of presence) if (Date.now() - p.at < ONLINE_MS && p.creatorId && canSee(u, p.creatorId)) out.push({ userId, name: p.name, avatar: p.avatar, fanId: p.fanId, creatorId: p.creatorId });
   return out;
 }
 

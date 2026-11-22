@@ -35,7 +35,7 @@ export function PlatformBadge({ c, className }: { c: { platform?: string | null 
 }
 
 /** Ordre stable : OnlyFans puis MYM, par nom. */
-export const sortCreators = (l: Creator[]) => [...l].sort((a, b) => platformOf(a).localeCompare(platformOf(b)) || a.name.localeCompare(b.name, "fr"));
+export const sortCreators = (l: Creator[]) => [...l].sort((a, b) => Number(platformOf(a) === "mym") - Number(platformOf(b) === "mym") || a.name.localeCompare(b.name, "fr"));
 
 /** Créatrices de l'agence + celle choisie (gardée d'une page à l'autre). */
 export function CreatorsProvider({ children }: { children: React.ReactNode }) {

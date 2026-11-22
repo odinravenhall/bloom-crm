@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, Lock, ScrollText, Send, X, Zap } from "lucide-react";
+import { EyeOff, ImagePlus, Lock, PanelRight, Pin, ScrollText, Send, X, Zap } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, dayLabel, hhmm, usd } from "@/lib/fmt";
-import type { AiLog, Chat as ChatT, Media, Message, Presence } from "@/lib/types";
+import type { AiLog, Chat as ChatT, Creator, Media, Message, Presence } from "@/lib/types";
+import { PlatformBadge } from "@/lib/creators";
 import { Avatar, btnCls } from "@/components/ui";
 import type { LiveEvent } from "./Inbox";
 import { FanPanel } from "./FanPanel";
@@ -16,7 +17,45 @@ import { QuickMenu, fillQuick, matchQuick, useQuickReplies } from "./QuickReplie
 type Page = { items: Message[]; olderCursor: string | null; aiLog?: AiLog[] };
 
 /** Une conversation : messages (avec l'historique IA coupée / rallumée), IA on/off, envoi texte ou PPV. */
-export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss = false }: { creatorId: string; chat: ChatT; lastEvent: LiveEvent | null; onPatch: (fanId: string, p: Partial<ChatT>) => void; watchers?: Presence[]; boss?: boolean }) {
+export function Chat({
+  creatorId,
+  chat,
+  lastEvent,
+  onPatch,
+  watchers = [],
+  boss = false,
+  creatorTag,
+  pinned,
+  onPin,
+  onUnread,
+  onSent,
+}: {
+  creatorId: string;
+  chat: ChatT;
+  lastEvent: LiveEvent | null;
+  onPatch: (fanId: string, p: Partial<ChatT>) => void;
+  watchers?: Presence[];
+  boss?: boolean;
+  creatorTag?: Creator;
+  pinned?: boolean;
+  onPin?: () => void;
+  onUnread?: () => void;
+  onSent?: () => void;
+}) {
+  // Fiche du fan à droite : affichée ou non (gardé sur cet ordinateur).
+  const [panel, setPanel] = useState(true);
+  useEffect(() => {
+    try {
+      setPanel(localStorage.getItem("bloom.inbox.panel") !== "0");
+    } catch {}
+  }, []);
+  const togglePanel = () =>
+    setPanel((p) => {
+      try {
+        localStorage.setItem("bloom.inbox.panel", p ? "0" : "1");
+      } catch {}
+      return !p;
+    });
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [aiLog, setAiLog] = useState<AiLog[]>([]);
   const [older, setOlder] = useState<string | null>(null);
@@ -149,6 +188,7 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
       setPrice(0);
       stick.current = true;
       toast("Envoyé");
+      onSent?.();
       // Le message arrive par le temps réel ; filet de sécurité si le flux a du retard.
       setTimeout(refreshLatest, 2500);
     } catch (e) {
@@ -175,13 +215,33 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
           <Avatar src={chat.avatar} name={chat.name} size="size-9" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold">{chat.name}</p>
-            <p className="truncate text-xs text-muted">{chat.username ? "@" + chat.username : ""}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs text-muted">
+              {chat.username ? "@" + chat.username : ""}
+              {creatorTag ? (
+                <span className="inline-flex items-center gap-1">
+                  · {creatorTag.name} <PlatformBadge c={creatorTag} />
+                </span>
+              ) : null}
+            </p>
           </div>
           {typing ? (
             <span className="flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-200">
               L’IA écrit <span className="typing-dot" /> <span className="typing-dot" style={{ animationDelay: ".15s" }} /> <span className="typing-dot" style={{ animationDelay: ".3s" }} />
             </span>
           ) : null}
+          {onPin ? (
+            <button onClick={onPin} className={cn("grid size-8 place-items-center rounded-xl border", pinned ? "border-primary bg-petal text-primary" : "text-muted hover:text-fg")} title={pinned ? "Désépingler (pour toute l’équipe)" : "Épingler (pour toute l’équipe)"}>
+              <Pin className="size-4" />
+            </button>
+          ) : null}
+          {onUnread ? (
+            <button onClick={onUnread} className="grid size-8 place-items-center rounded-xl border text-muted hover:text-fg" title="Remettre en non lu (dans Bloom) et fermer">
+              <EyeOff className="size-4" />
+            </button>
+          ) : null}
+          <button onClick={togglePanel} className={cn("hidden size-8 place-items-center rounded-xl border xl:grid", panel ? "text-primary" : "text-muted hover:text-fg")} title="Fiche du fan">
+            <PanelRight className="size-4" />
+          </button>
           <button onClick={toggleAi} className="flex items-center gap-2 rounded-xl border bg-card-2/70 px-3 py-1.5 text-xs font-bold" title="Couper ou rallumer l’IA sur cette conversation">
             {ai ? "IA active" : "IA coupée"}
             <span className={cn("relative h-5 w-9 rounded-full transition-colors", ai ? "bg-primary" : "bg-line")}>
@@ -333,7 +393,7 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
         </footer>
       </div>
 
-      <FanPanel creatorId={creatorId} fanId={chat.fanId} onLoaded={(f) => onPatch(chat.fanId, { name: f.name, avatar: f.avatar, username: f.username, ai: f.ai })} />
+      {panel ? <FanPanel creatorId={creatorId} fanId={chat.fanId} onLoaded={(f) => onPatch(chat.fanId, { name: f.name, avatar: f.avatar, username: f.username, ai: f.ai })} /> : null}
       {library ? (
         <LibraryPicker
           creatorId={creatorId}
