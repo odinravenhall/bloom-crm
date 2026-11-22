@@ -120,9 +120,43 @@ export function broadcast(creatorId, type, data) {
     logMessage(creatorId, data.data.fanId, payload.message);
     onLiveMessage(creatorId, data.data.fanId, payload.message);
     onMessageAlert(creatorId, data.data.fanId, payload.message);
+    // Le direct de Substy ne dit pas si l'IA (ou un employé) a écrit le message : on relit la conversation juste après.
+    if (!payload.message.fromFan && payload.message.by?.kind === 'creator') confirmSender(creatorId, payload.fanId);
   } else if (data?.data) payload.data = data.data;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const [c, u] of clients) if (canSee(u, creatorId)) c.write(line);
+}
+
+/**
+ * Qui a vraiment envoyé les derniers messages d'une conversation : le direct de Substy n'indique pas « IA » (ni
+ * l'employé), mais la liste des messages, oui. 4 s après un envoi, on relit les derniers messages du fan et on corrige
+ * le journal ; un PPV de l'IA ainsi reconnu déclenche ses notifications (et la relance auto).
+ */
+const confirmLater = new Map();
+function confirmSender(cid, fanId) {
+  if (!fanId || !SUB) return;
+  const key = `${cid}:${fanId}`;
+  if (confirmLater.has(key)) return;
+  confirmLater.set(
+    key,
+    setTimeout(async () => {
+      confirmLater.delete(key);
+      try {
+        const r = await SUB.messages(cid, fanId, { limit: 15 });
+        for (const it of r?.items || []) {
+          if (!it.isSentByCreator) continue;
+          const v = messageView(it, null);
+          if (!v.by || v.by.kind === 'creator') continue;
+          const row = one('SELECT kind FROM msg_log WHERE id = ?', String(v.id));
+          if (!row || row.kind !== 'creator') continue;
+          run('UPDATE msg_log SET kind = ?, by_name = ? WHERE id = ?', v.by.kind, v.by.kind === 'employee' ? v.by.name : null, String(v.id));
+          if (v.by.kind === 'ai') onMessageAlert(cid, fanId, v);
+        }
+      } catch (e) {
+        console.warn('[bloom] expéditeur des messages :', e.message);
+      }
+    }, 4000),
+  );
 }
 
 // ---------------------------------------------------------------- toutes les conversations, gardées en mémoire
