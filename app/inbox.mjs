@@ -38,10 +38,18 @@ const parse = (s, d) => {
 function boxConfig(cids) {
   if (!cids.length) return new Map();
   return new Map(
-    all(`SELECT creator_id, count, names FROM creator_boxes WHERE count >= 2 AND creator_id IN (${cids.map(() => '?').join(',')})`, ...cids).map((r) => [r.creator_id, { count: r.count, names: parse(r.names, []) }]),
+    all(`SELECT creator_id, count FROM creator_boxes WHERE count >= 2 AND creator_id IN (${cids.map(() => '?').join(',')})`, ...cids).map((r) => [r.creator_id, { count: r.count }]),
   );
 }
-const boxName = (cfg, i) => cfg.names[i] || `Boîte ${i + 1}`;
+const boxName = (i) => `Box ${i + 1}`;
+/**
+ * Comme Raven : seuls les fans « à répondre » (dans la fenêtre) sont répartis, distribués à tour de rôle
+ * (1, 2, 1, 2…) dans un ordre fixe (empreinte du fan) : chaque boîte a le même nombre de fans.
+ */
+function balanced(list, count) {
+  const keyed = list.map((c) => ({ id: c.fanId, k: boxOf(c.fanId, 2147483647) })).sort((a, b) => a.k - b.k || a.id.localeCompare(b.id));
+  return new Map(keyed.map((r, i) => [r.id, i % count]));
+}
 /** Boîtes cochées par l'utilisateur, par créatrice (vide = toutes). */
 function myBoxes(userId) {
   return new Map(all('SELECT creator_id, boxes FROM user_boxes WHERE user_id = ?', userId).map((r) => [r.creator_id, parse(r.boxes, [])]));
@@ -129,18 +137,24 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
         const inScope = scope.includes(cid);
         const cfg = boxes.get(cid);
         const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
-        for (const c of inb.chats) {
-          // Boîtes : on ne garde que les fans des boîtes cochées par ce chatteur.
-          const box = cfg ? boxOf(c.fanId, cfg.count) : null;
-          if (sel.length && !sel.includes(box)) continue;
+        const chats = [...inb.chats];
+        const isReply = (c) => {
+          const at = c.last ? Date.parse(c.last.at) || 0 : 0;
+          return waiting(c, metas.get(`${cid}:${c.fanId}`)) && (!win || at >= now - win);
+        };
+        // Boîtes : les fans à répondre sont partagés à parts égales ; le chatteur ne garde que ceux de ses boîtes.
+        const split = cfg ? balanced(chats.filter(isReply), cfg.count) : null;
+        for (const c of chats) {
           const m = metas.get(`${cid}:${c.fanId}`);
           const at = c.last ? Date.parse(c.last.at) || 0 : 0;
-          const reply = waiting(c, m) && (!win || at >= now - win);
+          const reply = isReply(c);
+          const box = split?.get(c.fanId) ?? null;
+          if (reply && sel.length && sel.length < cfg.count && !sel.includes(box)) continue;
           if (reply) n++;
           if (!inScope) continue;
           if (paying && !(c.spent > 0)) continue;
           if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
-          const row = { c, m, cid, at, reply, box: cfg ? boxName(cfg, box) : null };
+          const row = { c, m, cid, at, reply, box: box != null ? boxName(box) : null };
           row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
           row.active = !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
           counts.all++;
@@ -186,22 +200,17 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       if (!u) return;
       const cid = String(new URL(req.url, 'http://x').searchParams.get('creatorId') || '');
       if (!canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' });
-      const r = one('SELECT count, names FROM creator_boxes WHERE creator_id = ?', cid);
+      const r = one('SELECT count FROM creator_boxes WHERE creator_id = ?', cid);
       const count = r?.count >= 2 ? r.count : 0;
-      const names = parse(r?.names, []);
-      const preview = Array.from({ length: count }, (_, i) => ({ name: names[i] || `Boîte ${i + 1}`, fans: 0, reply: 0 }));
+      const preview = Array.from({ length: count }, (_, i) => ({ name: boxName(i), reply: 0 }));
       if (count) {
         const metas = metaMap([cid]);
         const now = Date.now();
-        for (const c of inboxChats(cid).chats) {
-          const b = preview[boxOf(c.fanId, count)];
-          b.fans++;
-          const at = c.last ? Date.parse(c.last.at) || 0 : 0;
-          if (waiting(c, metas.get(`${cid}:${c.fanId}`)) && at >= now - WINDOWS['3j']) b.reply++;
-        }
+        const list = [...inboxChats(cid).chats].filter((c) => waiting(c, metas.get(`${cid}:${c.fanId}`)) && Date.parse(c.last?.at || 0) >= now - WINDOWS['3j']);
+        for (const b of balanced(list, count).values()) preview[b].reply++;
       }
       const mine = parse(one('SELECT boxes FROM user_boxes WHERE user_id = ? AND creator_id = ?', u.id, cid)?.boxes, []).filter((i) => i < count);
-      send(res, 200, { count, names: preview.map((b) => b.name), mine, preview, canEdit: isBoss(u) });
+      send(res, 200, { count, mine, preview, canEdit: isBoss(u) });
     },
     // Régler le nombre de boîtes (0 = pas de boîtes, 2 à 20) et leurs noms : admins, managers, team leaders.
     'POST /api/boxes': async (req, res) => {
@@ -212,8 +221,7 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       if (!isBoss(u) || !canSee(u, cid)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
       const count = Math.round(Number(b.count) || 0);
       if (count && (count < 2 || count > 20)) return send(res, 400, { error: 'Entre 2 et 20 boîtes' });
-      const names = (Array.isArray(b.names) ? b.names : []).slice(0, count).map((n) => String(n || '').trim().slice(0, 30));
-      run('INSERT INTO creator_boxes (creator_id, count, names, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET count = excluded.count, names = excluded.names, updated_at = excluded.updated_at', cid, count, JSON.stringify(names), Date.now());
+      run('INSERT INTO creator_boxes (creator_id, count, names, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at', cid, count, '[]', Date.now());
       send(res, 200, { ok: true });
     },
     // Les boîtes que je prends sur cette créatrice (vide = toutes).
