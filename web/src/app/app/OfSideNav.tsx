@@ -50,7 +50,7 @@ const NAV: (Entry | "divider")[] = [
     children: [
       { label: "Smart Messages", icon: MessagesSquare, href: "/app/smart" },
       { label: "Smart lists", icon: ListFilter, href: "/app/listes" },
-      { label: "Auto-follow", icon: UserPlus, href: soon("Auto-follow") },
+      { label: "Auto-follow", icon: UserPlus, href: "/app/autofollow" },
       { label: "Vault Pro", icon: Images, href: "/app/vault" },
       { label: "Scripts", icon: ScrollText, href: "/app/scripts" },
       { label: "Profile promotion", icon: Gift, href: soon("Profile promotion") },

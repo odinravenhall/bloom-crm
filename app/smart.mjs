@@ -6,7 +6,7 @@
 //     Chaque fan reçoit une « collection » (suite de messages) tirée au hasard ; « unsend on reply » : on arrête la
 //     suite dès que le fan répond. Les autres déclencheurs d'Infloww (Nudge, Expiring, Expired, Resubscribe,
 //     Birthday) arrivent plus tard (le Nudge passera par l'IA de Substy).
-import { all, db, one, run } from './store.mjs';
+import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { inboxChats } from './chat.mjs';
 
@@ -242,6 +242,31 @@ export function smartRoutes({ substy, userFrom, send, body }) {
       run("UPDATE smart_auto SET status = 'canceled', canceled_by = ?, canceled_at = ? WHERE id = ?", u.name, Date.now(), a.id);
       run("UPDATE smart_runs SET status = 'stopped' WHERE auto_id = ? AND status = 'waiting'", a.id);
       send(res, 200, { ok: true });
+    },
+
+    // ---------------------------------------------------------------- Auto-follow (réglage par compte OnlyFans)
+    // Infloww suit automatiquement les fans dont l'abonnement a expiré. Substy ne le permet pas encore (ses
+    // automatisations, qui ont une action « follow fan », ne sont pas ouvertes sur le compte) : Bloom garde le réglage.
+    'GET /api/autofollow': async (req, res) => {
+      const u = auth(req, res, null);
+      if (!u) return;
+      let on = {};
+      try {
+        on = JSON.parse(getSetting('autofollow') || '{}');
+      } catch {}
+      send(res, 200, { on, active: false });
+    },
+    'POST /api/autofollow': async (req, res) => {
+      const u = auth(req, res, null, true);
+      if (!u) return;
+      const b = await body(req);
+      let on = {};
+      try {
+        on = JSON.parse(getSetting('autofollow') || '{}');
+      } catch {}
+      on[String(b.account)] = !!b.on;
+      setSetting('autofollow', JSON.stringify(on));
+      send(res, 200, { on });
     },
 
     // Retirer un message de masse OnlyFans (si Substy le permet encore).
