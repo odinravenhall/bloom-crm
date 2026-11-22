@@ -7,9 +7,11 @@ import type { Creator } from "./types";
 import { Avatar } from "@/components/ui";
 import { PlatformLogo } from "@/components/PlatformLogo";
 import { cn } from "./fmt";
+import { usePathname } from "next/navigation";
+import { getPf, isCommonPage, type Pf } from "./platform";
 
-type Ctx = { creators: Creator[]; creatorId: string | null; creator: Creator | null; setCreator: (id: string) => void; loaded: boolean };
-const C = createContext<Ctx>({ creators: [], creatorId: null, creator: null, setCreator: () => {}, loaded: false });
+type Ctx = { creators: Creator[]; allCreators: Creator[]; pf: Pf; creatorId: string | null; creator: Creator | null; setCreator: (id: string) => void; loaded: boolean };
+const C = createContext<Ctx>({ creators: [], allCreators: [], pf: "all", creatorId: null, creator: null, setCreator: () => {}, loaded: false });
 const KEY = "bloom.creator";
 const RECENT = "bloom.creator.recent";
 
@@ -33,7 +35,12 @@ export const sortCreators = (l: Creator[]) => [...l].sort((a, b) => Number(platf
 
 /** Créatrices de l'agence + celle choisie (gardée d'une page à l'autre). */
 export function CreatorsProvider({ children }: { children: React.ReactNode }) {
-  const [creators, setCreators] = useState<Creator[]>([]);
+  const [allCreators, setCreators] = useState<Creator[]>([]);
+  const [pf, setPfState] = useState<Pf>("all");
+  useEffect(() => setPfState(getPf()), []);
+  // Plateforme choisie en haut du menu : seulement ses créatrices, sauf sur les pages communes (IA, équipe…).
+  const path = usePathname() || "";
+  const creators = useMemo(() => (isCommonPage(path) || pf === "all" ? allCreators : allCreators.filter((c) => platformOf(c) === pf)), [allCreators, pf, path]);
   const [creatorId, setId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -45,7 +52,7 @@ export function CreatorsProvider({ children }: { children: React.ReactNode }) {
         try {
           id = new URLSearchParams(location.search).get("c") || localStorage.getItem(KEY);
         } catch {}
-        setId(list.some((c) => c.id === id) ? id : (list[0]?.id ?? null));
+        setId(list.some((c) => c.id === id) ? id : (list.find((c) => getPf() === "all" || platformOf(c) === getPf())?.id ?? list[0]?.id ?? null));
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -58,8 +65,9 @@ export function CreatorsProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(RECENT, JSON.stringify(r));
     } catch {}
   }, []);
-  const creator = creators.find((c) => c.id === creatorId) ?? null;
-  return <C.Provider value={{ creators, creatorId, creator, setCreator, loaded }}>{children}</C.Provider>;
+  // La créatrice choisie doit être de la plateforme affichée (sinon : la première de la liste).
+  const creator = creators.find((c) => c.id === creatorId) ?? creators[0] ?? null;
+  return <C.Provider value={{ creators, allCreators, pf, creatorId: creator?.id ?? null, creator, setCreator, loaded }}>{children}</C.Provider>;
 }
 
 export const useCreators = () => useContext(C);
@@ -152,7 +160,8 @@ export function CreatorTabs({ className, align = "right" }: { className?: string
                 className="h-9 w-full rounded-full border border-input bg-card-2/60 pr-3 pl-9 text-sm outline-none focus:border-primary"
               />
             </div>
-            <div className="flex gap-1">
+            {/* Boutons OnlyFans / MYM : seulement quand les deux plateformes sont affichées (vue d'ensemble, pages communes). */}
+            {counts.of && counts.mym ? <div className="flex gap-1">
               {(
                 [
                   ["all", `Toutes · ${creators.length}`],
@@ -168,7 +177,7 @@ export function CreatorTabs({ className, align = "right" }: { className?: string
                   {l}
                 </button>
               ))}
-            </div>
+            </div> : null}
           </div>
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto p-1">
             {sections.map((s) => (

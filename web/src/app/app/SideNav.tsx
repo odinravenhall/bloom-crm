@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/fmt";
+import { PlatformSwitch } from "./PlatformSwitch";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
@@ -207,6 +208,9 @@ export function SideNav({ me }: { me: Me }) {
       </div>
       {mobile ? (
         <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col justify-between overflow-y-auto bg-bg px-4 py-4 md:hidden">
+          <div className="mb-4">
+            <PlatformSwitch compact={false} />
+          </div>
           {links(false)}
           <div className="mt-6">{footer(false)}</div>
         </div>
@@ -220,6 +224,7 @@ export function SideNav({ me }: { me: Me }) {
             {narrow ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
         </div>
+        <PlatformSwitch compact={narrow} />
         {links(narrow)}
         <div className="mt-auto border-t pt-4">{footer(narrow)}</div>
       </aside>

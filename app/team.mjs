@@ -39,9 +39,21 @@ export function creatorsOf(u) {
   accessCache.set(u.id, { at: Date.now(), set });
   return set;
 }
+// Plateforme de chaque créatrice (« of » / « mym ») : le CRM est coupé en deux, on travaille sur l'une ou l'autre.
+const PLATFORM = new Map();
+export function setCreatorPlatforms(list) {
+  for (const c of list || []) PLATFORM.set(String(c.id), /mym/i.test(c.platform || '') ? 'mym' : 'of');
+}
+export const platformOfCreator = (id) => PLATFORM.get(String(id)) || null;
+/**
+ * u.pf : plateforme choisie en haut du menu (OnlyFans ou MYM). Les créatrices de l'autre plateforme sont alors
+ * invisibles (messagerie, chiffres, scripts, vault…), sauf sur les pages communes (IA, équipe) où u.pf est vide.
+ */
 export const canSee = (u, creatorId) => {
   const s = creatorsOf(u);
-  return s === null || s.has(String(creatorId || ''));
+  if (!(s === null || s.has(String(creatorId || '')))) return false;
+  const p = u?.pf && PLATFORM.get(String(creatorId || ''));
+  return !p || p === u.pf;
 };
 export function setAccess(userId, { all: allC, creators }) {
   run('UPDATE users SET all_creators = ? WHERE id = ?', allC ? 1 : 0, userId);

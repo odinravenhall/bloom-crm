@@ -14,7 +14,7 @@ import { startAlerts } from './alerts.mjs';
 import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
-import { canSee, isBoss } from './team.mjs';
+import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
@@ -75,6 +75,7 @@ async function syncCreators({ restart = false } = {}) {
   state.creators = list.map(creatorView).map((c) => ({ ...c, avatar: pics.get(pidOf.get(c.id)) || c.avatar || before.get(c.id) || null }));
   setCreators(state.creators);
   setCreatorPics(state.creators);
+  setCreatorPlatforms(state.creators);
   const ids = state.creators.map((c) => c.id).filter(Boolean);
   warmInbox(ids);
   for (const id of ids) if (!streamStops.has(id)) {
@@ -109,7 +110,13 @@ const creatorView = (c) => ({
 function userFrom(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.cookie || '');
   if (!m) return null;
-  return one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
+  const u = one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
+  if (!u) return null;
+  // Plateforme choisie en haut du menu (cookie « bloom_pf » : of, mym ou all) ; les pages communes (IA, équipe, réglages) voient tout.
+  // (« all » ou rien : vue d'ensemble de toute l'agence.)
+  const pf = /(?:^|;\s*)bloom_pf=(of|mym)(?:;|$)/.exec(req.headers.cookie || '')?.[1] || null;
+  const common = /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
+  return { ...u, pf: common ? null : pf };
 }
 function login(res, userId) {
   const token = randomBytes(32).toString('base64url');
