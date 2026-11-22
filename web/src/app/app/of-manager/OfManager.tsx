@@ -89,10 +89,10 @@ export function OfManager({ page }: { page: string }) {
 
   const path = p.path.replace("{user}", creator?.username || "");
 
-  // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) : on ne montre que le contenu de la page.
-  // Grand écran (cadre ≥ 1280 px) : OnlyFans centre 1280 px = menu 280 + contenu 1000. On élargit le cadre de 280 px et
-  // on le décale d'autant ; la marge gauche qui reste (où dépasse le menu) est couverte, le contenu est centré.
-  // Plus petit : OnlyFans réduit son menu en icônes (≈ 80 px) ; le cadre est décalé pour le faire sortir à gauche.
+  // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) : on ne montre que le contenu, collé à gauche.
+  // Grand écran : OnlyFans centre 1280 px (menu 280 + contenu 1000) dans une largeur W. Avec W = 2C − 720 et un
+  // décalage de C − 720, la marge et le menu sortent à gauche et le contenu commence au bord (C = largeur visible).
+  // Plus petit : OnlyFans centre ≈ 706 px (menu en icônes 80 + contenu) ; même principe.
   const area = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1200);
   useEffect(() => {
@@ -103,15 +103,8 @@ export function OfManager({ page }: { page: string }) {
     setW(el.clientWidth);
     return () => ro.disconnect();
   }, []);
-  const frame =
-    w >= 1000
-      ? { style: { left: -280, width: w + 280 }, cover: Math.max(0, (w - 1000) / 2) }
-      : // Moyen écran : OnlyFans centre ≈ 706 px (menu en icônes 80 + contenu) ; on décale pour que le menu sorte à gauche.
-        { style: { left: -Math.max(88, w - 706 + 176), width: w + Math.max(88, w - 706 + 176) }, cover: 0 };
-  const list = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return creators.filter((c) => !t || `${c.name} ${c.username || ""}`.toLowerCase().includes(t));
-  }, [creators, q]);
+  const shift = w >= 1000 ? w - 720 : Math.max(80, w - 706 + 160);
+  const frame = { style: { left: -shift, width: w + shift }, cover: 0 };
 
   return (
     <div ref={box} className="flex h-full min-h-0 bg-bg">
