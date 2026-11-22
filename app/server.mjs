@@ -264,6 +264,8 @@ const routes = {
     });
   },
   // Revenus officiels (Infloww / MyPulse) d'une période : admins et managers. from / to = jours (AAAA-MM-JJ, heure de Paris).
+  // Test « vitesse de connexion » de Paramètres → Optimisation (réponse la plus légère possible).
+  'GET /api/ping': async (req, res) => send(res, 200, { ok: true }),
   'GET /api/revenue': async (req, res) => {
     const me = userFrom(req);
     if (!me) return send(res, 401, { error: 'Connecte-toi' });

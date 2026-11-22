@@ -5,7 +5,9 @@ import { Preferences } from "./Preferences";
 export const metadata: Metadata = { title: "Paramètres" };
 export const dynamic = "force-dynamic";
 
-export default async function Parametres() {
+// ?s=… : partie des paramètres ouverte (sans : la page d'accueil des paramètres).
+export default async function Parametres({ searchParams }: { searchParams: Promise<{ s?: string }> }) {
   const me = await requireMe();
-  return <Preferences me={me} />;
+  const { s } = await searchParams;
+  return <Preferences key={s || "menu"} me={me} section={s || null} />;
 }
