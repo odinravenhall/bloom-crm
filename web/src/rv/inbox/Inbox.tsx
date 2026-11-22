@@ -118,6 +118,18 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   const seq = useRef(0);
   useTick(15_000);
 
+  // Filtre par liste de la modèle choisie : smart list (OnlyFans) ou groupe (MYM).
+  const [lists, setLists] = useState<{ id: number; name: string; count: number }[]>([]);
+  const [listId, setListId] = useState("");
+  useEffect(() => {
+    setListId("");
+    setLists([]);
+    if (!model) return;
+    api<{ lists: { id: number; name: string; count: number }[] }>("GET", `/api/fanlists?creatorId=${encodeURIComponent(model)}`)
+      .then((r) => setLists(r.lists))
+      .catch(() => {});
+  }, [model]);
+
   const load = useCallback(async () => {
     const s = ++seq.current;
     const p = new URLSearchParams({ tab: tab === "unread" ? "reply" : tab, sort, window: String(win) });
@@ -125,11 +137,12 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
     if (q.trim()) p.set("q", q.trim());
     if (paying) p.set("paying", "1");
     if (online) p.set("online", "1");
+    if (listId) p.set("list", listId);
     try {
       const r = await api<QueueResp>("GET", "/api/inbox?" + p);
       if (s === seq.current) setData(r);
     } catch {}
-  }, [tab, sort, win, model, q, paying, online]);
+  }, [tab, sort, win, model, q, paying, online, listId]);
 
   useEffect(() => {
     load();
@@ -389,6 +402,21 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
             >
               <BadgeDollarSign className="size-3.5" /> Ont payé
             </button>
+            {lists.length ? (
+              <select
+                value={listId}
+                onChange={(e) => setListId(e.target.value)}
+                title={modelsById[model]?.platform && /mym/i.test(modelsById[model].platform || "") ? "Groupe" : "Smart list"}
+                className={cn("h-8 max-w-36 min-w-0 rounded-lg border px-2 text-xs font-semibold", listId ? "border-primary bg-primary text-white" : "bg-card-2 text-muted")}
+              >
+                <option value="">{/mym/i.test(modelsById[model]?.platform || "") ? "Tous les groupes" : "Toutes les listes"}</option>
+                {lists.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.count})
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <FilterMenu sort={sort} setSort={setSort} paying={paying} setPaying={setPaying} online={online} setOnline={setOnline} reply={tab === "reply"} />
             {tab === "reply" ? (
               <select value={win} onChange={(e) => setWin(Number(e.target.value))} className="h-8 rounded-lg border bg-card-2 px-2 text-xs" title="Ancienneté max">

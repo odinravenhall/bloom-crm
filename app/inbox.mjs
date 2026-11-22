@@ -146,6 +146,8 @@ export function computeQueue(u, list, o = {}) {
       if (reply && (!c.ai || c.handoff)) nm++;
       if (!inScope) continue;
       if (paying && !(c.spent > 0)) continue;
+      // Filtre par liste (smart list OnlyFans / groupe MYM) : seulement ses fans.
+      if (o.list && (o.list.creatorId !== cid || !o.list.fans.has(c.fanId))) continue;
       if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
       const row = { c, m, cid, at, reply, boxIdx: box, box: box != null ? boxName(box) : null };
       row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;

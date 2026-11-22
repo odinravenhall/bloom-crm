@@ -13,6 +13,7 @@ import { listRoutes } from './lists.mjs';
 import { startAlerts } from './alerts.mjs';
 import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
+import { fanListRoutes } from './fanlists.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -381,6 +382,7 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
+Object.assign(routes, fanListRoutes({ userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, sentRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, relanceRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, listRoutes({ substy, userFrom, send, body, creators: () => state.creators }));

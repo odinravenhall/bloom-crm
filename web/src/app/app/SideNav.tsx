@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/fmt";
 import { PlatformSwitch } from "./PlatformSwitch";
+import { useCreators } from "@/lib/creators";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
@@ -53,6 +54,7 @@ const GROUPS: Group[] = [
     title: "Chatting",
     items: [
       { href: "/app/scripts", label: "Scripts & séquences", icon: ScrollText, roles: CHAT },
+      { href: "/app/listes", label: "Listes", icon: ListChecks, roles: CHAT },
       { href: "/app/vault", label: "Vault", icon: Images, roles: CHAT },
       { href: "/app/envoi", label: "Envoi groupé", icon: Send, roles: CHAT },
     ],
@@ -61,7 +63,6 @@ const GROUPS: Group[] = [
     title: "Intelligence artificielle",
     items: [
       { href: "/app/ia", label: "Configuration IA", icon: Bot, roles: MANAGE },
-      { href: "/app/ia#listes", label: "Listes automatiques", icon: ListChecks, roles: MANAGE },
       { href: "/app/ia-test", label: "Tester l’IA", icon: FlaskConical, roles: MANAGE, soon: true },
     ],
   },
@@ -111,7 +112,12 @@ export function SideNav({ me }: { me: Me }) {
   const narrow = inChat ? !chatWide : userSmall;
   const toggleNav = () => (inChat ? setChatWide((w) => !w) : toggle());
 
-  const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(me.role)) })).filter((g) => g.items.length);
+  // « Listes » : Smart lists sur OnlyFans, Groupes sur MYM.
+  const { pf } = useCreators();
+  const groups = GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.roles || i.roles.includes(me.role)).map((i) => (i.href === "/app/listes" ? { ...i, label: pf === "mym" ? "Groupes" : "Smart lists" } : i)),
+  })).filter((g) => g.items.length);
   const logout = async () => {
     await fetch("/api/logout", { method: "POST" }).catch(() => {});
     window.location.href = "/connexion";

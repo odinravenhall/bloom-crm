@@ -6,6 +6,7 @@ import { img, inboxChat, inboxChats, mediaView, messageView, plain } from './cha
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { pinFan } from './lists.mjs';
+import { listMembers, listsOfCreator } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
 import { canChat, canSee, isBoss } from './team.mjs';
 
@@ -202,6 +203,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         paying: p.get('paying') === '1',
         activeOnly: p.get('online') === '1',
         only: ['handoff', 'unread'].includes(p.get('only')) ? p.get('only') : undefined,
+        list: p.get('list') ? listMembers(p.get('list')) || { creatorId: '', fans: new Set() } : undefined,
       });
       const items = keep.slice(0, 300).map((r) =>
         convOf(r.cid, r.c, r.m, {
