@@ -53,6 +53,8 @@ try {
 try {
   db.exec('ALTER TABLE rv_accounts ADD COLUMN avatar TEXT'); // photo du compte (Infloww)
 } catch {}
+// Une seule fois : relire tout de suite le catalogue Infloww pour avoir les photos.
+if (!getSetting('rv:avatars-v1')) (setSetting('rv:avatars-v1', '1'), setSetting('rv:due:ifw-catalog', '0'));
 /** Photo d'une créatrice dans la réponse d'Infloww (nom du champ non documenté : on prend la 1re URL d'image). */
 const pictureOf = (c) => {
   for (const [k, v] of Object.entries(c || {})) if (/avatar|head|pic|photo|image/i.test(k) && typeof v === 'string' && /^https?:\/\//.test(v)) return v;
@@ -204,7 +206,8 @@ async function ifwCatalog() {
   const ue = db.prepare('INSERT INTO rv_sellers (id, name, updated_at) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at');
   tx(() => emps.forEach((e) => ue.run(`ifw:${e.employeeId}`, String(e.employeeName ?? '?').trim(), now)));
   autoMap();
-  return `${list.length} créatrices, ${emps.length} employés`;
+  const pics = list.filter((c) => pictureOf(c)).length;
+  return `${list.length} créatrices (${pics} photos ; champs : ${Object.keys(list[0] || {}).join(', ')}), ${emps.length} employés`;
 }
 
 async function ifwSalesWindow(accountId, start, end) {
