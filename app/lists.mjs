@@ -57,14 +57,16 @@ export async function pinFan(substy, u, cid, fanId, pin) {
   const c = inboxChat(cid, fanId);
   let ai;
   let cut = meta?.pin_cut || 0;
-  if (pin && mode === 'hybrid' && c?.ai) {
-    if (!isBoss(u) && !(await aiSentPpv(substy, cid, fanId))) throw err(400, 'L’IA n’a pas encore envoyé de PPV à ce fan : attends son premier PPV avant de le reprendre.');
+  // Épingler = reprendre le fan : l'IA de Substy est coupée sur lui. Désépingler = on la rallume
+  // (sauf créatrice réglée en « humain seulement », où l'IA reste éteinte).
+  if (pin) {
+    if (c?.ai !== false && !isBoss(u) && !(await aiSentPpv(substy, cid, fanId))) throw err(400, 'L’IA n’a pas encore envoyé de PPV à ce fan : attends son premier PPV avant de le reprendre.');
     await substy.setAi(cid, fanId, false);
     patchInboxChat(cid, fanId, { ai: false });
     ai = false;
     cut = 1;
-  } else if (!pin && cut) {
-    if (mode === 'hybrid') {
+  } else {
+    if (mode !== 'human') {
       await substy.setAi(cid, fanId, true);
       patchInboxChat(cid, fanId, { ai: true });
       ai = true;

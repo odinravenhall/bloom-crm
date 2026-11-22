@@ -11,7 +11,7 @@ import { debounce, onLive } from "@/rv/lib/liveClient";
 import { fillVars } from "@/rv/lib/vars";
 import type { Conv, LiveMsg, Media, Model } from "@/rv/inbox/types";
 import type { Lib, LibScript } from "@/rv/inbox/scriptTypes";
-import { VaultPicker } from "@/rv/inbox/VaultPicker";
+import { VaultProPicker } from "./VaultProPicker";
 import { CATEGORIES, QUICK } from "./emojis";
 import { ProScripts } from "./ProScripts";
 
@@ -107,7 +107,13 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
     const v = !pinned;
     setPinned(v);
     try {
-      await action({ action: "pin", pin: v });
+      // Épingler coupe l'IA de Substy, désépingler la rallume : les interrupteurs IA suivent.
+      const r = (await action({ action: "pin", pin: v })) as { ai?: boolean | null };
+      if (typeof r?.ai === "boolean") {
+        setAi(r.ai);
+        window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id: conv.id, on: r.ai } }));
+      }
+      toast(v ? t("Fan pinned: Substy AI turned off") : t("Fan unpinned: Substy AI turned back on"));
     } catch (e) {
       setPinned(!v);
       toast((e as Error).message, "err");
@@ -727,7 +733,7 @@ function Composer({ conv, model, me, firstName, replyTo, clearReply, onSent, t }
         </button>
       </div>
 
-      {pop === "vault" ? <VaultPicker modelId={conv.modelId} memberId={conv.memberId} selected={medias} onClose={() => setPop(null)} onPick={(m) => (setMedias(m), setPop(null))} /> : null}
+      {pop === "vault" ? <VaultProPicker creatorId={conv.modelId} selected={medias} onClose={() => setPop(null)} onPick={(m) => (setMedias(m), setPop(null))} t={t} /> : null}
       {pop === "price" ? <PriceModal convId={conv.id} value={price} onSave={(v) => (setPrice(v), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}
       {pop === "timed" ? <TimedModal conv={conv} text={text} medias={medias} price={price} onDone={() => (clear(), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}
       {pop === "schedule" ? <ScheduleModal conv={conv} text={text} medias={medias} price={price} onDone={() => (clear(), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}

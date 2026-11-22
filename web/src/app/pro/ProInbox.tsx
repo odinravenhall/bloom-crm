@@ -402,6 +402,7 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
               onOpen(c);
             }}
             onDismiss={() => markRead([c.id])}
+            onUnread={() => api("POST", `/api/conversations/${c.id}/action`, { action: "unread" }).then(() => (toast(t("Marked as unread")), load())).catch((e) => toast((e as Error).message, "err"))}
             t={t}
           />
         ))}
@@ -411,7 +412,11 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
   );
 }
 
-function Row({ c, on, onClick, onDismiss, selecting, picked, t }: { c: Item; on: boolean; onClick: () => void; onDismiss: () => void; selecting: boolean; picked: boolean; t: (s: string) => string }) {
+function Row({ c, on, onClick, onDismiss, onUnread, selecting, picked, t }: { c: Item; on: boolean; onClick: () => void; onDismiss: () => void; onUnread: () => void; selecting: boolean; picked: boolean; t: (s: string) => string }) {
+  // Glisser la conversation vers la gauche fait apparaître « Mark as Unread » (comme Infloww).
+  const [dx, setDx] = useState(0);
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const OPEN = 150;
   const isNew = !!c.subscribedAt && Date.now() - Date.parse(c.subscribedAt) < 3 * DAY;
   const fire = c.totalSpent >= 10000;
   const name = c.nickname || c.memberName || "Fan";
@@ -424,7 +429,42 @@ function Row({ c, on, onClick, onDismiss, selecting, picked, t }: { c: Item; on:
   })();
   const waiting = c.needsReply;
   return (
-    <div onClick={onClick} className="group relative flex cursor-pointer gap-3 px-3 pt-3 pb-3" style={{ background: on ? "var(--pro-on)" : undefined }}>
+    <div className="relative overflow-hidden" style={{ background: "var(--pro-chip)" }}>
+    <button
+      onClick={() => (setDx(0), onUnread())}
+      className="absolute inset-y-0 right-0 flex w-[150px] items-center justify-center text-[14px]"
+      style={{ color: BLUE }}
+    >
+      {t("Mark as Unread")}
+    </button>
+    <div
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        drag.current = { x: e.clientX - dx, y: e.clientY, moved: false };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        const v = Math.min(0, Math.max(-OPEN - 30, e.clientX - d.x));
+        if (!d.moved && Math.abs(v - dx) > 6 && Math.abs(e.clientY - d.y) < 20) {
+          d.moved = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }
+        if (d.moved) setDx(v);
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        if (d?.moved) setDx((v) => (v < -OPEN / 2 ? -OPEN : 0));
+        setTimeout(() => (drag.current = null), 0);
+      }}
+      onClickCapture={(e) => {
+        if (drag.current?.moved) e.stopPropagation();
+        else if (dx) (setDx(0), e.stopPropagation());
+      }}
+      onClick={onClick}
+      className="group relative flex cursor-pointer gap-3 px-3 pt-3 pb-3 select-none"
+      style={{ background: on ? "var(--pro-on)" : "var(--pro-page)", transform: `translateX(${dx}px)`, transition: drag.current?.moved ? "none" : "transform .2s" }}
+    >
       {c.box != null ? (
         <span className="absolute top-1 left-1 flex items-center gap-0.5 rounded-sm px-1 text-[11px]" style={{ background: "var(--pro-chip)" }}>
           <InboxIcon className="size-3" /> {c.box}
@@ -468,6 +508,7 @@ function Row({ c, on, onClick, onDismiss, selecting, picked, t }: { c: Item; on:
           </span>
         </div>
       </div>
+    </div>
     </div>
   );
 }

@@ -780,6 +780,11 @@ const D: Record<string, [es: string, fr: string]> = {
   "Create a category first (+ next to Custom).": ["Crea primero una categoría (+ junto a Custom).", "Crée d’abord une catégorie (+ à côté de Custom)."],
   "Select criteria": ["Elegir criterios", "Choisir les critères"],
   "Saving will update the details for all selected media": ["Se actualizarán todos los medios seleccionados", "Enregistrer modifie tous les médias sélectionnés"],
+  "Add to message": ["Añadir al mensaje", "Ajouter au message"],
+  "Mark as Unread": ["Marcar como no leído", "Marquer non lu"],
+  "Marked as unread": ["Marcado como no leído", "Remis en non lu"],
+  "Fan pinned: Substy AI turned off": ["Fan fijado: IA de Substy apagada", "Fan épinglé : IA Substy coupée"],
+  "Fan unpinned: Substy AI turned back on": ["Fan sin fijar: IA de Substy encendida", "Fan désépinglé : IA Substy rallumée"],
   // settings
   "Your Account": ["Tu cuenta", "Ton compte"],
   "Your account": ["Tu cuenta", "Ton compte"],
