@@ -96,7 +96,7 @@ export function OfManager({ page }: { page: string }) {
 
   // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) et limite ses pages à 1000 px de contenu.
   // On l'affiche en 1300 px de large (sa grande mise en page : marge 10 + menu 280 + contenu 1000 + marge 10), on fait
-  // sortir la marge et le menu à gauche (290 px) et on agrandit le tout pour que le contenu remplisse la largeur visible.
+  // sortir la marge et le menu à gauche (290 px) : le contenu est collé à gauche.
   const area = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   useEffect(() => {
@@ -108,7 +108,9 @@ export function OfManager({ page }: { page: string }) {
     read();
     return () => ro.disconnect();
   }, []);
-  const scale = Math.max(0.6, size.w / 1000);
+  // Taille normale (comme Infloww) ; réduit seulement si la place manque. Dans un navigateur, on ne peut pas étirer les
+  // pages d'OnlyFans (1000 px de contenu) : l'espace en plus reste à droite.
+  const scale = Math.min(1, Math.max(0.6, size.w / 1000));
   const frameStyle: React.CSSProperties = {
     left: 0,
     width: 1300,
