@@ -60,7 +60,8 @@ function convOf(cid, c, m, extra = {}) {
     subscribedAt: c.since || null,
     pinnedBy: m?.pinned && m?.pinned_by ? { id: 0, name: m.pinned_by } : null,
     seen: !!m?.seen_id && m.seen_id === last?.id,
-    unread: c.unread > 0 || !!m?.unread,
+    // Non lu : Substy en signale, sauf si Bloom a déjà vu ce dernier message (OnlyFans n'accepte pas l'accusé de lecture) ; ou remis en non lu.
+    unread: (c.unread > 0 && (!m?.seen_id || m.seen_id !== last?.id)) || !!m?.unread,
     fresh: !!m?.unread || (fromFan && m?.seen_id !== last?.id && waiting(c, m)),
     pinned: !!m?.pinned,
     vip: false,
@@ -322,8 +323,9 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           setMeta(x.cid, x.fanId, 'seen_id = ?, unread = 0', c?.last?.id || null);
           // Lu aussi chez Substy (et dans la liste de Bloom tout de suite).
           patchInboxChat(x.cid, x.fanId, { unread: 0 });
-          const sub = c?.last?.id ? await substy.markRead(x.cid, x.fanId, c.last.id).then(() => 'ok', (e) => String(e.message).slice(0, 120)) : 'no message';
-          return send(res, 200, { ok: true, substy: sub });
+          // Chez Substy aussi quand la plateforme l'accepte (OnlyFans : « no read receipts »).
+          if (c?.last?.id) substy.markRead(x.cid, x.fanId, c.last.id).catch(() => {});
+          return send(res, 200, { ok: true });
         }
         case 'unread':
           setMeta(x.cid, x.fanId, 'unread = 1, seen_id = NULL');
