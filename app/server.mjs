@@ -6,6 +6,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
+import { libraryRoutes } from './library.mjs';
 import { matchLive, parisDay, performance, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -313,6 +314,7 @@ const routes = {
 };
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
+Object.assign(routes, libraryRoutes({ userFrom, send, body }));
 
 createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];

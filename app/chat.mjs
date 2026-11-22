@@ -1,5 +1,6 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
+import { libItemOf } from './library.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
@@ -260,7 +261,9 @@ function periodStats(since) {
 function bloomSenderOf(m) {
   if (!m?.isSentByCreator) return null;
   const at = Date.parse(m.createdAt || '') || Date.now();
-  const r = all('SELECT u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND s.text = ? AND ABS(s.at - ?) < 90000 ORDER BY s.at DESC LIMIT 1', m.creatorId, m.fanId, plain(m.text), at);
+  const r = all('SELECT s.id, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND s.text = ? AND ABS(s.at - ?) < 90000 ORDER BY s.at DESC LIMIT 1', m.creatorId, m.fanId, plain(m.text), at);
+  // On garde l'identifiant du message : sert aux statistiques des scripts (achat du PPV envoyé).
+  if (r[0] && !r[0].message_id && m.id != null) run('UPDATE sent_log SET message_id = ? WHERE id = ?', String(m.id), r[0].id);
   return r[0]?.name || null;
 }
 
@@ -789,7 +792,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
         if (v && (v.valid === false || v.isValid === false || (Array.isArray(v.bannedWords) && v.bannedWords.length) || (Array.isArray(v.matches) && v.matches.length)))
           return send(res, 400, { error: 'Mot interdit dans le message', details: v });
       }
-      run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at) VALUES (?, ?, ?, ?, ?, ?)', u.id, String(b.creatorId), String(b.fanId), message, price, Date.now());
+      // Script de la bibliothèque de Bloom envoyé (pour ses statistiques et l'avancement du fan dans la séquence).
+      const lib = libItemOf(String(b.creatorId), b.libItemId);
+      run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at, lib_item) VALUES (?, ?, ?, ?, ?, ?, ?)', u.id, String(b.creatorId), String(b.fanId), message, price, Date.now(), lib);
       const r = await substy.send(String(b.creatorId), String(b.fanId), { message, medias, price: price || undefined, replyId: b.replyId || null, templateId: b.templateId ? String(b.templateId) : undefined });
       send(res, 200, { ok: true, result: r ?? null });
     },

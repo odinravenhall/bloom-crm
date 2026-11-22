@@ -10,6 +10,7 @@ import type { LiveEvent } from "./Inbox";
 import { FanPanel } from "./FanPanel";
 import { VaultPicker } from "./VaultPicker";
 import { ScriptPicker } from "./ScriptPicker";
+import { LibraryPicker } from "./LibraryPicker";
 import { QuickMenu, fillQuick, matchQuick, useQuickReplies } from "./QuickReplies";
 
 type Page = { items: Message[]; olderCursor: string | null; aiLog?: AiLog[] };
@@ -112,6 +113,9 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
   // Étape de script préparée (envoyée avec son identifiant, pour les statistiques du script chez Substy)
   const [step, setStep] = useState<{ id: string; name: string } | null>(null);
   const [scripts, setScripts] = useState(false);
+  // Script de la bibliothèque de Bloom préparé (tags / séquences) : noté à l'envoi pour ses chiffres et l'avancement du fan.
+  const [library, setLibrary] = useState(false);
+  const [libPick, setLibPick] = useState<{ id: number; name: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
@@ -137,8 +141,9 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
     setSending(true);
     setErr("");
     try {
-      await api("POST", "/api/send", { creatorId, fanId: chat.fanId, message: text, medias: sel.map((m) => m.id), price, templateId: step?.id ?? null });
+      await api("POST", "/api/send", { creatorId, fanId: chat.fanId, message: text, medias: sel.map((m) => m.id), price, templateId: step?.id ?? null, libItemId: libPick?.id ?? null });
       setStep(null);
+      setLibPick(null);
       setText("");
       setSel([]);
       setPrice(0);
@@ -306,12 +311,20 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
             <button onClick={() => setPicker(true)} className={btnCls.ghost}>
               <ImagePlus className="size-4" /> Médias / PPV
             </button>
-            <button onClick={() => setScripts(true)} className={btnCls.ghost}>
+            <button onClick={() => setLibrary(true)} className={btnCls.ghost}>
               <ScrollText className="size-4" /> Scripts
             </button>
             <button onClick={() => (setQuickOpen((o) => !o), input.current?.focus())} className={cn(btnCls.ghost, menu && "text-primary-soft")}>
               <Zap className="size-4" /> Rapides
             </button>
+            {libPick ? (
+              <span className="inline-flex max-w-56 items-center gap-1 rounded-full bg-petal px-2 py-0.5 text-[11px] font-semibold text-primary-soft" title="Script préparé : compté dans ses chiffres à l’envoi">
+                <span className="truncate">{libPick.name}</span>
+                <button onClick={() => setLibPick(null)} className="hover:text-fg" title="Ne plus le compter comme script">
+                  <X className="size-3" />
+                </button>
+              </span>
+            ) : null}
             {err ? <span className="truncate text-xs font-semibold text-rose-300">{err}</span> : null}
             <button onClick={send} disabled={sending || (!text.trim() && !sel.length)} className={cn(btnCls.primary, "ml-auto")}>
               <Send className="size-4" /> Envoyer
@@ -321,6 +334,25 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
       </div>
 
       <FanPanel creatorId={creatorId} fanId={chat.fanId} onLoaded={(f) => onPatch(chat.fanId, { name: f.name, avatar: f.avatar, username: f.username, ai: f.ai })} />
+      {library ? (
+        <LibraryPicker
+          creatorId={creatorId}
+          fanId={chat.fanId}
+          fanName={chat.name}
+          onClose={() => setLibrary(false)}
+          onSubsty={() => (setLibrary(false), setScripts(true))}
+          onPick={(it, where) => {
+            setText(fillQuick(it.text, chat.name));
+            setSel(it.medias);
+            setPrice(it.medias.length ? it.price : 0);
+            setStep(null);
+            setLibPick({ id: it.id, name: where });
+            setLibrary(false);
+            toast("Script prêt : relis, puis envoie");
+            requestAnimationFrame(() => input.current?.focus());
+          }}
+        />
+      ) : null}
       {scripts ? (
         <ScriptPicker
           creatorId={creatorId}
@@ -332,6 +364,7 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss 
             setSel(st.medias.map(({ context: _c, ...m }) => m));
             setPrice(st.medias.length ? st.price : 0);
             setStep({ id: st.id, name: st.name });
+            setLibPick(null);
             setScripts(false);
             toast(st.aiCaption && !st.text ? "Étape prête : écris ta légende, puis envoie" : "Étape prête : relis, puis envoie");
             requestAnimationFrame(() => input.current?.focus());

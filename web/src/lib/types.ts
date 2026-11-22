@@ -137,3 +137,22 @@ export type FanScript = Omit<Script, "steps"> & { steps: ScriptStep[]; next: str
 export type PerfSeller = { key: string; name: string; kind: "bloom" | "platform" | "ai" | "other"; eur: number; prev: number; sales: number; ppv: number; tips: number; other: number; buyers: number; best: number; creators: Record<string, number>; msgs: number | null; ppvSent: number | null };
 export type PerfCreator = { creatorId: string; eur: number; prev: number; subs: number; sellers: Record<string, number> };
 export type Perf = { from: string; to: string; total: number; prev: number; subs: number; sellers: PerfSeller[]; creators: PerfCreator[] };
+
+/** Bibliothèque de scripts de Bloom (tags et séquences, par créatrice). */
+export type LibItem = {
+  id: number;
+  name: string;
+  text: string;
+  note: string | null;
+  price: number;
+  medias: Media[];
+  uses: number;
+  fans: number;
+  ppvSent: number;
+  sales: number;
+  revenue: number;
+  currency: string | null;
+  sent: { at: number; by: string | null; bought: boolean } | null;
+};
+export type LibGroup = { id: number; kind: "tag" | "sequence"; name: string; position: number; items: LibItem[] };
+export type Library = { groups: LibGroup[]; canEdit: boolean };

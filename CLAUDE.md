@@ -93,6 +93,16 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 Le bot crée tout seul les rôles qui manquent sur le serveur (Team Leader reçoit les droits de salons du Manager).
 Paramètres de chacun (thème, langue) : `/app/parametres`.
 
+## Bibliothèque de scripts — `app/library.mjs`, page `/app/scripts`
+
+- Comme Infloww : par créatrice, des **tags** (dossiers de scripts, envoyés quand on veut) et des **séquences**
+  (étapes dans l'ordre). Tables `lib_groups` (kind `tag` | `sequence`) et `lib_items` (nom, texte, consigne, médias du vault, prix).
+- Créer / modifier / ordonner / copier vers une autre créatrice : admins, managers, team leaders. Les chatteurs les utilisent.
+- Envoi depuis la messagerie (bouton « Scripts ») : `libItemId` → `sent_log.lib_item`, puis l'id du message reçu en temps réel
+  → `sent_log.message_id`. Achat = vente Substy (`rv_live.message_id`). L'avancement d'un fan dans une séquence = les étapes
+  déjà envoyées à ce fan (pas un index : réordonner ne casse rien).
+- `{prenom}` est remplacé par le prénom du fan. L'onglet « IA Substy » montre en lecture les scripts de l'IA de Substy.
+
 ## Configuration IA — page `/app/ia` (admins, managers)
 
 - Lecture : `settings.getSettings`, `settings.voicePreset.getAll`, fiche = item de `creators.getCreators`.
