@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { cn } from "@/rv/lib/fmt";
 
 export function Logo({ href = "/app", compact }: { href?: string; compact?: boolean }) {
@@ -91,8 +94,11 @@ const AVATAR_BG = [
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 export function Avatar({ src, name, size = "size-9", rounded = "rounded-full", className }: { src?: string | null; name?: string | null; size?: string; rounded?: string; className?: string }) {
+  // Photo introuvable ou lien expiré (MYM signe ses liens pour un temps) : on affiche les initiales.
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [src]);
   // eslint-disable-next-line @next/next/no-img-element
-  if (src) return <img src={src} alt="" loading="lazy" className={cn(size, rounded, "avatar-img shrink-0 bg-card-2 object-cover", className)} referrerPolicy="no-referrer" />;
+  if (src && !bad) return <img src={src} alt="" loading="lazy" onError={() => setBad(true)} className={cn(size, rounded, "avatar-img shrink-0 bg-card-2 object-cover", className)} referrerPolicy="no-referrer" />;
   const n = name || "?";
   const big = /size-(1[2-9]|[2-9]\d)/.test(size);
   return (

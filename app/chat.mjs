@@ -134,7 +134,8 @@ function inboxOf(cid) {
         b.map.set(c.fanId, { ...c, _t: stamp() });
       } catch {}
     }
-    const done = Number(getSetting(`inbox_done:${cid}`)) || 0;
+    // 22/11/2026 : les photos des fans n'étaient pas lues ; on refait un tour complet une fois pour les récupérer.
+    const done = getSetting('inbox_avatars_v1') ? Number(getSetting(`inbox_done:${cid}`)) || 0 : 0;
     if (done && b.map.size) {
       b.complete = true;
       b.crawledAt = done;
@@ -195,6 +196,7 @@ async function crawl(cid) {
     b.complete = true;
     b.crawledAt = Date.now();
     setSetting(`inbox_done:${cid}`, String(b.crawledAt));
+    setSetting('inbox_avatars_v1', '1');
     console.log(`[bloom] conversations de ${cid} : ${b.map.size} en ${Math.round((Date.now() - t0) / 1000)} s`);
   } catch (e) {
     console.warn('[bloom] liste des conversations (reprise dans 10 s) :', e.message);

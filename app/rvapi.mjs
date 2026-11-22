@@ -2,7 +2,7 @@
 // exactement dans le format de Raven, à partir de Substy (OnlyFans / MYM) et de ce que Bloom garde en plus.
 // Une conversation = « <creatorId>~<fanId> ». Les montants sont en centimes (comme Raven).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
+import { img, inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { parisDay, revenue } from './revenue.mjs';
@@ -45,7 +45,7 @@ function convOf(cid, c, m, extra = {}) {
     modelId: cid,
     memberId: c.fanId,
     memberName: c.name,
-    memberAvatar: c.avatar,
+    memberAvatar: img(c.avatar),
     nickname: m?.nickname || null,
     totalSpent: cents(c.spent),
     // Substy ne dit pas si le fan est en ligne : on prend l'heure de son dernier message.
