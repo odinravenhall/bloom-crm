@@ -156,7 +156,7 @@ export function Inbox() {
   }, [tab, todo, chats, q]);
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col max-md:h-[calc(100dvh-57px)]">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b bg-panel px-4 py-2.5">
         <h1 className="text-2xl">Messagerie</h1>
         <span className={cn("size-2 rounded-full", live ? "bg-emerald-400" : "bg-amber-400")} title={live ? "Temps réel actif" : "Temps réel : connexion…"} />
@@ -179,7 +179,7 @@ export function Inbox() {
                   className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors", tab === k ? "bg-petal text-primary-soft" : "text-muted hover:text-fg")}
                 >
                   {l}
-                  <span className={cn("rounded-full px-1.5 text-[11px] font-bold tabular-nums", tab === k ? "bg-white" : "bg-card-2")}>{n}</span>
+                  <span className={cn("rounded-full px-1.5 text-[11px] font-bold tabular-nums", tab === k ? "bg-card" : "bg-card-2")}>{n}</span>
                 </button>
               ))}
             </div>

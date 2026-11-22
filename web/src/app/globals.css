@@ -152,29 +152,28 @@
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(60% 45% at 0% 0%, rgb(247 219 228 / 0.75), transparent 70%),
-    radial-gradient(50% 40% at 100% 100%, rgb(227 238 228 / 0.9), transparent 70%),
-    radial-gradient(40% 30% at 90% 5%, rgb(250 225 210 / 0.6), transparent 70%),
+    radial-gradient(60% 45% at 0% 0%, var(--bd-a), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, var(--bd-b), transparent 70%),
+    radial-gradient(40% 30% at 90% 5%, var(--bd-c), transparent 70%),
     var(--color-bg);
 }
 .backdrop .flora {
   position: absolute;
   color: var(--color-primary);
-  opacity: 0.09;
+  opacity: var(--flora, 0.09);
 }
 
 /* ------------------------------------------------------------ cartes */
 .card,
 .stat {
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 12px 30px -22px rgb(110 50 80 / 0.35);
+  box-shadow: var(--card-shadow);
   transition: border-color 0.2s;
 }
 .card:hover {
-  border-color: #e2c6d1;
+  border-color: color-mix(in oklab, var(--color-primary) 30%, var(--color-line));
 }
 .stat-accent {
-  background: linear-gradient(160deg, #fff 30%, var(--color-petal)) !important;
-  border-color: #efc6d4 !important;
+  background: linear-gradient(160deg, var(--color-card) 30%, var(--color-petal)) !important;
 }
 
 /* Plus d'animations décoratives (anciens noms gardés pour ne rien casser) */
@@ -228,3 +227,78 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 84px;
 }
+
+/* ============================================================ thèmes (Réglages du compte : clair / sombre / onyx) */
+:root {
+  --bd-a: rgb(247 219 228 / 0.75);
+  --bd-b: rgb(227 238 228 / 0.9);
+  --bd-c: rgb(250 225 210 / 0.6);
+  --card-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 12px 30px -22px rgb(110 50 80 / 0.35);
+}
+/* Sombre : prune profond, doux pour les yeux (pas de noir pur) */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #17131a;
+  --color-card: #201b24;
+  --color-card-2: #2a2330;
+  --color-line: #352c3b;
+  --color-input: #45394c;
+  --color-fg: #f2ebe8;
+  --color-muted: #a8999f;
+  --color-panel: rgb(32 27 36 / 0.88);
+  --color-panel-strong: #1b161e;
+  --color-primary: #e07a9e;
+  --color-primary-soft: #f3a9c2;
+  --color-petal: #3b2431;
+  --color-sage: #93bd9e;
+  --color-sage-soft: #233229;
+  --color-bubble-fan: #27212b;
+  --color-bubble-me: #43263a;
+  --color-emerald-200: #a7f3d0; --color-emerald-300: #86d9a8;
+  --color-rose-200: #fecdd3; --color-rose-300: #f9a8bd;
+  --color-amber-100: #fef3c7; --color-amber-200: #fde68a; --color-amber-300: #f5cf72;
+  --color-violet-200: #d9ccff;
+  --color-sky-200: #bae6fd; --color-sky-300: #9fd7f5;
+  --bd-a: rgb(120 50 85 / 0.28);
+  --bd-b: rgb(60 95 70 / 0.22);
+  --bd-c: rgb(140 80 60 / 0.16);
+  --flora: 0.07;
+  --card-shadow: 0 14px 34px -26px rgb(0 0 0 / 0.8);
+  scrollbar-color: #4a3b48 transparent;
+}
+/* Onyx : noir profond, contraste maximal */
+html[data-theme="onyx"] {
+  color-scheme: dark;
+  --color-bg: #050505;
+  --color-card: #0e0e0f;
+  --color-card-2: #18181a;
+  --color-line: #242427;
+  --color-input: #333337;
+  --color-fg: #f6f6f6;
+  --color-muted: #9d9da3;
+  --color-panel: rgb(10 10 11 / 0.92);
+  --color-panel-strong: #0a0a0b;
+  --color-primary: #ea7aa0;
+  --color-primary-soft: #f6b3c9;
+  --color-petal: #2b1620;
+  --color-sage: #93bd9e;
+  --color-sage-soft: #16231a;
+  --color-bubble-fan: #151517;
+  --color-bubble-me: #2e1622;
+  --color-emerald-200: #a7f3d0; --color-emerald-300: #86d9a8;
+  --color-rose-200: #fecdd3; --color-rose-300: #f9a8bd;
+  --color-amber-100: #fef3c7; --color-amber-200: #fde68a; --color-amber-300: #f5cf72;
+  --color-violet-200: #d9ccff;
+  --color-sky-200: #bae6fd; --color-sky-300: #9fd7f5;
+  --bd-a: rgb(110 40 75 / 0.18);
+  --bd-b: transparent;
+  --bd-c: transparent;
+  --flora: 0.05;
+  --card-shadow: none;
+  scrollbar-color: #333 transparent;
+}
+html[data-theme="dark"] .bg-white\/5, html[data-theme="onyx"] .bg-white\/5 { background-color: rgb(255 255 255 / 5%); }
+html[data-theme="dark"] .hover\:bg-white\/5:hover, html[data-theme="onyx"] .hover\:bg-white\/5:hover { background-color: rgb(255 255 255 / 7%); }
+html[data-theme="dark"] .bg-white\/\[0\.03\], html[data-theme="dark"] .hover\:bg-white\/\[0\.03\]:hover,
+html[data-theme="onyx"] .bg-white\/\[0\.03\], html[data-theme="onyx"] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgb(255 255 255 / 4%); }
+html[data-theme="dark"] select option, html[data-theme="onyx"] select option { background-color: var(--color-card-2); }

@@ -1,7 +1,7 @@
 "use client";
 
 // Graphiques de Bloom, façon shadcn/ui (Recharts), repris de Raven CRM.
-import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/fmt";
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from "./chart-ui";
 
@@ -56,6 +56,42 @@ export function StackBars({
         ))}
       </div>
     </div>
+  );
+}
+
+/** Courbes empilées (par plateforme), sans légende (elle est affichée à côté). */
+export function AreaStack({
+  data,
+  series,
+  format,
+  height = 240,
+}: {
+  data: Record<string, number | string>[];
+  series: { key: string; label: string; color: string }[];
+  format: (v: number) => string;
+  height?: number;
+}) {
+  const config: ChartConfig = Object.fromEntries(series.map((s) => [s.key, { label: s.label, color: s.color }]));
+  return (
+    <ChartContainer config={config} className="w-full" height={height}>
+      <AreaChart data={data} margin={{ top: 10, right: 6, left: 4, bottom: 0 }}>
+        <defs>
+          {series.map((s) => (
+            <linearGradient key={s.key} id={`ar-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={`var(--color-${s.key})`} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={`var(--color-${s.key})`} stopOpacity={0.02} />
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid vertical={false} strokeDasharray="2 6" />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={16} />
+        <YAxis tickLine={false} axisLine={false} width={60} tickFormatter={(v: number) => format(v)} />
+        <Tooltip cursor={{ stroke: "var(--color-line)" }} content={<ChartTooltipContent format={format} total />} />
+        {series.map((s) => (
+          <Area key={s.key} type="monotone" dataKey={s.key} stackId="a" stroke={`var(--color-${s.key})`} strokeWidth={2} fill={`url(#ar-${s.key})`} isAnimationActive={false} dot={data.length === 1} />
+        ))}
+      </AreaChart>
+    </ChartContainer>
   );
 }
 
