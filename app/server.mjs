@@ -22,42 +22,64 @@ const substy = new SubstySession({
   onState: (s) => (state.token = s),
 });
 
-let stopStreams = [];
-async function startStreams() {
-  stopStreams.forEach((f) => f());
-  stopStreams = [];
+// Un flux temps réel par créatrice (id → fonction d'arrêt).
+const streamStops = new Map();
+function openStream(id) {
+  state.streams[id] = { live: false, events: 0 };
+  streamStops.set(
+    id,
+    substy.stream(
+      id,
+      (type, data) => {
+        const s = state.streams[id];
+        s.events++;
+        s.lastEvent = { type: data?.type || type, at: Date.now() };
+        broadcast(id, type, data);
+        if (type !== 'connected' && data?.type !== 'connection_ready') {
+          run('INSERT INTO events (creator_id, type, data, at) VALUES (?, ?, ?, ?)', id, data?.type || type, JSON.stringify(data).slice(0, 4000), Date.now());
+          run('DELETE FROM events WHERE id < (SELECT MAX(id) - 1000 FROM events)');
+        }
+      },
+      (st) => Object.assign(state.streams[id], st),
+    ),
+  );
+}
+
+/**
+ * Liste des créatrices de Substy → Bloom. Appelée au démarrage puis toutes les minutes :
+ * une créatrice ajoutée sur Substy est prise en compte toute seule (temps réel, conversations, lien Infloww / MyPulse),
+ * une créatrice retirée voit son flux fermé.
+ */
+async function syncCreators({ restart = false } = {}) {
   if (!getSetting('substy_client')) return;
+  if (restart) {
+    for (const stop of streamStops.values()) stop();
+    streamStops.clear();
+  }
+  const list = (await substy.creators()) || [];
+  state.creators = list.map(creatorView);
+  setCreators(state.creators);
+  const ids = state.creators.map((c) => c.id).filter(Boolean);
+  warmInbox(ids);
+  for (const id of ids) if (!streamStops.has(id)) {
+    console.log('[bloom] créatrice suivie :', state.creators.find((c) => c.id === id)?.name, id);
+    openStream(id);
+  }
+  for (const [id, stop] of streamStops) if (!ids.includes(id)) {
+    stop();
+    streamStops.delete(id);
+    delete state.streams[id];
+  }
+}
+async function startStreams() {
   try {
-    const list = (await substy.creators()) || [];
-    state.creators = list.map(creatorView);
-    setCreators(state.creators);
-    warmInbox(list.map((c) => c.id || c.creatorId).filter(Boolean));
-    for (const c of list) {
-      const id = c.id || c.creatorId;
-      if (!id) continue;
-      state.streams[id] = { live: false, events: 0 };
-      stopStreams.push(
-        substy.stream(
-          id,
-          (type, data) => {
-            const s = state.streams[id];
-            s.events++;
-            s.lastEvent = { type: data?.type || type, at: Date.now() };
-            broadcast(id, type, data);
-            if (type !== 'connected' && data?.type !== 'connection_ready') {
-              run('INSERT INTO events (creator_id, type, data, at) VALUES (?, ?, ?, ?)', id, data?.type || type, JSON.stringify(data).slice(0, 4000), Date.now());
-              run('DELETE FROM events WHERE id < (SELECT MAX(id) - 1000 FROM events)');
-            }
-          },
-          (st) => Object.assign(state.streams[id], st),
-        ),
-      );
-    }
+    await syncCreators({ restart: true });
   } catch (e) {
     console.warn('[bloom] flux temps réel :', e.message);
     setTimeout(startStreams, 60_000);
   }
 }
+setInterval(() => syncCreators().catch((e) => console.warn('[bloom] liste des créatrices :', e.message)), 60_000);
 
 const creatorView = (c) => ({
   id: c.id || c.creatorId,
@@ -299,12 +321,5 @@ createServer(async (req, res) => {
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);
   setInterval(pollSales, 30_000);
-  // Liste des créatrices rafraîchie toutes les 30 min (une nouvelle modèle est reliée toute seule).
-  setInterval(async () => {
-    try {
-      state.creators = ((await substy.creators()) || []).map(creatorView);
-      setCreators(state.creators);
-      matchLive();
-    } catch {}
-  }, 30 * 60_000);
+  // (La liste des créatrices est relue toutes les minutes par syncCreators : une nouvelle modèle est prise en compte toute seule.)
 });
