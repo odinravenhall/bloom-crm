@@ -53,7 +53,7 @@ export function ChartTooltipContent({
   const items = payload.filter((p) => p.value !== undefined && p.value !== null);
   const sum = items.filter((p) => !String(p.dataKey).startsWith("prev")).reduce((a, p) => a + Number(p.value || 0), 0);
   return (
-    <div className="min-w-44 rounded-xl border bg-card/95 px-3 py-2.5 text-xs shadow-2xl backdrop-blur-xl">
+    <div className="min-w-44 rounded-xl border bg-card/95 px-3 py-2.5 text-xs shadow-2xl">
       {label !== undefined ? <p className="mb-1.5 font-semibold">{labelFormatter ? labelFormatter(String(label)) : label}</p> : null}
       <div className="flex flex-col gap-1">
         {items.map((p) => {

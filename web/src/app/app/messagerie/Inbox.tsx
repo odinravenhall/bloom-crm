@@ -157,16 +157,16 @@ export function Inbox() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col max-md:h-[calc(100dvh-57px)]">
-      <div className="flex flex-wrap items-center gap-3 border-b bg-panel px-4 py-2.5 backdrop-blur-xl">
-        <h1 className="text-lg">Messagerie</h1>
-        <span className={cn("size-2 rounded-full", live ? "pulse-dot bg-emerald-400" : "bg-amber-400")} title={live ? "Temps réel actif" : "Temps réel : connexion…"} />
+      <div className="flex flex-wrap items-center gap-3 border-b bg-panel px-4 py-2.5">
+        <h1 className="text-2xl">Messagerie</h1>
+        <span className={cn("size-2 rounded-full", live ? "bg-emerald-400" : "bg-amber-400")} title={live ? "Temps réel actif" : "Temps réel : connexion…"} />
         <CreatorTabs className="min-w-0" />
       </div>
       <div className="flex min-h-0 flex-1">
         {/* Liste des conversations */}
-        <aside className={cn("flex w-full min-w-0 flex-col border-r bg-panel backdrop-blur-xl md:w-[360px] md:shrink-0", open && "max-md:hidden")}>
+        <aside className={cn("flex w-full min-w-0 flex-col border-r bg-panel md:w-[360px] md:shrink-0", open && "max-md:hidden")}>
           <div className="flex flex-col gap-2 border-b p-3">
-            <div className="flex rounded-xl border bg-card/80 p-1">
+            <div className="flex rounded-full border bg-card p-1">
               {(
                 [
                   ["todo", "À répondre", todo.length],
@@ -176,10 +176,10 @@ export function Inbox() {
                 <button
                   key={k}
                   onClick={() => setTab(k)}
-                  className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors", tab === k ? "bg-primary text-white" : "text-muted hover:text-fg")}
+                  className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors", tab === k ? "bg-petal text-primary-soft" : "text-muted hover:text-fg")}
                 >
                   {l}
-                  <span className={cn("rounded-full px-1.5 text-[11px] font-bold tabular-nums", tab === k ? "bg-white/20" : "bg-card-2")}>{n}</span>
+                  <span className={cn("rounded-full px-1.5 text-[11px] font-bold tabular-nums", tab === k ? "bg-white" : "bg-card-2")}>{n}</span>
                 </button>
               ))}
             </div>
@@ -227,7 +227,7 @@ export function Inbox() {
 function Row({ c, on, onClick }: { c: ChatT; on: boolean; onClick: () => void }) {
   const waiting = needsReply(c);
   return (
-    <button onClick={onClick} className={cn("cv-row relative flex w-full items-start gap-3 border-b border-line/50 px-3 py-2.5 text-left transition-colors", on ? "bg-primary/12" : "hover:bg-white/[0.03]")}>
+    <button onClick={onClick} className={cn("cv-row relative flex w-full items-start gap-3 border-b border-line/50 px-3 py-2.5 text-left transition-colors", on ? "bg-petal/60" : "hover:bg-white/[0.03]")}>
       {on ? <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-primary" /> : null}
       <Avatar src={c.avatar} name={c.name} size="size-10" />
       <span className="min-w-0 flex-1">

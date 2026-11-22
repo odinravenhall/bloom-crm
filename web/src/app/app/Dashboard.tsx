@@ -130,10 +130,10 @@ export function Dashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <Segmented<P> value={p} onChange={setP} options={PERIODS} />
           {p === "custom" ? (
-            <div className="flex items-center gap-1.5 rounded-xl border bg-card/80 p-1 backdrop-blur">
-              <input type="date" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} className="h-8 rounded-lg bg-card-2 px-2 text-sm [color-scheme:dark]" />
+            <div className="flex items-center gap-1.5 rounded-full border bg-card p-1">
+              <input type="date" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} className="h-8 rounded-full bg-card-2 px-3 text-sm" />
               <span className="text-muted">→</span>
-              <input type="date" value={custom.to} min={custom.from} max={parisDay(Date.now())} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} className="h-8 rounded-lg bg-card-2 px-2 text-sm [color-scheme:dark]" />
+              <input type="date" value={custom.to} min={custom.from} max={parisDay(Date.now())} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} className="h-8 rounded-full bg-card-2 px-3 text-sm" />
             </div>
           ) : null}
           <button className={btnCls.secondary} onClick={() => (loadRev(), loadLive())} disabled={busy} title="Actualiser">
@@ -196,7 +196,7 @@ export function Dashboard() {
                     <span className="w-10 text-right text-xs text-muted tabular-nums">{Math.round(share * 100)} %</span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-card-2">
-                    <div className="bar-grow h-full rounded-full" style={{ width: `${Math.max(2, share * 100)}%`, background: color }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.max(2, share * 100)}%`, background: color }} />
                   </div>
                 </div>
               );
@@ -218,7 +218,7 @@ export function Dashboard() {
               const l = live?.creators.find((x) => x.id === c.id);
               const unmapped = rev?.unmapped.includes(c.id);
               return (
-                <section key={c.id} className="card rise flex min-w-0 flex-col gap-3 rounded-(--radius-card) border bg-card/80 p-5 backdrop-blur" style={{ animationDelay: `${i * 60}ms` }}>
+                <section key={c.id} className="card flex min-w-0 flex-col gap-3 rounded-(--radius-card) border bg-card p-5">
                   <div className="flex items-center gap-3">
                     <Avatar src={c.avatar} name={c.name} size="size-11" />
                     <div className="min-w-0 flex-1">
@@ -273,7 +273,7 @@ export function Dashboard() {
         <Card
           title={
             <span className="flex items-center gap-2">
-              Dernières ventes <span className="pulse-dot size-2 rounded-full bg-primary" />
+              Dernières ventes <span className="size-2 rounded-full bg-primary" />
             </span>
           }
         >
@@ -283,7 +283,7 @@ export function Dashboard() {
               const o = ORIGINS.find(([k]) => k === s.origin);
               const row = (
                 <>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary-soft">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-petal text-primary-soft">
                     <Icon className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1">

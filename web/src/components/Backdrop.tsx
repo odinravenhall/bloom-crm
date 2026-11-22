@@ -1,61 +1,34 @@
-/** Fond animé de Bloom (lignes lumineuses + grille), repris de Raven CRM. Prend la couleur d'accent. */
-// ---------------------------------------------------------------- Lignes (d'origine)
-const LINES = [
-  { d: "M-200 760 L1800 40", c: "r", w: 1.4, dur: 9, delay: 0 },
-  { d: "M-200 900 L1800 180", c: "w", w: 1, dur: 13, delay: 2.5 },
-  { d: "M-200 620 L1800 -100", c: "r", w: 1, dur: 11, delay: 5 },
-  { d: "M-200 1040 L1800 320", c: "r", w: 2, dur: 15, delay: 1.2 },
-  { d: "M-200 480 L1800 -240", c: "w", w: 0.8, dur: 10, delay: 7 },
-  { d: "M200 1100 L1900 490", c: "w", w: 1.2, dur: 17, delay: 3.8 },
-];
-
-function Lines({ uid }: { uid: string }) {
-  return (
-    <>
-      <div className="bd-grid" />
-      <div className="bd-glow bd-glow-a" />
-      <div className="bd-glow bd-glow-b" />
-      <svg className="bd-lines" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <linearGradient id={`bd-r${uid}`} x1="0" x2="1" y1="1" y2="0">
-            <stop offset="0" stopColor="var(--color-primary)" stopOpacity="0" />
-            <stop offset="0.5" stopColor="var(--color-primary)" stopOpacity="0.9" />
-            <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id={`bd-w${uid}`} x1="0" x2="1" y1="1" y2="0">
-            <stop offset="0" stopColor="#fff" stopOpacity="0" />
-            <stop offset="0.5" stopColor="#fff" stopOpacity="0.5" />
-            <stop offset="1" stopColor="#fff" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {LINES.map((l, i) => (
-          <g key={i}>
-            <path d={l.d} stroke={l.c === "r" ? "var(--color-primary)" : "#fff"} strokeOpacity={l.c === "r" ? 0.07 : 0.035} strokeWidth={l.w} fill="none" />
-            <path
-              d={l.d}
-              className="bd-streak"
-              stroke={`url(#bd-${l.c}${uid})`}
-              strokeWidth={l.w + 0.6}
-              strokeLinecap="round"
-              fill="none"
-              pathLength={1000}
-              style={{ animationDuration: `${l.dur}s`, animationDelay: `-${l.delay}s` }}
-            />
-          </g>
-        ))}
-      </svg>
-    </>
-  );
-}
-
-
+/** Fond de Bloom : crème, voiles pétale et sauge, et deux branches fleuries dessinées au trait dans les coins. Fixe, sans animation. */
 export function Backdrop() {
   return (
     <div className="backdrop" aria-hidden>
-      <div className="decor-base absolute inset-0">
-        <Lines uid="bloom" />
-      </div>
-      <div className="bd-vignette" />
+      <Branch className="flora" style={{ right: -40, bottom: -30, width: 420, transform: "rotate(-8deg)" }} />
+      <Branch className="flora" style={{ left: -60, top: -50, width: 300, transform: "rotate(172deg)" }} />
     </div>
+  );
+}
+
+function Flower({ x, y, r }: { x: number; y: number; r: number }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      {[0, 60, 120, 180, 240, 300].map((a) => (
+        <ellipse key={a} rx={r * 0.42} ry={r} cy={-r} transform={`rotate(${a})`} fill="none" stroke="currentColor" strokeWidth="1.4" />
+      ))}
+      <circle r={r * 0.32} fill="currentColor" />
+    </g>
+  );
+}
+
+function Branch({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="0 0 400 400" className={className} style={style}>
+      <path d="M380 390 C 300 320, 260 250, 230 170 S 170 60, 110 30" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M262 236 C 300 222, 330 200, 345 168 C 310 172, 282 196, 262 236 Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M236 180 C 196 176, 168 156, 152 126 C 190 128, 218 150, 236 180 Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M300 300 C 336 300, 362 286, 380 260 C 346 256, 318 272, 300 300 Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <Flower x={110} y={30} r={22} />
+      <Flower x={200} y={105} r={14} />
+      <Flower x={345} y={150} r={11} />
+    </svg>
   );
 }

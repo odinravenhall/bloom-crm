@@ -31,8 +31,8 @@ export function VaultPicker({
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="pop flex h-[min(720px,92vh)] w-[min(1000px,100%)] flex-col overflow-hidden rounded-(--radius-card) border bg-card">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#2b1a26]/40 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="flex h-[min(720px,92vh)] w-[min(1000px,100%)] flex-col overflow-hidden rounded-(--radius-card) border bg-card">
         <header className="flex items-center gap-3 border-b px-4 py-3">
           <b>Vault</b>
           <span className="text-xs text-muted">{picked.size ? `${picked.size} sélectionné${picked.size > 1 ? "s" : ""}` : ""}</span>
@@ -100,7 +100,7 @@ export function VaultBrowser({ creatorId, picked, onPick, onOpen }: { creatorId:
   }, [creatorId, list]);
 
   const btn = (id: string | null, name: string, sub?: string) => (
-    <button key={id ?? "all"} onClick={() => setList(id)} className={cn("w-full rounded-xl px-3 py-2 text-left text-sm", list === id ? "bg-primary/15 font-semibold" : "hover:bg-card-2")}>
+    <button key={id ?? "all"} onClick={() => setList(id)} className={cn("w-full rounded-xl px-3 py-2 text-left text-sm", list === id ? "bg-petal font-semibold text-primary-soft" : "hover:bg-card-2")}>
       {name}
       {sub ? <span className="block text-[11px] text-muted">{sub}</span> : null}
     </button>

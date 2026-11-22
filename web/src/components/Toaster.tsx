@@ -22,7 +22,7 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            "toast-in flex items-center gap-2 rounded-xl border bg-card-2/95 px-4 py-2.5 text-sm font-medium shadow-2xl backdrop-blur",
+            "flex items-center gap-2 rounded-xl border bg-card-2/95 px-4 py-2.5 text-sm font-medium shadow-2xl",
             t.tone === "err" ? "border-rose-500/40" : "border-emerald-500/30",
           )}
         >

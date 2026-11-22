@@ -154,9 +154,9 @@ export function Sidebar({ me }: { me: Me }) {
               small ? (
                 <div className="mx-auto my-1.5 h-px w-6 bg-line" />
               ) : (
-                <button onClick={() => fold(s.label!)} className="group/h flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-bold">
+                <button onClick={() => fold(s.label!)} className="group/h flex w-full items-center gap-2.5 rounded-full px-2 py-1.5 text-left font-display text-[15px] font-semibold">
                   {s.icon ? (
-                    <span className="grid size-6 place-items-center rounded-md bg-primary/20 text-primary-soft">
+                    <span className="grid size-6 place-items-center rounded-full bg-sage-soft text-sage">
                       <s.icon className="size-3.5" />
                     </span>
                   ) : null}
@@ -175,16 +175,15 @@ export function Sidebar({ me }: { me: Me }) {
                       href={i.href}
                       title={small ? i.label : undefined}
                       className={cn(
-                        "group relative flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-all duration-200",
+                        "group relative flex items-center gap-2.5 rounded-full py-2 text-sm font-medium transition-colors",
                         small ? "justify-center px-0" : "px-3",
-                        on ? "bg-primary/15 font-semibold text-fg" : "text-muted hover:bg-card hover:text-fg",
+                        on ? "bg-petal font-semibold text-primary-soft" : "text-muted hover:bg-card-2 hover:text-fg",
                         i.soon && !on && "opacity-60",
                       )}
                     >
-                      {on ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-primary shadow-[0_0_12px_var(--color-primary)]" /> : null}
-                      <i.icon className={cn("size-[18px] shrink-0 transition-colors", on ? "text-primary-soft" : "group-hover:text-primary-soft")} />
+                                            <i.icon className={cn("size-[18px] shrink-0", on ? "text-primary" : "group-hover:text-primary")} />
                       {small ? null : <span className="truncate">{i.label}</span>}
-                      {i.soon && !small ? <span className="ml-auto rounded-md bg-card-2 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted uppercase">bientôt</span> : null}
+                      {i.soon && !small ? <span className="ml-auto rounded-full bg-sage-soft px-2 py-0.5 text-[10px] font-bold tracking-wide text-sage">bientôt</span> : null}
                     </Link>
                   );
                 })}
@@ -197,7 +196,7 @@ export function Sidebar({ me }: { me: Me }) {
   );
 
   const footer = (small: boolean) => (
-    <div className={cn("flex items-center gap-3 rounded-xl border bg-card", small ? "flex-col p-1.5" : "p-2.5")}>
+    <div className={cn("flex items-center gap-3 rounded-2xl border bg-bg", small ? "flex-col p-1.5" : "p-2.5")}>
       <Avatar src={me.avatar} name={me.name} size="size-8" rounded="rounded-lg" />
       {small ? null : (
         <div className="min-w-0 flex-1 leading-tight">
@@ -215,14 +214,14 @@ export function Sidebar({ me }: { me: Me }) {
   return (
     <>
       {/* téléphone : barre du haut + menu plein écran */}
-      <div className="sticky top-0 z-50 flex items-center justify-between border-b bg-panel-strong px-4 py-2.5 backdrop-blur-xl md:hidden" style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}>
+      <div className="sticky top-0 z-50 flex items-center justify-between border-b bg-panel-strong px-4 py-2.5 md:hidden" style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}>
         <Logo />
         <button onClick={() => setOpen((o) => !o)} className="rounded-lg border bg-card px-3 py-2" aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}>
           {open ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>
       </div>
       {open ? (
-        <div className="fixed inset-0 z-40 flex flex-col bg-bg/97 backdrop-blur-xl md:hidden" style={{ paddingTop: "calc(env(safe-area-inset-top) + 64px)" }}>
+        <div className="fixed inset-0 z-40 flex flex-col bg-bg/97 md:hidden" style={{ paddingTop: "calc(env(safe-area-inset-top) + 64px)" }}>
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{links(false)}</div>
           <div className="border-t px-4 pt-3" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
             {footer(false)}
@@ -233,7 +232,7 @@ export function Sidebar({ me }: { me: Me }) {
       {/* bureau */}
       <aside
         className={cn(
-          "no-scrollbar hidden h-dvh shrink-0 flex-col gap-4 overflow-y-auto border-r bg-panel-strong py-5 backdrop-blur-xl transition-[width] duration-300 md:flex",
+          "no-scrollbar hidden h-dvh shrink-0 flex-col gap-4 overflow-y-auto border-r bg-panel-strong py-5 md:flex",
           compact ? "w-[68px] px-2.5" : "w-60 px-4",
         )}
       >

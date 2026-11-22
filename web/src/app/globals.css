@@ -1,26 +1,47 @@
 @import "tailwindcss";
 
-/* Bloom CRM : même système que Raven CRM (noir profond), avec un rose Bloom en accent. */
+/*
+ * Bloom — direction artistique « floraison » : un jardin au petit matin.
+ * Fond crème, cartes blanches, texte prune, accent rose pétale, vert sauge pour ce qui va bien.
+ * Titres en serif (Fraunces), texte en Manrope. Aucune animation décorative.
+ */
 @theme {
-  --color-bg: #121216;
-  --color-card: #1a1a20;
-  --color-card-2: #23232a;
-  --color-line: #303039;
-  --color-input: #3d3d47;
-  --color-fg: #f5f5f7;
-  --color-muted: #a6a5b0;
-  /* Panneaux (menu, file, en-tête du chat) : posés sur le fond, suivent le thème */
-  --color-panel: rgb(0 0 0 / 0.28);
-  --color-panel-strong: rgb(10 10 13 / 0.78);
-  --color-primary: #ec4899;
-  --color-primary-soft: #f9a8d4;
-  --color-danger: #f0645c;
-  --color-good: #34d399;
-  --color-warn: #fbbf24;
-  --color-bubble-fan: #25252c;
-  --color-bubble-me: #4a1838;
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --radius-card: 1.25rem;
+  --color-bg: #f8f3ee;
+  --color-card: #ffffff;
+  --color-card-2: #f4ece6;
+  --color-line: #eadfd8;
+  --color-input: #e2d3cb;
+  --color-fg: #2b1a26;
+  --color-muted: #8a7480;
+  --color-panel: rgb(255 255 255 / 0.72);
+  --color-panel-strong: #fffcfa;
+  --color-primary: #d4537e;
+  --color-primary-soft: #b23a64;
+  --color-petal: #f7dbe4;
+  --color-sage: #6f9478;
+  --color-sage-soft: #e3eee4;
+  --color-peach: #f2a07b;
+  --color-danger: #c2410c;
+  --color-good: #4f7d5a;
+  --color-warn: #b7791f;
+  --color-bubble-fan: #ffffff;
+  --color-bubble-me: #fbe4ec;
+
+  /* Couleurs de texte « claires » (pensées pour fond sombre) recalées pour un fond crème */
+  --color-emerald-200: #2f6b43;
+  --color-emerald-300: #3d7a4f;
+  --color-rose-200: #a3264f;
+  --color-rose-300: #b2345e;
+  --color-amber-100: #7a4b0c;
+  --color-amber-200: #8a5a12;
+  --color-amber-300: #96631a;
+  --color-violet-200: #6b4c9a;
+  --color-sky-200: #2f6d8f;
+  --color-sky-300: #2f6d8f;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --radius-card: 1.5rem;
 }
 
 @layer base {
@@ -28,23 +49,22 @@
     @apply border-line;
   }
   html {
-    color-scheme: dark;
+    color-scheme: light;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scrollbar-color: #e3cfd6 transparent;
   }
   html,
   body {
     max-width: 100%;
     overflow-x: clip;
   }
-  /* Protection des médias : pas de glisser, pas d'appui long « enregistrer l'image », pas de sélection. */
   img,
   video {
     -webkit-user-drag: none;
     user-select: none;
     -webkit-touch-callout: none;
   }
-  /* Téléphone : iOS zoome sur tout champ < 16 px → champs à 16 px, pas de surbrillance au toucher. */
   @media (max-width: 767px) {
     input,
     textarea,
@@ -70,14 +90,16 @@
   h1,
   h2,
   h3 {
-    @apply font-bold tracking-tight;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
   ::selection {
-    background: color-mix(in oklab, var(--color-primary) 55%, transparent);
-    color: #fff;
+    background: var(--color-petal);
+    color: var(--color-fg);
   }
   :focus-visible {
-    outline: 2px solid var(--color-primary-soft);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
   ::-webkit-scrollbar {
@@ -85,7 +107,7 @@
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2a2d;
+    background: #e6d5dc;
     border-radius: 99px;
     border: 3px solid transparent;
     background-clip: padding-box;
@@ -96,202 +118,110 @@
   .scroll-thin {
     scrollbar-width: thin;
   }
-  /* listes déroulantes natives lisibles sur fond sombre */
   select option,
   select optgroup {
-    background-color: var(--color-card-2);
+    background-color: #fff;
     color: var(--color-fg);
+  }
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  progress {
+    accent-color: var(--color-primary);
+  }
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--color-primary);
   }
 }
 
-/* ------------------------------------------------------------ fond animé */
+/* Voiles « blancs » des composants (pensés pour fond sombre) → voiles prune très légers sur fond crème */
+.bg-white\/5 { background-color: rgb(43 26 38 / 4%); }
+.hover\:bg-white\/5:hover { background-color: rgb(43 26 38 / 6%); }
+.bg-white\/\[0\.03\], .hover\:bg-white\/\[0\.03\]:hover { background-color: rgb(43 26 38 / 4%); }
+.bg-white\/20 { background-color: rgb(255 255 255 / 30%); }
+/* Pastilles sur les images (type, prix) : texte blanc sur fond sombre */
+.bg-black\/65, .bg-black\/55 { color: #fff; }
+
+/* ------------------------------------------------------------ fond : jardin (fixe, sans animation) */
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  background:
+    radial-gradient(60% 45% at 0% 0%, rgb(247 219 228 / 0.75), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, rgb(227 238 228 / 0.9), transparent 70%),
+    radial-gradient(40% 30% at 90% 5%, rgb(250 225 210 / 0.6), transparent 70%),
+    var(--color-bg);
 }
-.bd-grid {
+.backdrop .flora {
   position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 30%, transparent 85%);
-  animation: grid-pan 40s linear infinite;
-}
-.bd-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  will-change: transform;
-}
-.bd-glow-a {
-  width: 720px;
-  height: 520px;
-  top: -260px;
-  left: -120px;
-  background: color-mix(in oklab, var(--color-primary) 26%, transparent);
-  animation: drift-a 26s ease-in-out infinite alternate;
-}
-.bd-glow-b {
-  width: 560px;
-  height: 460px;
-  bottom: -260px;
-  right: -160px;
-  background: color-mix(in oklab, var(--color-primary) 14%, transparent);
-  animation: drift-b 32s ease-in-out infinite alternate;
-}
-.bd-lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.bd-streak {
-  stroke-dasharray: 140 860;
-  animation: streak linear infinite;
-}
-.bd-vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 50%, rgba(0, 0, 0, 0.75));
-}
-@keyframes streak {
-  from { stroke-dashoffset: 1000; }
-  to { stroke-dashoffset: 0; }
-}
-@keyframes drift-a {
-  to { transform: translate(260px, 120px) scale(1.15); }
-}
-@keyframes drift-b {
-  to { transform: translate(-220px, -140px) scale(1.2); }
-}
-@keyframes grid-pan {
-  to { background-position: 72px 72px; }
+  color: var(--color-primary);
+  opacity: 0.09;
 }
 
-/* ------------------------------------------------------------ cartes & tuiles */
+/* ------------------------------------------------------------ cartes */
 .card,
 .stat {
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 12px 30px -22px rgb(110 50 80 / 0.35);
+  transition: border-color 0.2s;
 }
-.stat:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--color-primary) 45%, var(--color-line));
-  box-shadow: 0 18px 40px -24px color-mix(in oklab, var(--color-primary) 70%, transparent);
-}
-.stat::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-primary) 70%, transparent), transparent);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.stat:hover::before,
-.stat-accent::before {
-  opacity: 1;
+.card:hover {
+  border-color: #e2c6d1;
 }
 .stat-accent {
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--color-primary) 22%, transparent), transparent 60%),
-    color-mix(in oklab, var(--color-card) 85%, transparent);
-}
-.stat-accent::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.06) 50%, transparent 60%);
-  transform: translateX(-100%);
-  pointer-events: none;
-  animation: sheen 6s ease-in-out 1.2s infinite;
-}
-@keyframes sheen {
-  0%, 70% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  background: linear-gradient(160deg, #fff 30%, var(--color-petal)) !important;
+  border-color: #efc6d4 !important;
 }
 
-@keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-.rise {
-  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-@keyframes bar-grow {
-  from { transform: scaleY(0); }
-}
+/* Plus d'animations décoratives (anciens noms gardés pour ne rien casser) */
+.rise,
+.pop,
+.toast-in,
 .bar-grow {
-  transform-origin: bottom;
-  animation: bar-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-@keyframes pop {
-  from { opacity: 0; transform: translateY(6px) scale(0.98); }
-}
-.pop {
-  animation: pop 0.22s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
-}
-.toast-in {
-  animation: toast-in 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
-}
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(16px) scale(0.96); }
-}
-@keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-primary) 60%, transparent); }
-  50% { box-shadow: 0 0 0 5px transparent; }
+  animation: none;
 }
 .pulse-dot {
-  animation: pulse-dot 1.8s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgb(212 83 126 / 0.18);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .rise, .bar-grow, .bd-grid, .bd-glow, .bd-streak, .stat-accent::after, .toast-in, .pop, .pulse-dot {
-    animation: none !important;
-  }
-  .bd-streak { display: none; }
-}
-
-
-/* Couleur d'accent reprise dans les détails */
-::-webkit-scrollbar-thumb { background-color: color-mix(in oklab, var(--color-primary) 22%, var(--color-line)) !important; }
-::-webkit-scrollbar-thumb:hover { background-color: var(--color-primary) !important; }
-html { scrollbar-color: color-mix(in oklab, var(--color-primary) 30%, var(--color-line)) transparent; }
-.card:hover { border-color: color-mix(in oklab, var(--color-primary) 35%, var(--color-line)); }
-input:focus, textarea:focus, select:focus { border-color: color-mix(in oklab, var(--color-primary) 70%, var(--color-line)); }
-input[type="checkbox"], input[type="radio"], input[type="range"], progress { accent-color: var(--color-primary); }
-
-.no-scrollbar { scrollbar-width: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-
-/* Palette des graphiques : dérivée de la couleur d'accent (même famille de teintes), suit le thème et les couleurs perso. */
-:root {
-  --chart-1: var(--color-primary);
-  --chart-2: oklch(from var(--color-primary) calc(l + 0.08) c calc(h + 38));
-  --chart-3: oklch(from var(--color-primary) calc(l - 0.06) c calc(h - 38));
-  --chart-4: oklch(from var(--color-primary) calc(l + 0.14) calc(c * 0.75) calc(h + 80));
-  --chart-5: var(--color-primary-soft);
-  --chart-6: oklch(from var(--color-primary) calc(l - 0.12) calc(c * 0.8) calc(h - 80));
-  --chart-7: color-mix(in oklab, var(--color-primary) 25%, var(--color-muted));
-}
-
-/* « En train d'écrire » : trois points qui rebondissent (immobiles en mode sans animation) */
+/* « En train d'écrire » : trois points (le seul mouvement, il donne une information) */
 .typing-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  background: var(--color-muted);
-  animation: typing-bounce 1s ease-in-out infinite;
+  background: currentColor;
+  opacity: 0.6;
+  animation: typing-bounce 1.2s ease-in-out infinite;
 }
 @keyframes typing-bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
-  30% { transform: translateY(-4px); opacity: 1; }
+  0%, 60%, 100% { opacity: 0.35; }
+  30% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot { animation: none; }
 }
 
+/* Palette des graphiques : rose, sauge, pêche, lilas, miel… */
+:root {
+  --chart-1: #d4537e;
+  --chart-2: #6f9478;
+  --chart-3: #f2a07b;
+  --chart-4: #9b86c4;
+  --chart-5: #e8b04b;
+  --chart-6: #5c8fa8;
+  --chart-7: #c9b3bd;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
 /* Listes longues (toutes les conversations) : le navigateur ne dessine que ce qui est à l'écran. */
 .cv-row {

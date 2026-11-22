@@ -29,7 +29,7 @@ export default async function Connexion({ searchParams }: { searchParams: Promis
   const err = e ? (ERR[e] ?? e.slice(0, 200)) : "";
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
-      <div className="card rise w-full max-w-md rounded-(--radius-card) border bg-card/80 p-7 backdrop-blur">
+      <div className="card w-full max-w-md rounded-(--radius-card) border bg-card p-7">
         <Logo href="/connexion" />
         {!s.setup ? (
           <FirstSetup />

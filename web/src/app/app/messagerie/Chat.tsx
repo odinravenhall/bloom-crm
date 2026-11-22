@@ -143,14 +143,14 @@ export function Chat({ creatorId, chat, lastEvent, onPatch }: { creatorId: strin
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b bg-panel px-4 py-2.5 backdrop-blur-xl">
+        <header className="flex items-center gap-3 border-b bg-panel px-4 py-2.5">
           <Avatar src={chat.avatar} name={chat.name} size="size-9" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold">{chat.name}</p>
             <p className="truncate text-xs text-muted">{chat.username ? "@" + chat.username : ""}</p>
           </div>
           {typing ? (
-            <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-1 text-xs font-semibold text-violet-200">
+            <span className="flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-200">
               L’IA écrit <span className="typing-dot" /> <span className="typing-dot" style={{ animationDelay: ".15s" }} /> <span className="typing-dot" style={{ animationDelay: ".3s" }} />
             </span>
           ) : null}
@@ -227,7 +227,7 @@ export function Chat({ creatorId, chat, lastEvent, onPatch }: { creatorId: strin
           </div>
         ) : null}
 
-        <footer className="border-t bg-panel px-4 py-3 backdrop-blur-xl">
+        <footer className="border-t bg-panel px-4 py-3">
           <textarea
             ref={input}
             rows={2}
@@ -280,7 +280,7 @@ function Bubble({ m }: { m: Message }) {
     <div
       className={cn(
         "max-w-[min(560px,78%)] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
-        me ? "self-end rounded-br-md" : "self-start rounded-bl-md bg-bubble-fan",
+        me ? "self-end rounded-br-md" : "self-start rounded-bl-md border bg-bubble-fan",
         me && (m.by?.kind === "ai" ? "bg-violet-500/20" : m.by?.kind === "auto" || m.by?.kind === "script" ? "bg-card-2" : "bg-bubble-me"),
       )}
     >

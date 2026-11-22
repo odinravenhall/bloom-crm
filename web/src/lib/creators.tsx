@@ -45,14 +45,14 @@ export function CreatorTabs({ className }: { className?: string }) {
   const { creators, creatorId, setCreator } = useCreators();
   if (creators.length < 2) return null;
   return (
-    <div className={cn("no-scrollbar flex gap-1.5 overflow-x-auto rounded-xl border bg-card/80 p-1 backdrop-blur", className)}>
+    <div className={cn("no-scrollbar flex gap-1.5 overflow-x-auto rounded-full border bg-card p-1", className)}>
       {creators.map((c) => (
         <button
           key={c.id}
           onClick={() => setCreator(c.id)}
           className={cn(
-            "flex shrink-0 items-center gap-2 rounded-lg py-1 pr-3 pl-1 text-sm font-semibold whitespace-nowrap transition-colors",
-            c.id === creatorId ? "bg-primary text-white" : "text-muted hover:bg-card-2 hover:text-fg",
+            "flex shrink-0 items-center gap-2 rounded-full py-1 pr-3.5 pl-1 text-sm font-semibold whitespace-nowrap transition-colors",
+            c.id === creatorId ? "bg-petal text-primary-soft" : "text-muted hover:bg-card-2 hover:text-fg",
           )}
         >
           <Avatar src={c.avatar} name={c.name} size="size-6" />

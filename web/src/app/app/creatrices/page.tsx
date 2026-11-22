@@ -13,7 +13,7 @@ export default function Creatrices() {
       <PageHeader eyebrow="Administration" title="Créatrices" sub="Les créatrices reliées au compte agence Substy." />
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {creators.map((c, i) => (
-          <section key={c.id} className="card rise flex flex-col gap-4 rounded-(--radius-card) border bg-card/80 p-5 backdrop-blur" style={{ animationDelay: `${i * 60}ms` }}>
+          <section key={c.id} className="card flex flex-col gap-4 rounded-(--radius-card) border bg-card p-5">
             <div className="flex items-center gap-3">
               <Avatar src={c.avatar} name={c.name} size="size-12" />
               <div className="min-w-0 flex-1">

@@ -72,7 +72,7 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 
 - `app/` (Node 24, sans dépendance) = l'**API** : garde la session Substy côté serveur (chiffrée dans `data/`), appelle
   l'API interne de Substy, écoute le temps réel, sert `/api/*` et `/media`, et fait tourner le **bot Discord « Bloom »**.
-- `web/` (Next.js 16 + Tailwind 4, même design que Raven CRM) = l'**interface**. Elle relaie `/api/*` et `/media` vers
+- `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec SA direction artistique « floraison » (thème clair crème / prune / rose pétale / sauge, titres Fraunces, texte Manrope, aucune animation décorative) — ne pas recopier le look de Raven. Elle relaie `/api/*` et `/media` vers
   l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,
   `/app/fans`, `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
 - `docker-compose.yml` : `app` (API, réseau interne) + `web` (alias `bloom-web` sur le réseau du Caddy de /root/zebre).

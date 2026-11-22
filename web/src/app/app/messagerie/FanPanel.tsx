@@ -38,7 +38,7 @@ export function FanPanel({ creatorId, fanId, onLoaded }: { creatorId: string; fa
   const h = (t: string) => <p className="mt-4 mb-1 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">{t}</p>;
 
   return (
-    <aside className="scroll-thin hidden w-[300px] shrink-0 overflow-y-auto border-l bg-panel p-4 backdrop-blur-xl xl:block">
+    <aside className="scroll-thin hidden w-[300px] shrink-0 overflow-y-auto border-l bg-panel p-4 xl:block">
       {!f ? (
         <p className="text-sm text-muted">{err || "Chargement…"}</p>
       ) : (
