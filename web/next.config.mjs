@@ -13,16 +13,12 @@ const nextConfig = {
     return [
       { source: "/api/:path*", destination: `${API}/api/:path*` },
       { source: "/media", destination: `${API}/media` },
-      // OF Manager : le site OnlyFans / MYM intégré de Substy, relayé par l'API (adresses « /s/<session>/… »).
-      { source: "/s/:path*", destination: `${API}/ofb/s/:path*` },
-      { source: "/static/prod/:path*", destination: `${API}/ofb/static/prod/:path*` },
     ];
   },
   async headers() {
     return [
       {
-        // Toutes les pages sauf le site intégré (affiché dans un cadre de Bloom : SAMEORIGIN, posé par l'API).
-        source: "/((?!s/|static/prod/).*)",
+        source: "/:path*",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },

@@ -399,8 +399,6 @@ createServer(async (req, res) => {
   try {
     if (h) return await h(req, res);
     if (path.startsWith('/api/rv/')) return await rv(req, res, path);
-    // Site OnlyFans / MYM intégré (Substy), relayé sous Bloom : « OF Manager ».
-    if (path.startsWith('/ofb/')) return await ofb.proxy(req, res, path);
     send(res, 404, { error: 'Introuvable' });
   } catch (e) {
     const status = e instanceof SubstyError ? (e.status === 401 ? 400 : 502) : e.status || 500;

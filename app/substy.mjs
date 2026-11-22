@@ -212,26 +212,11 @@ export class SubstySession {
   recentSales() { return this.call('agency.getRecentSales'); }
   aiLogs(creatorId, fanId, limit = 50) { return this.call('creators.fans.getFanAiLogs', { creatorId, fanId, limit }); }
   /**
-   * Site OnlyFans / MYM intégré de Substy (« Browser ») : ouvre (ou reprend) une session pour une créatrice, puis
-   * l'autorise comme le fait la page d'accès de Substy (POST …/browser/sessions/<jeton>/access avec le jeton Clerk).
-   * Renvoie l'adresse du site (redirectUrl), son origine et les cookies d'autorisation (gardés par le serveur de Bloom).
-   * Format relevé sur le site de Substy (22/11/2026).
+   * Site OnlyFans / MYM intégré de Substy (« Browser », 4 h) : ouvre ou reprend la session d'une créatrice.
+   * Renvoie { sessionToken, accessOrigin } (format relevé sur le site de Substy le 22/11/2026). L'autorisation se fait
+   * ensuite dans le navigateur de la personne, connectée à Substy (page …/browser/sessions/<jeton>/access de Substy).
    */
-  async browserOpen(creatorId) {
-    const s = await this.call('agency.browser.getOrCreateSession', { creatorId, label: 'Bloom CRM' });
-    if (!s?.sessionToken) throw new SubstyError(502, 'Substy n’a pas ouvert le site intégré pour cette créatrice.');
-    const origin = s.accessOrigin || 'https://of.substy.ai';
-    if (!/^https:\/\/[a-z0-9.-]+\.substy\.ai$/.test(origin)) throw new SubstyError(502, 'Adresse du site intégré inattendue');
-    const jwt = await this.token();
-    const r = await fetch(`${origin}/browser/sessions/${encodeURIComponent(s.sessionToken)}/access`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${jwt}`, origin: APP, referer: `${APP}/`, 'user-agent': UA },
-      signal: AbortSignal.timeout(30_000),
-    });
-    const j = await r.json().catch(() => null);
-    if (!r.ok || !j?.redirectUrl) throw new SubstyError(r.status || 502, j?.error || 'Substy a refusé l’accès au site intégré.');
-    return { origin, token: s.sessionToken, redirectUrl: j.redirectUrl, cookies: r.headers.getSetCookie?.() || [] };
-  }
+  browserSession(creatorId) { return this.call('agency.browser.getOrCreateSession', { creatorId, label: 'Bloom CRM' }); }
   /** Supprimer (« unsend ») un message envoyé au fan. Format relevé sur le site de Substy (22/11/2026), sans rien supprimer. */
   unsend(creatorId, fanId, messageId) { return this.call('messages.unsend', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
