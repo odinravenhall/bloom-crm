@@ -48,7 +48,7 @@ const NAV: (Entry | "divider")[] = [
     icon: ChartArea,
     roles: CHAT,
     children: [
-      { label: "Smart Messages", icon: MessagesSquare, href: "/app/envoi" },
+      { label: "Smart Messages", icon: MessagesSquare, href: "/app/smart" },
       { label: "Smart lists", icon: ListFilter, href: "/app/listes" },
       { label: "Auto-follow", icon: UserPlus, href: soon("Auto-follow") },
       { label: "Vault Pro", icon: Images, href: "/app/vault" },
