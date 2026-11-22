@@ -1,6 +1,6 @@
 // Dashboard OnlyFans (comme celui d'Infloww) : « Creator earnings overview » (net ou brut ; hier, aujourd'hui, cette
 // semaine, ce mois), réparti en abonnements, posts, messages, pourboires, parrainages et lives, et « Employee sales »
-// (comme Infloww : messages + pourboires en brut, jour par jour ou heure par heure).
+// (comme Infloww : ventes de messages et pourboires faites par les employés, en brut, jour par jour).
 // Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, de toutes les modèles OnlyFans d'Infloww, plus les ventes Substy des dernières 24 h pas
 // encore confirmées (provisoires). Heure de Paris.
 import { all } from './store.mjs';
@@ -50,14 +50,13 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       // un team leader, seulement ses modèles.
       const accounts = seesAll(u) && !only ? all("SELECT id FROM rv_accounts WHERE platform = 'onlyfans'").map((a) => a.id) : maps.map((m) => m.account);
       const blocks = { subscriptions: 0, posts: 0, messages: 0, tips: 0, referrals: 0, streams: 0 };
-      // Courbe : heure par heure pour un seul jour, sinon jour par jour.
-      const hourly = from === to;
+      // Courbe : un point par jour (un seul pour « aujourd'hui » / « hier », comme Infloww), plus le jour d'avant (pour « Growth »).
+      const hourly = false;
       const points = [];
-      if (hourly) for (let h = 0; h < 24; h++) points.push({ key: String(h), label: `${String(h).padStart(2, '0')}:00`, at: start + h * 3600_000, msgs: 0, tips: 0 });
-      else for (let d = from; d <= to; d = addDay(d, 1)) points.push({ key: d, label: d, at: parisMidnight(d), msgs: 0, tips: 0 });
+      for (let d = addDay(from, -1); d <= to; d = addDay(d, 1)) points.push({ key: d, label: d, at: parisMidnight(d), msgs: 0, tips: 0 });
       // Point de la courbe d'une vente : calcul direct (pas de conversion de date par vente : trop lent sur un mois).
       const slot = (at) => {
-        let i = Math.floor((at - start) / (hourly ? 3600_000 : DAY));
+        let i = Math.floor((at - points[0].at) / DAY);
         i = Math.max(0, Math.min(points.length - 1, i));
         while (i + 1 < points.length && points[i + 1].at <= at) i++;
         while (i > 0 && points[i].at > at) i--;
@@ -68,18 +67,19 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       let sales = 0;
       if (accounts.length) {
         const ph = accounts.map(() => '?').join(',');
-        for (const r of all(`SELECT type, raw_type, gross, net, currency, status, seller, origin, at FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, start, end)) {
+        for (const r of all(`SELECT type, raw_type, gross, net, currency, status, seller, origin, at FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, start - DAY, end)) {
           if (REFUND.test(r.status || '')) continue;
+          // Courbe « Employee sales » (comme Infloww) : ventes de messages et pourboires faites par un employé, en brut.
+          if ((r.type === 'ppv' || r.type === 'tip') && r.seller) {
+            const sl = slot(r.at);
+            if (sl) sl[r.type === 'tip' ? 'tips' : 'msgs'] += r.gross / 100;
+          }
+          if (r.at < start) continue;
           const v = (gross ? r.gross : r.net) / 100;
           const b = BLOCK[r.type] || (/refer|parrain/i.test(r.raw_type || '') ? 'referrals' : null);
           if (b) blocks[b] += v;
           total += v;
           sales++;
-          // Courbe « Employee sales » (comme Infloww) : messages + pourboires, toujours en brut, quel que soit le choix brut / net.
-          if (r.type === 'ppv' || r.type === 'tip') {
-            const sl = slot(r.at);
-            if (sl) sl[r.type === 'tip' ? 'tips' : 'msgs'] += r.gross / 100;
-          }
         }
       }
       // Ventes Substy des dernières 24 h pas encore confirmées par Infloww (provisoires).
@@ -103,7 +103,8 @@ export function ofDashRoutes({ userFrom, send, creators }) {
         provisional: round(provisional),
         sales,
         blocks: Object.fromEntries(Object.entries(blocks).map(([k, v]) => [k, round(v)])),
-        employeeSales: points.map((x) => ({ label: x.label, v: round(x.msgs + x.tips), msgs: round(x.msgs), tips: round(x.tips), future: x.at > Date.now() })),
+        employeeSales: points.slice(1).map((x) => ({ label: x.label, v: round(x.msgs + x.tips), msgs: round(x.msgs), tips: round(x.tips), future: x.at > Date.now() })),
+        employeeBefore: round(points[0].msgs + points[0].tips),
         hourly,
         creators: ofCreators.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, mapped: maps.some((m) => m.creator_id === c.id) || !ids.has(c.id) })),
         accounts: accounts.length,

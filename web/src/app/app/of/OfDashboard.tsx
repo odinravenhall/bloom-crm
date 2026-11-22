@@ -20,6 +20,7 @@ type Data = {
   sales: number;
   blocks: { subscriptions: number; posts: number; messages: number; tips: number; referrals: number; streams: number };
   employeeSales: { label: string; v: number; msgs: number; tips: number; future: boolean }[];
+  employeeBefore?: number;
   hourly: boolean;
   unmapped: string[];
 };
@@ -198,7 +199,7 @@ export function OfDashboard() {
                     if (!active || hover == null) return null;
                     const pt = chart[hover];
                     if (!pt) return null;
-                    const prev = hover > 0 ? chart[hover - 1].v : 0;
+                    const prev = hover > 0 ? chart[hover - 1].v : (data?.employeeBefore ?? 0);
                     const growth = prev > 0 ? ((pt.v - prev) / prev) * 100 : null;
                     return (
                       <div className="rounded-md border px-3 py-2 text-[13px] leading-[1.45] text-white shadow-xl" style={{ background: "rgba(48,48,50,.94)", borderColor: "rgba(255,255,255,.12)" }}>
