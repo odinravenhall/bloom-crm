@@ -5,6 +5,7 @@ import { Check, Moon, Sparkle, Sun } from "lucide-react";
 import { cn } from "@/lib/fmt";
 import { ROLE_LABEL, type Me } from "@/lib/types";
 import { ACCENTS, DECORS, THEMES, useThemePrefs, type Theme } from "@/lib/theme";
+import { usePerf } from "@/lib/perf";
 import { Avatar, Pill } from "@/components/ui";
 
 const BASE_INFO: Record<Theme, { icon: typeof Sun; text: string; swatch: string[] }> = {
@@ -17,6 +18,7 @@ const LANG_KEY = "bloom.lang";
 /** Paramètres de chacun : apparence, langue, compte. Gardés sur cet ordinateur. */
 export function Preferences({ me }: { me: Me }) {
   const { prefs, setPrefs } = useThemePrefs();
+  const perf = usePerf();
   const [lang, setLang] = useState("fr");
   useEffect(() => {
     try {
@@ -95,13 +97,31 @@ export function Preferences({ me }: { me: Me }) {
               ))}
             </div>
           </div>
-          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-card px-4 py-3">
-            <input type="checkbox" checked={!prefs.motion} onChange={(e) => setPrefs({ motion: !e.target.checked })} className="size-4" />
-            <span>
-              <b className="block text-sm">Réduire les animations</b>
-              <span className="text-xs text-muted">Fond immobile : pour un ordinateur lent ou si ça te gêne.</span>
-            </span>
-          </label>
+        </div>,
+      )}
+
+      {section(
+        "Optimisation",
+        "Pour un PC lent ou une connexion faible : Bloom reste fluide. Gardé sur cet ordinateur.",
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              ["auto", "Automatique", "Active tout seul ce qu’il faut si l’ordinateur ou la connexion est faible."],
+              ["noAnim", "Sans animations", "Plus rien ne bouge : fond fixe, pas d’effets."],
+              ["lite", "Version allégée", "Pas de fond animé, de flous ni d’ombres : le plus efficace pour un PC lent."],
+              ["data", "Connexion faible", "La messagerie s’actualise deux fois moins souvent."],
+              ["noMedia", "Photos au clic", "Les photos et vidéos du chat ne se chargent que quand tu cliques dessus."],
+            ] as const
+          ).map(([k, label, text]) => (
+            <label key={k} className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-card px-4 py-3">
+              <input type="checkbox" checked={!!perf.prefs[k]} onChange={(e) => perf.set({ [k]: e.target.checked })} className="size-4 accent-[var(--color-primary)]" />
+              <span className="min-w-0 flex-1">
+                <b className="block text-sm">{label}</b>
+                <span className="text-xs text-muted">{text}</span>
+              </span>
+              {k !== "auto" && !perf.prefs[k] && perf.active[k] ? <span className="rounded-full bg-card-2 px-2 py-0.5 text-[10px] font-bold text-muted">activé par l’auto</span> : null}
+            </label>
+          ))}
         </div>,
       )}
 

@@ -555,15 +555,6 @@ export function Chat({
             {actions.fresh ? <CheckCheck className="size-4" /> : <MailWarning className="size-4" />}
           </ActBtn>
           <span className="mx-0.5 h-5 w-px bg-line" />
-          {/* Bloom : couper / rallumer l'IA de Substy sur ce fan (chatting hybride). */}
-          <button
-            onClick={toggleAi}
-            title={ai ? "L’IA de Substy répond à ce fan : couper pour répondre à la main" : "IA coupée : rallumer l’IA de Substy sur ce fan"}
-            className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-bold", ai ? "bg-primary/15 text-primary-soft" : "text-muted hover:bg-card-2 hover:text-fg")}
-          >
-            <Bot className="size-4" /> {ai ? "IA" : "IA off"}
-          </button>
-          <span className="mx-0.5 h-5 w-px bg-line" />
           <ActBtn on={actions.panelOpen} onClick={actions.onPanel} title={actions.panelOpen ? "Masquer les notes du fan" : "Afficher les notes du fan"}>
             {actions.panelOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
           </ActBtn>

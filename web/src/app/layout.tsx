@@ -4,6 +4,7 @@ import "./globals.css";
 import { Backdrop } from "@/components/Backdrop";
 import { Toaster } from "@/components/Toaster";
 import { themeBootScript } from "@/lib/theme";
+import { bloomPerfBoot } from "@/lib/perf";
 
 // Même police que Raven CRM.
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta" });
@@ -23,6 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen font-sans">
         {/* Thème choisi (clair / sombre / onyx) appliqué avant le premier affichage */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        {/* Optimisation (PC lent, connexion lente) appliquée avant le premier affichage */}
+        <script dangerouslySetInnerHTML={{ __html: bloomPerfBoot }} />
         <Backdrop />
         {children}
         <Toaster />

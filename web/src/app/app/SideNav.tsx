@@ -94,6 +94,14 @@ export function SideNav({ me }: { me: Me }) {
       return !s;
     });
 
+  // Dans la messagerie, le menu se réduit tout seul en icônes (plus de place pour chatter), sauf si on l'agrandit à la main.
+  const inChat = path.startsWith("/app/messagerie");
+  const [chatWide, setChatWide] = useState(false);
+  useEffect(() => setChatWide(false), [inChat]);
+  const userSmall = small;
+  const narrow = inChat ? !chatWide : userSmall;
+  const toggleNav = () => (inChat ? setChatWide((w) => !w) : toggle());
+
   const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(me.role)) })).filter((g) => g.items.length);
   const logout = async () => {
     await fetch("/api/logout", { method: "POST" }).catch(() => {});
@@ -168,15 +176,15 @@ export function SideNav({ me }: { me: Me }) {
       ) : null}
 
       {/* ordinateur : menu à gauche */}
-      <aside className={cn("no-scrollbar hidden h-dvh shrink-0 flex-col gap-6 overflow-y-auto border-r bg-panel-strong py-5 md:flex", small ? "w-[72px] px-3" : "w-60 px-4")}>
-        <div className={cn("flex items-center", small ? "flex-col gap-3" : "justify-between pl-1")}>
-          {small ? <BloomMark className="size-9" /> : <Logo href={homeOf(me.role)} />}
-          <button onClick={toggle} title={small ? "Agrandir le menu" : "Réduire le menu"} className="grid size-8 place-items-center rounded-full text-muted hover:bg-card hover:text-fg">
-            {small ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+      <aside className={cn("no-scrollbar hidden h-dvh shrink-0 flex-col gap-6 overflow-y-auto border-r bg-panel-strong py-5 md:flex", narrow ? "w-[72px] px-3" : "w-60 px-4")}>
+        <div className={cn("flex items-center", narrow ? "flex-col gap-3" : "justify-between pl-1")}>
+          {narrow ? <BloomMark className="size-9" /> : <Logo href={homeOf(me.role)} />}
+          <button onClick={toggleNav} title={narrow ? "Agrandir le menu" : "Réduire le menu"} className="grid size-8 place-items-center rounded-full text-muted hover:bg-card hover:text-fg">
+            {narrow ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
         </div>
-        {links(small)}
-        <div className="mt-auto border-t pt-4">{footer(small)}</div>
+        {links(narrow)}
+        <div className="mt-auto border-t pt-4">{footer(narrow)}</div>
       </aside>
     </>
   );
