@@ -1,0 +1,113 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Check, Moon, Sparkle, Sun } from "lucide-react";
+import { cn } from "@/lib/fmt";
+import { ROLE_LABEL, type Me } from "@/lib/types";
+import { THEMES, useTheme, type Theme } from "@/lib/theme";
+import { Avatar, Pill } from "@/components/ui";
+
+const THEME_INFO: Record<Theme, { icon: typeof Sun; text: string; swatch: string[] }> = {
+  light: { icon: Sun, text: "Crème, rose pétale et sauge", swatch: ["#f8f3ee", "#ffffff", "#d4537e", "#6f9478"] },
+  dark: { icon: Moon, text: "Prune profond, doux pour les yeux", swatch: ["#17131a", "#201b24", "#e07a9e", "#93bd9e"] },
+  onyx: { icon: Sparkle, text: "Noir profond, contraste maximal", swatch: ["#050505", "#0e0e0f", "#ea7aa0", "#93bd9e"] },
+};
+const LANG_KEY = "bloom.lang";
+
+/** Paramètres de chacun : apparence, langue, compte. Gardés sur cet ordinateur. */
+export function Preferences({ me }: { me: Me }) {
+  const { theme, setTheme } = useTheme();
+  const [lang, setLang] = useState("fr");
+  useEffect(() => {
+    try {
+      setLang(localStorage.getItem(LANG_KEY) || "fr");
+    } catch {}
+  }, []);
+  const chooseLang = (l: string) => {
+    setLang(l);
+    try {
+      localStorage.setItem(LANG_KEY, l);
+    } catch {}
+  };
+
+  const section = (title: string, sub: string, children: React.ReactNode) => (
+    <section className="grid gap-4 border-b py-8 md:grid-cols-[260px_1fr]">
+      <div>
+        <h2 className="text-2xl">{title}</h2>
+        <p className="mt-1 text-sm text-muted">{sub}</p>
+      </div>
+      <div>{children}</div>
+    </section>
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-[1000px] px-4 py-6 md:px-8 md:py-10">
+      <h1 className="text-4xl md:text-5xl">Paramètres</h1>
+      <p className="mt-1 text-sm text-muted">Tes préférences, gardées sur cet ordinateur.</p>
+
+      {section(
+        "Apparence",
+        "Le thème de Bloom.",
+        <div className="grid gap-3 sm:grid-cols-3">
+          {THEMES.map(([t, label]) => {
+            const info = THEME_INFO[t];
+            return (
+              <button key={t} onClick={() => setTheme(t)} className={cn("rounded-3xl border bg-card p-4 text-left transition-colors", theme === t ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40")}>
+                <div className="flex overflow-hidden rounded-2xl border">
+                  {info.swatch.map((c) => (
+                    <span key={c} className="h-12 flex-1" style={{ background: c }} />
+                  ))}
+                </div>
+                <p className="mt-3 flex items-center gap-2 font-semibold">
+                  <info.icon className="size-4 text-primary" /> {label}
+                  {theme === t ? <Check className="ml-auto size-4 text-primary" /> : null}
+                </p>
+                <p className="text-xs text-muted">{info.text}</p>
+              </button>
+            );
+          })}
+        </div>,
+      )}
+
+      {section(
+        "Langue",
+        "La langue de l’interface.",
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["fr", "Français", false],
+            ["en", "English", true],
+          ].map(([k, l, soon]) => (
+            <button
+              key={k as string}
+              disabled={!!soon}
+              onClick={() => chooseLang(k as string)}
+              className={cn("flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold", lang === k ? "border-primary bg-petal text-primary-soft" : "bg-card text-muted hover:text-fg", soon && "opacity-60")}
+            >
+              {l as string}
+              {soon ? <span className="rounded-full bg-sage-soft px-2 py-0.5 text-[10px] font-bold text-sage">bientôt</span> : null}
+            </button>
+          ))}
+        </div>,
+      )}
+
+      {section(
+        "Compte",
+        "Ton compte vient de Discord : le nom, la photo et le rôle se changent sur le serveur.",
+        <div className="flex items-center gap-4 rounded-3xl border bg-card p-4">
+          <Avatar src={me.avatar} name={me.name} size="size-14" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-xl font-semibold">{me.name}</p>
+            <p className="text-sm text-muted">Connexion par Discord</p>
+          </div>
+          <Pill tone="accent">{ROLE_LABEL[me.role] ?? me.role}</Pill>
+        </div>,
+      )}
+
+      {section(
+        "Notifications",
+        "Être prévenu d’un nouveau message, d’une vente…",
+        <p className="rounded-3xl border border-dashed bg-card/60 p-4 text-sm text-muted">Bientôt : sons, alertes du navigateur, et plus tard notifications de l’application Bloom pour ordinateur.</p>,
+      )}
+    </div>
+  );
+}

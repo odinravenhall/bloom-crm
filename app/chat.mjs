@@ -1,6 +1,6 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
-import { canSee, creatorsOf, onCreator, ping, setAccess, setActive, teamView } from './team.mjs';
+import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
 const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -272,11 +272,11 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     if (!u) send(res, 401, { error: 'Connecte-toi' });
     return u;
   };
-  // Chiffres de l'agence (revenus, ventes) : admins et managers seulement.
+  // Chiffres et équipe : admins, managers et team leaders (chacun sur ses créatrices).
   const boss = (req, res) => {
     const u = auth(req, res);
-    if (u && u.role !== 'admin' && u.role !== 'lead') {
-      send(res, 403, { error: 'Réservé aux admins et managers' });
+    if (u && !isBoss(u)) {
+      send(res, 403, { error: 'Réservé aux managers et team leaders' });
       return null;
     }
     return u;
@@ -286,7 +286,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
   const authC = (req, res, creatorId) => {
     const u = auth(req, res);
     if (!u) return null;
-    if (!canSee(u, creatorId)) {
+    if (!canChat(u) || !canSee(u, creatorId)) {
       send(res, 403, { error: 'Tu n’as pas accès à cette créatrice. Demande à un manager.' });
       return null;
     }
@@ -334,8 +334,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
   return {
     // Ventes en direct (rafraîchies souvent, sans recalculer tout le dashboard).
     'GET /api/sales': async (req, res) => {
-      if (!boss(req, res)) return;
-      send(res, 200, await salesView());
+      const u = boss(req, res);
+      if (!u) return;
+      send(res, 200, (await salesView()).filter((s) => canSee(u, s.creatorId)));
     },
 
     'GET /api/creators': async (req, res) => {
@@ -366,15 +367,20 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const b = await body(req);
       const target = one('SELECT id, role FROM users WHERE id = ?', Number(b.userId));
       if (!target) return send(res, 404, { error: 'Personne inconnue' });
-      if (target.role === 'admin') return send(res, 400, { error: 'Un admin voit déjà toutes les créatrices.' });
+      if (seesAll(target)) return send(res, 400, { error: 'Les admins et managers voient déjà toutes les créatrices.' });
+      if (!canEditAccess(u, target)) return send(res, 403, { error: 'Un team leader ne peut changer que les accès de ses chatteurs.' });
+      // On ne donne que des créatrices qu'on voit soi-même.
+      if (!seesAll(u) && (b.all || (b.creators || []).some((c) => !canSee(u, c)))) return send(res, 403, { error: 'Tu ne peux donner que tes propres créatrices.' });
       setAccess(target.id, { all: !!b.all, creators: Array.isArray(b.creators) ? b.creators.map(String) : [] });
       send(res, 200, teamView());
     },
     'POST /api/team/active': async (req, res) => {
       const u = auth(req, res);
       if (!u) return;
-      if (u.role !== 'admin') return send(res, 403, { error: 'Réservé aux admins' });
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
       const b = await body(req);
+      const target = one('SELECT role FROM users WHERE id = ?', Number(b.userId));
+      if (target?.role === 'admin' && u.role !== 'admin') return send(res, 403, { error: 'Seul un admin peut désactiver un admin.' });
       if (Number(b.userId) === u.id) return send(res, 400, { error: 'Tu ne peux pas te désactiver toi-même.' });
       setActive(Number(b.userId), !!b.active);
       send(res, 200, teamView());
@@ -382,9 +388,13 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
 
     // Dashboard : l'état en direct de chaque créatrice + ce que Bloom a vu passer aujourd'hui et sur 7 jours.
     'GET /api/dashboard': async (req, res) => {
-      if (!boss(req, res)) return;
+      const me = boss(req, res);
+      if (!me) return;
+      // Chaque personne ne voit que ses créatrices (le cache est commun, on filtre à la sortie).
+      const mine = (d) => ({ ...d, creators: d.creators.filter((c) => canSee(me, c.id)), sales: (d.sales || []).filter((s) => canSee(me, s.creatorId)) });
+      const sendMine = (r, code, d) => send(r, code, mine(d));
       const period = ['today', '7d', '30d'].includes(q(req).get('period')) ? q(req).get('period') : 'today';
-      if (dashCache?.[period] && Date.now() - dashCache[period].at < 20_000) return send(res, 200, dashCache[period].data);
+      if (dashCache?.[period] && Date.now() - dashCache[period].at < 20_000) return sendMine(res, 200, dashCache[period].data);
       const creators = ((await substy.creators()) || []).map(creatorOf);
       // Dates à l'heure de Paris, comme le dashboard de Substy (7 jours = du J-7 à aujourd'hui).
       const ymd = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(d);
@@ -412,7 +422,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const since = one('SELECT MIN(at) AS t FROM msg_log')?.t || null;
       const data = { period, start, end, revenue, sales, creators: items, since, at: Date.now() };
       dashCache = { ...dashCache, [period]: { at: Date.now(), data } };
-      send(res, 200, data);
+      sendMine(res, 200, data);
     },
 
     // Toutes les conversations d'une créatrice (depuis la mémoire de Bloom). since = seulement ce qui a changé depuis.

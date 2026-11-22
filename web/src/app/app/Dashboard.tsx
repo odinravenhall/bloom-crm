@@ -6,7 +6,7 @@ import { ArrowUpRight, Clock, Gift, Image as ImageIcon, Lock, RefreshCw, UserRou
 import { api } from "@/lib/api";
 import { cn, eur, moneyC, num, when } from "@/lib/fmt";
 import { useCreators } from "@/lib/creators";
-import type { Count, Dashboard as Live, RevenueR } from "@/lib/types";
+import type { Count, Dashboard as Live, RevenueR, Role } from "@/lib/types";
 import { Avatar, Pill } from "@/components/ui";
 import { AreaStack, DeltaPct, pctChange } from "@/components/charts";
 
@@ -48,7 +48,9 @@ const SALE_ICON: Record<string, typeof Lock> = { ppv: Lock, tip: Gift, post: Ima
 const count = (c: Count | undefined) => (c?.n == null ? "—" : `${c.n}${c.more ? "+" : ""}`);
 const inbox = (creatorId: string, extra = "") => `/app/messagerie?c=${encodeURIComponent(creatorId)}${extra}`;
 
-export function Dashboard() {
+export function Dashboard({ role }: { role: Role }) {
+  // Une modèle voit seulement son chiffre : pas d'origine des ventes, pas de conversations.
+  const model = role === "model";
   const { creators } = useCreators();
   const [p, setP] = useState<P>("today");
   const [custom, setCustom] = useState(() => ({ from: minus(parisDay(Date.now()), 6), to: parisDay(Date.now()) }));
@@ -69,7 +71,7 @@ export function Dashboard() {
       setBusy(false);
     }
   }, [from, to]);
-  const loadLive = useCallback(() => api<Live>("GET", "/api/dashboard").then(setLive).catch(() => {}), []);
+  const loadLive = useCallback(() => (model ? Promise.resolve() : api<Live>("GET", "/api/dashboard").then(setLive).catch(() => {})), [model]);
   useEffect(() => {
     loadRev();
   }, [loadRev]);
@@ -157,7 +159,7 @@ export function Dashboard() {
             ) : null}
           </div>
         </div>
-        <div>
+        <div className={model ? "hidden" : ""}>
           <div className="flex items-baseline justify-between">
             <p className="text-sm font-semibold text-muted">D’où vient l’argent</p>
             <p className="text-sm">
@@ -229,10 +231,14 @@ export function Dashboard() {
                   <th className="px-3 py-3 text-right font-semibold">Chiffre</th>
                   <th className="px-3 py-3 font-semibold">Évolution</th>
                   <th className="px-3 py-3 text-right font-semibold">Ventes</th>
-                  <th className="px-3 py-3 text-right font-semibold">Non lues</th>
-                  <th className="px-3 py-3 text-right font-semibold">À reprendre</th>
-                  <th className="px-3 py-3 font-semibold">IA</th>
-                  <th />
+                  {model ? null : (
+                    <>
+                      <th className="px-3 py-3 text-right font-semibold">Non lues</th>
+                      <th className="px-3 py-3 text-right font-semibold">À reprendre</th>
+                      <th className="px-3 py-3 font-semibold">IA</th>
+                      <th />
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -261,6 +267,8 @@ export function Dashboard() {
                       </td>
                       <td className="px-3 py-3">{r ? <DeltaPct v={pctChange(r.eur, r.prev)} /> : null}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{r?.sales ?? 0}</td>
+                      {model ? null : (
+                      <>
                       <td className="px-3 py-3 text-right tabular-nums">
                         <Link href={inbox(c.id, "&f=todo")} className="font-semibold text-primary-soft hover:underline">
                           {count(l?.unread)}
@@ -277,6 +285,8 @@ export function Dashboard() {
                           <ArrowUpRight className="size-4" />
                         </Link>
                       </td>
+                      </>
+                      )}
                     </tr>
                   );
                 })}
@@ -306,7 +316,7 @@ export function Dashboard() {
                   </span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
                     {byId.get(s.creatorId)?.name ?? ""} · {when(s.at)}
-                    {o ? <span>· {s.by ? s.by : o[1]}</span> : null}
+                    {o && !model ? <span>· {s.by ? s.by : o[1]}</span> : null}
                     {s.provisional ? (
                       <span className="inline-flex items-center gap-1 text-amber-300">
                         <Clock className="size-3" /> en attente
@@ -317,7 +327,7 @@ export function Dashboard() {
               );
               return (
                 <li key={s.id} className="relative">
-                  {s.fanId ? (
+                  {s.fanId && !model ? (
                     <Link href={inbox(s.creatorId, `&fan=${encodeURIComponent(s.fanId)}`)} className="block rounded-2xl px-3 py-2.5 hover:bg-card">
                       {body}
                     </Link>

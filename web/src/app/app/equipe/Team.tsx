@@ -6,17 +6,21 @@ import { Check, Search, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { ago, cn, moneyC, usd } from "@/lib/fmt";
 import { useCreators } from "@/lib/creators";
-import { ROLE_LABEL, type Me, type Member } from "@/lib/types";
+import { ROLE_LABEL, seesAll, type Me, type Member } from "@/lib/types";
 import { Avatar, Pill, btnCls, inputCls } from "@/components/ui";
 
-type F = "all" | "online" | "chatter" | "lead" | "off";
+type F = "all" | "online" | "chatter" | "lead" | "manager" | "model" | "off";
 const FILTERS: [F, string][] = [
   ["all", "Tout le monde"],
   ["online", "En ligne"],
   ["chatter", "Chatteurs"],
-  ["lead", "Managers"],
+  ["lead", "Team leaders"],
+  ["manager", "Managers"],
+  ["model", "Modèles"],
   ["off", "Désactivés"],
 ];
+/** Même règle que le serveur : admin / manager → tout le monde sauf les admins ; team leader → ses chatteurs. */
+const canEdit = (me: Me, m: Member) => m.role !== "admin" && !seesAll(m.role) && (seesAll(me.role) || (me.role === "lead" && m.role === "chatter"));
 
 /** Équipe : qui est en ligne et sur quel fan, à quelles créatrices chacun a accès, ce qu'il a fait aujourd'hui. */
 export function Team({ me }: { me: Me }) {
@@ -38,7 +42,7 @@ export function Team({ me }: { me: Me }) {
     if (f === "off") return !m.active;
     if (!m.active) return false;
     if (f === "online" && !m.online) return false;
-    if ((f === "chatter" || f === "lead") && m.role !== f) return false;
+    if (f !== "all" && f !== "online" && m.role !== f) return false;
     return !q.trim() || m.name.toLowerCase().includes(q.trim().toLowerCase());
   });
   const online = (list ?? []).filter((m) => m.active && m.online).length;
@@ -59,7 +63,7 @@ export function Team({ me }: { me: Me }) {
         <div>
           <h1 className="text-4xl md:text-5xl">Équipe</h1>
           <p className="mt-1 text-sm text-muted">
-            <b className="text-fg">{online}</b> en ligne sur {activeN} · les rôles (Admin, Manager, Chatteur) se donnent sur le serveur Discord
+            <b className="text-fg">{online}</b> en ligne sur {activeN} · les rôles (Admin, Manager, Team Leader, Chatteur, Modèle) se donnent sur le serveur Discord
           </p>
         </div>
         <div className="relative w-full max-w-xs">
@@ -148,12 +152,12 @@ export function Team({ me }: { me: Me }) {
                     {m.sold.length ? m.sold.map((s) => <span key={s.currency} className="block font-semibold">{moneyC(s.net, s.currency, 0)}</span>) : <span className="text-muted">—</span>}
                   </td>
                   <td className="px-3 py-3 text-right whitespace-nowrap">
-                    {m.role !== "admin" && m.active ? (
+                    {canEdit(me, m) && m.active ? (
                       <button onClick={() => setEdit(m)} className={btnCls.ghost}>
                         Accès
                       </button>
                     ) : null}
-                    {me.role === "admin" && m.id !== me.id ? (
+                    {seesAll(me.role) && m.id !== me.id && (m.role !== "admin" || me.role === "admin") ? (
                       <button onClick={() => toggleActive(m)} className={cn(btnCls.ghost, m.active ? "hover:text-rose-300" : "")}>
                         {m.active ? "Désactiver" : "Réactiver"}
                       </button>
@@ -198,7 +202,7 @@ function AccessEditor({ member, onClose, onSaved }: { member: Member; onClose: (
           <Avatar src={member.avatar} name={member.name} size="size-10" />
           <div className="min-w-0 flex-1">
             <h2 className="text-2xl">Accès de {member.name}</h2>
-            <p className="text-xs text-muted">Les créatrices dont il ou elle peut voir et écrire les conversations.</p>
+            <p className="text-xs text-muted">{member.role === "model" ? "Les comptes dont elle voit le chiffre d’affaires." : "Les créatrices dont il ou elle peut voir et écrire les conversations."}</p>
           </div>
           <button onClick={onClose} className="grid size-8 place-items-center rounded-full text-muted hover:bg-card-2">
             <X className="size-4" />

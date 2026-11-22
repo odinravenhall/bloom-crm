@@ -80,6 +80,19 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
   `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).
 
+## Rôles (donnés sur Discord, le plus haut gagne) — `app/team.mjs`
+
+| Rôle Discord | Rôle Bloom | Voit |
+|---|---|---|
+| Admin | admin | tout, y compris Branchements |
+| Manager | manager | toutes les créatrices, chiffres, équipe (managers des modèles et du chatting) |
+| Team Leader | lead | ses créatrices : messagerie, chiffres, équipe ; change les accès de ses chatteurs |
+| Chatteur | chatter | messagerie / fans / vault de ses créatrices |
+| Modèle | model | uniquement l'Accueil avec son chiffre d'affaires (toutes plateformes), pas les conversations |
+
+Le bot crée tout seul les rôles qui manquent sur le serveur (Team Leader reçoit les droits de salons du Manager).
+Paramètres de chacun (thème, langue) : `/app/parametres`.
+
 ## Équipe — `app/team.mjs`, page `/app/equipe`
 
 - Accès par créatrice : admin = tout ; manager / chatteur = seulement les créatrices données dans Équipe

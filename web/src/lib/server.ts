@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Me } from "./types";
+import { homeOf, type Me, type Role } from "./types";
 
 const API = process.env.API_URL || "http://api:3000";
 
@@ -17,10 +17,13 @@ export async function getState(): Promise<State> {
   return { setup: true, discord: true, me: null };
 }
 
-/** Pages de l'app : connexion obligatoire. `boss` = admins et managers seulement. */
-export async function requireMe(boss?: boolean) {
+/** Pages de l'app : connexion obligatoire ; `allow` = rôles autorisés (sinon : page d'arrivée du rôle). */
+export async function requireMe(allow?: Role[]) {
   const s = await getState();
   if (!s.me) redirect("/connexion");
-  if (boss && s.me.role !== "admin" && s.me.role !== "lead") redirect("/app/messagerie");
+  // Page non autorisée : retour à la page d'arrivée du rôle (toujours autorisée pour lui).
+  if (allow && !allow.includes(s.me.role)) redirect(homeOf(s.me.role));
   return s.me;
 }
+export const CHAT_ROLES: Role[] = ["admin", "manager", "lead", "chatter"];
+export const BOSS_ROLES: Role[] = ["admin", "manager", "lead"];

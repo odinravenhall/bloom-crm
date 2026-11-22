@@ -1,7 +1,12 @@
-export type Role = "admin" | "lead" | "chatter";
+export type Role = "admin" | "manager" | "lead" | "chatter" | "model";
 export type Me = { id: number; email: string; name: string; role: Role; avatar: string | null; discord_id: string | null };
-export const ROLE_LABEL: Record<string, string> = { admin: "Admin", lead: "Manager", chatter: "Chatteur" };
-export const isBoss = (r?: string | null) => r === "admin" || r === "lead";
+export const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", lead: "Team leader", chatter: "Chatteur", model: "Modèle" };
+/** Managers et admins : toutes les créatrices. */
+export const seesAll = (r?: string | null) => r === "admin" || r === "manager";
+/** Chiffres et équipe : admins, managers, team leaders. */
+export const isBoss = (r?: string | null) => seesAll(r) || r === "lead";
+/** Page d'arrivée selon le rôle. */
+export const homeOf = (r?: string | null) => (r === "chatter" ? "/app/messagerie" : "/app");
 
 export type Creator = { id: string; name: string; username: string | null; platform: string | null; avatar: string | null; ai: boolean | null };
 

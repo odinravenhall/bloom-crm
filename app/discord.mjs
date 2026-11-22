@@ -11,8 +11,17 @@ const API = 'https://discord.com/api/v10';
 const BASE = (process.env.PUBLIC_URL || 'https://bloom.ravencrm.xyz').replace(/\/$/, '');
 const LINK_TTL = 5 * 60_000;
 const ADMINISTRATOR = 1n << 3n;
-const ROLE_OF = { admin: 'admin', manager: 'lead', chatteur: 'chatter' }; // nom du rôle Discord (minuscules) → rôle Bloom
-const RANK = { admin: 3, lead: 2, chatter: 1 };
+// Nom du rôle Discord (minuscules, sans accents ni espaces) → rôle Bloom. Le plus haut gagne.
+const ROLE_OF = { admin: 'admin', manager: 'manager', teamleader: 'lead', tl: 'lead', chatteur: 'chatter', chatter: 'chatter', modele: 'model', model: 'model' };
+const RANK = { admin: 5, manager: 4, lead: 3, chatter: 2, model: 1 };
+const roleKey = (name) => String(name || '').normalize('NFKD').toLowerCase().replace(/[^a-z]/g, '');
+// Rôles que le bot crée sur le serveur s'ils n'existent pas (nom, couleur).
+const DISCORD_ROLES = [
+  ['Manager', 0xa78bfa],
+  ['Team Leader', 0x60a5fa],
+  ['Chatteur', 0x34d399],
+  ['Modèle', 0xf9a8d4],
+];
 export const sha = (t) => createHash('sha256').update(t).digest('hex');
 
 export const botToken = () => {
@@ -123,7 +132,7 @@ async function bloomRole(roleIds = [], isAdmin = false) {
   const names = await guildRoles();
   let best = null;
   for (const id of roleIds) {
-    const r = ROLE_OF[String(names.get(id) || '').trim().toLowerCase()];
+    const r = ROLE_OF[roleKey(names.get(id))];
     if (r && (!best || RANK[r] > RANK[best])) best = r;
   }
   return best;
@@ -217,7 +226,7 @@ async function onInteraction(i) {
   try {
     const perms = BigInt(i.member.permissions || '0');
     const role = await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR);
-    if (!role) return reply(i, '🚫 Tu n’as pas encore accès à Bloom : demande à un admin de te donner le rôle **Chatteur**.');
+    if (!role) return reply(i, '🚫 Tu n’as pas encore accès à Bloom : demande à un admin de te donner un rôle (**Chatteur**, **Team Leader**, **Manager** ou **Modèle**).');
     const d = linkFor({
       discordId: u.id,
       name: i.member.nick || u.global_name || u.username,
@@ -227,6 +236,34 @@ async function onInteraction(i) {
     await reply(i, `🌸 Ton lien de connexion à Bloom, **rien que pour toi** : valable 5 min, utilisable une seule fois. Ne le partage pas.${d.firstTime ? '\nPremière connexion : bienvenue !' : ''}`, d.url);
   } catch (e) {
     reply(i, `❌ ${e.message || 'Connexion impossible pour le moment.'}`);
+  }
+}
+
+/**
+ * Crée sur le serveur Discord les rôles Bloom qui manquent (Team Leader, Modèle…).
+ * Un nouveau Team Leader reçoit les mêmes droits de salons que le rôle Manager.
+ */
+async function ensureRoles() {
+  const g = discordGuild();
+  if (!g) return;
+  try {
+    const roles = await discord('GET', `/guilds/${g}/roles`);
+    const byKey = new Map(roles.map((r) => [roleKey(r.name), r]));
+    for (const [name, color] of DISCORD_ROLES) {
+      if (byKey.has(roleKey(name))) continue;
+      const created = await discord('POST', `/guilds/${g}/roles`, { name, color, hoist: true, mentionable: true, permissions: '0' });
+      console.log('[bot] rôle Discord créé :', name);
+      const manager = byKey.get('manager');
+      if (roleKey(name) === 'teamleader' && manager) {
+        for (const ch of await discord('GET', `/guilds/${g}/channels`)) {
+          const ow = (ch.permission_overwrites || []).find((o) => o.id === manager.id);
+          if (ow) await discord('PUT', `/channels/${ch.id}/permissions/${created.id}`, { type: 0, allow: ow.allow, deny: ow.deny }).catch(() => {});
+        }
+      }
+    }
+    roleCache.at = 0;
+  } catch (e) {
+    console.warn('[bot] rôles Discord :', e.message);
   }
 }
 
@@ -275,6 +312,7 @@ function gateway() {
     else if (p.op === 0 && p.t === 'READY') {
       gw.ready = true;
       console.log('[bot] Bloom connecté à Discord');
+      ensureRoles();
     } else if (p.op === 0 && p.t === 'INTERACTION_CREATE') onInteraction(p.d).catch(() => {});
   };
   ws.onclose = (e) => {

@@ -7,6 +7,7 @@ import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, set
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
 import { matchLive, parisDay, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
+import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
@@ -243,7 +244,8 @@ const routes = {
   'GET /api/revenue': async (req, res) => {
     const me = userFrom(req);
     if (!me) return send(res, 401, { error: 'Connecte-toi' });
-    if (me.role !== 'admin' && me.role !== 'lead') return send(res, 403, { error: 'Réservé aux admins et managers' });
+    // Managers, team leaders et modèles (une modèle ne voit que son propre chiffre).
+    if (!isBoss(me) && me.role !== 'model') return send(res, 403, { error: 'Réservé aux managers, team leaders et modèles' });
     const p = new URL(req.url, 'http://x').searchParams;
     const today = parisDay(Date.now());
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
@@ -252,7 +254,7 @@ const routes = {
     if (from > to) [from, to] = [to, from];
     if (to > today) to = today;
     if (Date.parse(to) - Date.parse(from) > 400 * 864e5) from = parisDay(Date.parse(to) - 400 * 864e5);
-    send(res, 200, revenue({ from, to, creators: state.creators }));
+    send(res, 200, revenue({ from, to, creators: state.creators.filter((c) => canSee(me, c.id)) }));
   },
   // Branchements Infloww / MyPulse (admins) : état, clés, créatrices reliées.
   'GET /api/integrations': async (req, res) => {

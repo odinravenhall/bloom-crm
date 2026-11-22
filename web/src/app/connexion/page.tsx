@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getState } from "@/lib/server";
+import { homeOf } from "@/lib/types";
 import { Logo } from "@/components/ui";
 import { FirstSetup, PasswordLogin } from "./Forms";
 
@@ -24,7 +25,7 @@ function DiscordLogo() {
 // On entre dans Bloom par Discord : bouton (OAuth2) ou /connexion sur le serveur. Les formulaires ne servent qu'à la mise en route.
 export default async function Connexion({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const s = await getState();
-  if (s.me) redirect(s.me.role === "chatter" ? "/app/messagerie" : "/app");
+  if (s.me) redirect(homeOf(s.me.role));
   const e = (await searchParams).e;
   const err = e ? (ERR[e] ?? e.slice(0, 200)) : "";
   return (

@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Vue d’ensemble" };
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
-  // Chiffres de l'agence : admins et managers. Les chatteurs vont directement à la messagerie.
-  await requireMe(true);
-  return <Dashboard />;
+  // Chiffres : admins, managers, team leaders (leurs créatrices) et modèles (leur propre chiffre). Les chatteurs vont à la messagerie.
+  const me = await requireMe(["admin", "manager", "lead", "model"]);
+  return <Dashboard role={me.role} />;
 }

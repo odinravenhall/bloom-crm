@@ -13,12 +13,25 @@ try {
   db.exec('ALTER TABLE users ADD COLUMN all_creators INTEGER NOT NULL DEFAULT 0');
 } catch {}
 
+// ---------------------------------------------------------------- rôles
+// admin     : tout, y compris les branchements (Substy, Discord, Infloww / MyPulse).
+// manager   : managers des modèles et du chatting : toutes les créatrices, l'équipe, les chiffres.
+// lead      : team leader : surveille ses chatteurs (équipe, chiffres) sur les créatrices qu'on lui donne.
+// chatter   : chatte sur les créatrices qu'on lui donne.
+// model     : une créatrice : voit seulement son chiffre d'affaires (toutes plateformes), pas les conversations.
+export const ROLES = ['admin', 'manager', 'lead', 'chatter', 'model'];
+export const seesAll = (u) => u?.role === 'admin' || u?.role === 'manager';
+export const isBoss = (u) => seesAll(u) || u?.role === 'lead';
+export const canChat = (u) => !!u && u.role !== 'model';
+/** Qui peut changer les accès de qui : admin / manager → tout le monde sauf les admins ; team leader → ses chatteurs. */
+export const canEditAccess = (actor, target) => target.role !== 'admin' && (seesAll(actor) || (actor.role === 'lead' && target.role === 'chatter'));
+
 // ---------------------------------------------------------------- accès
 const accessCache = new Map(); // userId -> { at, set }
 /** null = toutes les créatrices ; sinon l'ensemble des créatrices autorisées. */
 export function creatorsOf(u) {
   if (!u) return new Set();
-  if (u.role === 'admin') return null;
+  if (seesAll(u)) return null;
   const hit = accessCache.get(u.id);
   if (hit && Date.now() - hit.at < 15_000) return hit.set;
   const row = one('SELECT all_creators FROM users WHERE id = ?', u.id);
@@ -73,7 +86,7 @@ export function teamView() {
       avatar: u.avatar,
       discord: !!u.discord_id,
       active: !!u.active,
-      allCreators: u.role === 'admin' || !!u.all_creators,
+      allCreators: seesAll(u) || !!u.all_creators,
       creators: access.filter((a) => a.user_id === u.id).map((a) => a.creator_id),
       online: !!p && Date.now() - p.at < ONLINE_MS,
       seenAt: p?.at || null,
