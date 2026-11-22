@@ -93,6 +93,7 @@ function Insights({ conv, fan, reload, t }: { conv: Conv; fan: Fan | null; reloa
   return (
     <>
       <h3 className="mb-3 text-[15px] font-semibold">{t("Fan insights")}</h3>
+      <AiSwitch conv={conv} t={t} />
       <Card title={t("Spending behavior")}>
         <div className="grid grid-cols-2 border-b pb-2" style={{ borderColor: "var(--pro-line)" }}>
           <div>
@@ -138,6 +139,45 @@ function Insights({ conv, fan, reload, t }: { conv: Conv; fan: Fan | null; reloa
       </Card>
       <FanNotes conv={conv} initial={fan?.profile.notes ?? null} onSaved={reload} t={t} />
     </>
+  );
+}
+
+/** IA de Substy sur ce fan : interrupteur on / off (synchronisé avec l'en-tête de la conversation). */
+function AiSwitch({ conv, t }: { conv: Conv; t: (s: string) => string }) {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    api<{ ai: boolean }>("GET", `/api/conversations/${conv.id}/substy`).then((r) => setOn(!!r.ai)).catch(() => setOn(!!conv.ai));
+    const h = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; on: boolean }>).detail;
+      if (d.id === conv.id) setOn(d.on);
+    };
+    window.addEventListener("pro-ai", h);
+    return () => window.removeEventListener("pro-ai", h);
+  }, [conv.id, conv.ai]);
+  const toggle = async () => {
+    if (on === null) return;
+    const v = !on;
+    setOn(v);
+    window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id: conv.id, on: v } }));
+    try {
+      await api("POST", `/api/conversations/${conv.id}/action`, { action: "ai", on: v });
+      toast(v ? t("Substy AI turned on for this fan") : t("Substy AI turned off: you reply by hand"));
+    } catch (e) {
+      setOn(!v);
+      window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id: conv.id, on: !v } }));
+      toast((e as Error).message, "err");
+    }
+  };
+  return (
+    <div className="mb-3 flex items-center justify-between rounded-xl p-3" style={{ background: "var(--pro-panel)" }}>
+      <div>
+        <p className="text-[15px] font-semibold">{t("Substy AI")}</p>
+        <p className="text-[12px]" style={{ color: on ? GREEN : "var(--of-muted)" }}>{on === null ? "…" : t(on ? "The AI replies to this fan" : "You reply by hand")}</p>
+      </div>
+      <button role="switch" aria-checked={!!on} onClick={toggle} disabled={on === null} className="relative h-6 w-11 rounded-full transition-colors disabled:opacity-50" style={{ background: on ? GREEN : "#555" }}>
+        <span className="absolute top-0.5 size-5 rounded-full bg-white transition-all" style={{ left: on ? 22 : 2 }} />
+      </button>
+    </div>
   );
 }
 

@@ -113,14 +113,26 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
       toast((e as Error).message, "err");
     }
   };
+  // IA de Substy : état réel relu chez Substy, partagé avec la fiche du fan (événement « pro-ai »).
+  useEffect(() => {
+    api<{ ai: boolean }>("GET", `/api/conversations/${conv.id}/substy`).then((r) => setAi(!!r.ai)).catch(() => {});
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; on: boolean }>).detail;
+      if (d.id === conv.id) setAi(d.on);
+    };
+    window.addEventListener("pro-ai", on);
+    return () => window.removeEventListener("pro-ai", on);
+  }, [conv.id]);
   const toggleAi = async () => {
     const v = !ai;
     setAi(v);
+    window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id: conv.id, on: v } }));
     try {
       await action({ action: "ai", on: v });
       toast(v ? t("Substy AI turned on for this fan") : t("Substy AI turned off: you reply by hand"));
     } catch (e) {
       setAi(!v);
+      window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id: conv.id, on: !v } }));
       toast((e as Error).message, "err");
     }
   };
@@ -204,10 +216,6 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
                 <Pin className="size-3.5" />
               </button>
               <Sep />
-              <button onClick={toggleAi} title={t(ai ? "Turn off Substy AI" : "Turn on Substy AI")} className="flex items-center gap-1" style={{ color: ai ? "#2ec4a6" : undefined }}>
-                <Bot className="size-3.5" /> {ai ? "IA" : "IA off"}
-              </button>
-              <Sep />
               <button onClick={() => setView(view === "gallery" ? "chat" : "gallery")} className="flex items-center gap-1">
                 <Images className="size-3.5" /> {t("Gallery")}
               </button>
@@ -218,6 +226,14 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
             </p>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {/* IA Substy on / off pour ce fan */}
+            <button onClick={toggleAi} title={t(ai ? "Turn off Substy AI" : "Turn on Substy AI")} className="flex items-center gap-2 rounded-full border px-3 py-1 text-[13px] font-semibold" style={{ borderColor: ai ? "#2ec4a6" : "var(--pro-line)", color: ai ? "#2ec4a6" : "var(--of-muted)" }}>
+              <Bot className="size-4" /> {t("Substy AI")}
+              <span className="relative h-5 w-9 rounded-full transition-colors" style={{ background: ai ? "#2ec4a6" : "#555" }}>
+                <span className="absolute top-0.5 size-4 rounded-full bg-white transition-all" style={{ left: ai ? 18 : 2 }} />
+              </span>
+              <span className="w-6 text-left">{ai ? "On" : "Off"}</span>
+            </button>
             {onNewTab ? (
               <button onClick={onNewTab} className="flex items-center gap-1.5 text-[13px]" style={{ color: BLUE }}>
                 <ExternalLink className="size-4" /> {t("Open in new tab")}

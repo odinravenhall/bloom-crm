@@ -576,6 +576,9 @@ const D: Record<string, [es: string, fr: string]> = {
   Back: ["Atrás", "Retour"],
   Recent: ["Recientes", "Récents"],
   Retry: ["Reintentar", "Réessayer"],
+  "Substy AI": ["IA de Substy", "IA Substy"],
+  "The AI replies to this fan": ["La IA responde a este fan", "L’IA répond à ce fan"],
+  "You reply by hand": ["Respondes tú", "Tu réponds à la main"],
   // settings
   "Your Account": ["Tu cuenta", "Ton compte"],
   "Your account": ["Tu cuenta", "Ton compte"],
