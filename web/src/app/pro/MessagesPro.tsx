@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Languages, LayoutGrid, MessageCircle, Plus, RefreshCw, Search, Bell, UserRoundPlus, X } from "lucide-react";
 import { api } from "@/rv/lib/client";
-import { setModelCurrencies } from "@/rv/lib/fmt";
+import { setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import { debounce, onLive } from "@/rv/lib/liveClient";
 import { setLang, useT } from "@/lib/i18n";
 import type { Conv, Model } from "@/rv/inbox/types";
@@ -323,6 +323,8 @@ function Workspace({
   setView: (v: string) => void; openTab: (c: Conv) => void; closeTab: (id: string) => void; notif: number; t: (s: string) => string;
 }) {
   const [sel, setSel] = useState<Conv | null>(null);
+  // Montants dans la devise de la créatrice (OnlyFans : dollars).
+  setCurrentModel(model.id);
   // Pastille rouge sur l'onglet d'un fan qui vient d'écrire (tant qu'on n'a pas regardé l'onglet).
   const [dots, setDots] = useState<Set<string>>(new Set());
   useEffect(() => {
