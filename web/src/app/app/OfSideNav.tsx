@@ -41,7 +41,7 @@ const NAV: (Entry | "divider")[] = [
       { label: "Message dashboard", icon: Activity, href: "/app/analytics/messages" },
     ],
   },
-  { key: "mp", label: "Messages Pro", icon: MessageCirclePlus, href: "/app/messagerie", roles: CHAT, badge: true, external: true },
+  { key: "mp", label: "Messages Pro", icon: MessageCirclePlus, href: "/pro", roles: CHAT, badge: true, external: true },
   {
     key: "growth",
     label: "Growth",

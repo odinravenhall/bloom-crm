@@ -659,3 +659,14 @@ html[data-theme="light"] {
 
 /* Barre de défilement fine et discrète (listes OF, comme Infloww). */
 .of-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--of-muted) 45%, transparent) transparent; }
+
+/* Messages Pro (copie d'Infloww) : couleurs en sombre et en clair, flou « SFW ». */
+.pro {
+  --pro-page: #161616; --pro-bar: #000000; --pro-tab: #232323; --pro-tab-off: #2c2c2c; --pro-panel: #262626; --pro-pop: #262626;
+  --pro-line: #333333; --pro-chip: #2f2f2f; --pro-on: #2c2c2c; --pro-fan: #262626; --pro-me: #2b2b2b; --pro-media: #1b2a33; --pro-media-on: #12303f;
+}
+html[data-theme="light"] .pro {
+  --pro-page: #ffffff; --pro-bar: #f1f1f3; --pro-tab: #e6e6ea; --pro-tab-off: #d9d9de; --pro-panel: #f4f4f6; --pro-pop: #ffffff;
+  --pro-line: #e2e2e6; --pro-chip: #ececf0; --pro-on: #e9effe; --pro-fan: #f1f1f4; --pro-me: #e7ecf8; --pro-media: #e8f1f6; --pro-media-on: #d8ebf5;
+}
+.pro-sfw .pro-media img, .pro-sfw .pro-media image, .pro-sfw img.avatar-img { filter: blur(14px); }

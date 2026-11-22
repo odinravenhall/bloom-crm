@@ -47,6 +47,7 @@ function convOf(cid, c, m, extra = {}) {
     modelId: cid,
     memberId: c.fanId,
     memberName: c.name,
+    memberUsername: c.username || null,
     memberAvatar: img(c.avatar),
     nickname: m?.nickname || null,
     totalSpent: cents(c.spent),
@@ -434,6 +435,9 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         platformSpent: null,
         insights: null,
         profile: { notes: m?.notes || '' },
+        // Messages Pro : listes OnlyFans du fan (si Substy les donne) et prix de son abonnement.
+        lists: (Array.isArray(f.lists) ? f.lists : Array.isArray(f.fanLists) ? f.fanLists : []).map((l) => String(l?.name ?? l)).filter(Boolean).slice(0, 30),
+        subscriptionPrice: f.subscription?.price ?? null,
         profileUpdated: m?.notes_at ? { at: m.notes_at, by: m.notes_by || null } : null,
       });
     }],
