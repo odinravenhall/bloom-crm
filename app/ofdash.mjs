@@ -1,6 +1,6 @@
 // Dashboard OnlyFans (comme celui d'Infloww) : « Creator earnings overview » (net ou brut ; hier, aujourd'hui, cette
 // semaine, ce mois), réparti en abonnements, posts, messages, pourboires, parrainages et lives, et « Employee sales »
-// (comme Infloww : messages + pourboires en net, jour par jour ou heure par heure).
+// (comme Infloww : messages + pourboires en brut, jour par jour ou heure par heure).
 // Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, de toutes les modèles OnlyFans d'Infloww, plus les ventes Substy des dernières 24 h pas
 // encore confirmées (provisoires). Heure de Paris.
 import { all } from './store.mjs';
@@ -75,10 +75,10 @@ export function ofDashRoutes({ userFrom, send, creators }) {
           if (b) blocks[b] += v;
           total += v;
           sales++;
-          // Courbe « Employee sales » (comme Infloww) : messages + pourboires, toujours en net, quel que soit le choix brut / net.
+          // Courbe « Employee sales » (comme Infloww) : messages + pourboires, toujours en brut, quel que soit le choix brut / net.
           if (r.type === 'ppv' || r.type === 'tip') {
             const sl = slot(r.at);
-            if (sl) sl[r.type === 'tip' ? 'tips' : 'msgs'] += r.net / 100;
+            if (sl) sl[r.type === 'tip' ? 'tips' : 'msgs'] += r.gross / 100;
           }
         }
       }
