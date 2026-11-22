@@ -30,11 +30,12 @@ function accountsFor(u, creators) {
   const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL');
   const byAcc = new Map(maps.map((m) => [m.account, m.creator_id]));
   const cr = new Map(creators().map((c) => [c.id, c]));
-  return all("SELECT id, name, nick, username FROM rv_accounts WHERE platform = 'onlyfans' ORDER BY name COLLATE NOCASE")
+  // Nom et photo comme dans Infloww (pas le nom Substy, qui peut différer et porter des émojis).
+  return all("SELECT id, name, nick, username, avatar FROM rv_accounts WHERE platform = 'onlyfans' ORDER BY name COLLATE NOCASE")
     .map((a) => {
       const cid = byAcc.get(a.id) || null;
       const c = cid ? cr.get(cid) : null;
-      return { id: a.id, name: c?.name || a.nick || a.name || a.username || 'Créatrice', avatar: c?.avatar || null, creatorId: cid };
+      return { id: a.id, name: a.name || a.nick || c?.name || a.username || 'Créatrice', avatar: a.avatar || c?.avatar || null, creatorId: cid };
     })
     .filter((a) => seesAll(u) || (a.creatorId && canSee({ ...u, pf: null }, a.creatorId)));
 }
@@ -181,7 +182,7 @@ function report(u, creators, p, newSubs = null) {
     days,
     gran,
     net,
-    accounts: all_.map(({ id, name, avatar }) => ({ id, name, avatar })),
+    accounts: all_.map(({ id, name, avatar, creatorId }) => ({ id, name, avatar, creatorId })),
     summary: Object.fromEntries([['total', { v: round(total), change: pct(total, prevTotal) }], ...CHANNELS.map((k) => [k, { v: round(cur[k]), change: pct(cur[k], prev[k]) }])]),
     trends: buckets.map((b, i) => ({ label: b.label, ...Object.fromEntries(CHANNELS.map((k) => [k, round(b[k])])), total: round(b.total), refunds: round(b.refunds), change: i ? pct(b.total, buckets[i - 1].total) : null })),
     kpi: { creators: accs.length, messages: round(cur.messages), total: round(total), refunded: round(refunded) },

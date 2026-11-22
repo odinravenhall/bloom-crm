@@ -50,6 +50,14 @@ db.exec(`
 try {
   db.exec('ALTER TABLE msg_log ADD COLUMN by_name TEXT');
 } catch {}
+try {
+  db.exec('ALTER TABLE rv_accounts ADD COLUMN avatar TEXT'); // photo du compte (Infloww)
+} catch {}
+/** Photo d'une créatrice dans la réponse d'Infloww (nom du champ non documenté : on prend la 1re URL d'image). */
+const pictureOf = (c) => {
+  for (const [k, v] of Object.entries(c || {})) if (/avatar|head|pic|photo|image/i.test(k) && typeof v === 'string' && /^https?:\/\//.test(v)) return v;
+  return null;
+};
 
 // ---------------------------------------------------------------- clés (collées par un admin, gardées chiffrées)
 const secret = (k) => {
@@ -186,11 +194,11 @@ const upSale = () =>
 async function ifwCatalog() {
   const now = Date.now();
   const list = await ifwAll('/v1/creators');
-  const up = db.prepare(`INSERT INTO rv_accounts (id, src, platform, name, nick, username, connected, updated_at) VALUES (?, 'ifw', 'onlyfans', ?, ?, ?, 1, ?)
-    ON CONFLICT (id) DO UPDATE SET name = excluded.name, nick = excluded.nick, username = excluded.username, connected = 1, updated_at = excluded.updated_at`);
+  const up = db.prepare(`INSERT INTO rv_accounts (id, src, platform, name, nick, username, avatar, connected, updated_at) VALUES (?, 'ifw', 'onlyfans', ?, ?, ?, ?, 1, ?)
+    ON CONFLICT (id) DO UPDATE SET name = excluded.name, nick = excluded.nick, username = excluded.username, avatar = COALESCE(excluded.avatar, rv_accounts.avatar), connected = 1, updated_at = excluded.updated_at`);
   tx(() => {
     run("UPDATE rv_accounts SET connected = 0 WHERE src = 'ifw'");
-    for (const c of list) up.run(`ifw:${c.id}`, c.name ?? '?', c.nickName ?? null, c.userName ?? null, now);
+    for (const c of list) up.run(`ifw:${c.id}`, c.name ?? '?', c.nickName ?? null, c.userName ?? null, pictureOf(c), now);
   });
   const emps = await ifwAll('/v1/employees');
   const ue = db.prepare('INSERT INTO rv_sellers (id, name, updated_at) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at');

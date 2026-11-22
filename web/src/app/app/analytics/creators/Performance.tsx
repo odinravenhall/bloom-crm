@@ -12,7 +12,7 @@ import { Avatar } from "@/components/ui";
 type Change = number | null;
 type Gran = "hour" | "day" | "week" | "month";
 type Channel = "subscriptions" | "tips" | "posts" | "messages" | "referrals" | "streams";
-type Account = { id: string; name: string; avatar: string | null };
+type Account = { id: string; name: string; avatar: string | null; creatorId?: string | null };
 type Perf = {
   from: string; to: string; days: number; gran: Gran; net: boolean; accounts: Account[]; account: string | null;
   summary: Record<"total" | Channel, { v: number; change: Change }>;
@@ -32,6 +32,15 @@ const PCH: { key: Channel; label: string; color: string }[] = [
 // Montants comme Infloww dans cet onglet : « $1670.4 », « $412 ».
 const amt = (v: number) => `$${+v.toFixed(2)}`;
 const pctTxt = (c: number) => `${c.toFixed(2)}%`;
+// Graduations « rondes » comme Infloww (pas de 1, 2 ou 5 × 10ⁿ, 5 intervalles environ) : 454 → 0, 100 … 500.
+const niceTicks = (max: number) => {
+  if (max <= 0) return [0, 1];
+  const raw = max / 5;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw)!;
+  const top = Math.ceil(max / step) * step;
+  return Array.from({ length: Math.round(top / step) + 1 }, (_, i) => +(i * step).toFixed(6));
+};
 const growth = (a: number, b: number | undefined) => (b == null ? null : b ? ((a - b) / b) * 100 : a ? 100 : 0);
 
 export function Performance({ range, net, gran, accounts, t, lang }: { range: { from: string; to: string }; net: boolean; gran: Gran; accounts: Account[]; t: (s: string) => string; lang: string }) {
@@ -42,6 +51,17 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
   const [chan, setChan] = useState<"all" | Channel>("all");
   const [nonce, setNonce] = useState(0);
   const list = useMemo(() => [...accounts].sort((a, b) => a.name.localeCompare(b.name)), [accounts]);
+  // Messages à répondre par créatrice (pastille rouge, comme Infloww).
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const load = () =>
+      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply&window=72")
+        .then((r) => setUnread(r.counts || {}))
+        .catch(() => {});
+    load();
+    const id = setInterval(() => document.visibilityState === "visible" && load(), 60_000);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => {
     if (!acc && list.length) setAcc(list[0].id);
   }, [acc, list]);
@@ -76,24 +96,32 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
       {/* Créatrices */}
       <div className="flex w-[184px] shrink-0 flex-col gap-2">
         <div className="flex gap-2">
-          <label className="flex h-10 min-w-0 flex-1 items-center gap-1 rounded-md border px-2.5" style={{ borderColor: "var(--of-line)", background: "var(--of-card)" }}>
+          <label className="flex h-10 min-w-0 flex-1 items-center gap-1 rounded-md border px-2.5" style={{ borderColor: "var(--of-line)", background: "var(--of-field)" }}>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search")} className="min-w-0 flex-1 bg-transparent text-[14px] outline-none" />
             <Search className="size-4 shrink-0" style={{ color: "var(--of-muted)" }} />
           </label>
-          <button onClick={() => setNonce((n) => n + 1)} title={t("Refresh")} className="grid size-10 place-items-center rounded-md border" style={{ borderColor: "var(--of-line)", background: "var(--of-card)" }}>
+          <button onClick={() => setNonce((n) => n + 1)} title={t("Refresh")} className="grid size-10 place-items-center rounded-md border" style={{ borderColor: "var(--of-line)", background: "var(--of-field)" }}>
             <RefreshCw className={cn("size-4", busy && "animate-spin")} />
           </button>
         </div>
-        <div className="flex h-8 items-center justify-between rounded-md px-3 text-[14px]" style={{ background: "var(--of-card)", color: BLUE }}>
+        <div className="flex h-8 items-center justify-between rounded-md px-3 text-[14px]" style={{ background: "var(--of-pick-bar)", color: BLUE }}>
           {t("All creators")} <ChevronDown className="size-3.5" style={{ color: "var(--of-muted)" }} />
         </div>
-        <div className="sticky top-16 flex max-h-[calc(100vh-200px)] flex-col overflow-y-auto rounded-md" style={{ background: "var(--of-card)" }}>
+        <div className="of-scroll sticky top-16 flex max-h-[calc(100vh-200px)] flex-col overflow-y-auto rounded-md" style={{ background: "var(--of-pick-list)" }}>
           {list
             .filter((a) => !q || a.name.toLowerCase().includes(q.toLowerCase()))
             .map((a) => (
-              <button key={a.id} onClick={() => setAcc(a.id)} className="flex items-center gap-2.5 px-3 py-3.5 text-left text-[14px] font-medium" style={acc === a.id ? { background: "color-mix(in srgb, " + BLUE + " 28%, transparent)" } : undefined}>
-                <Avatar src={a.avatar} name={a.name} size="size-9" />
-                <span className="truncate">{a.name}</span>
+              <button key={a.id} onClick={() => setAcc(a.id)} className="flex items-center gap-2.5 px-3 py-3.5 text-left text-[14px] font-medium" style={acc === a.id ? { background: "var(--of-pick)" } : undefined}>
+                <span className="relative shrink-0">
+                  <Avatar src={a.avatar} name={a.name} size="size-9" rounded="rounded-md" />
+                  <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 bg-emerald-500" style={{ borderColor: "var(--of-pick-list)" }} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                {a.creatorId && unread[a.creatorId] ? (
+                  <span className="rounded-full px-1.5 text-[10px] leading-4 font-bold text-white tabular-nums" style={{ background: "#f26b6b" }}>
+                    {unread[a.creatorId] > 99 ? "99+" : unread[a.creatorId]}
+                  </span>
+                ) : null}
               </button>
             ))}
         </div>
@@ -116,7 +144,7 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
             <BarChart data={bars} margin={{ left: -10, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="var(--of-line)" />
               <XAxis dataKey="label" tickFormatter={dateLabel} tickLine={false} axisLine={{ stroke: "var(--of-line)" }} tick={{ fill: "var(--of-muted)", fontSize: 12 }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--of-muted)", fontSize: 12 }} allowDecimals={false} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--of-muted)", fontSize: 12 }} ticks={niceTicks(Math.max(0, ...bars.map((b) => b.v)))} domain={[0, "dataMax"]} />
               <Tooltip
                 cursor={<BarCursor />}
                 content={({ active, payload }) => {

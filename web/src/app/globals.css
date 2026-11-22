@@ -621,6 +621,9 @@ html.motion-off .online-ring { animation: none !important; }
   --of-field: #1c1c1e;
   --of-area: #3a3a3c;
   --of-site: #161618; /* fond du site OnlyFans (sombre) */
+  --of-pick: #23324f; /* liste des créatrices (Creator performance) */
+  --of-pick-list: #1c1c1e;
+  --of-pick-bar: #1c1c1e;
 }
 html[data-theme="light"] {
   --of-page: #f2f2f6;
@@ -641,6 +644,9 @@ html[data-theme="light"] {
   --of-field: #ffffff;
   --of-area: #dce7fd;
   --of-site: #ffffff;
+  --of-pick: #d3e2ff;
+  --of-pick-list: #ececec;
+  --of-pick-bar: #f7f7f7;
 }
 .of-item { color: var(--of-side-text); }
 .of-item:hover { color: var(--of-text); }
@@ -650,3 +656,6 @@ html[data-theme="light"] {
 .of-range { appearance: none; -webkit-appearance: none; background: transparent; pointer-events: none; height: 100%; margin: 0; }
 .of-range::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 8px; height: 22px; border-radius: 3px; background: #fff; border: 1px solid #2f6bff; cursor: pointer; }
 .of-range::-moz-range-thumb { pointer-events: auto; width: 8px; height: 22px; border-radius: 3px; background: #fff; border: 1px solid #2f6bff; cursor: pointer; }
+
+/* Barre de défilement fine et discrète (listes OF, comme Infloww). */
+.of-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--of-muted) 45%, transparent) transparent; }
