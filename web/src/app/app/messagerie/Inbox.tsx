@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bell, BellRing, ChevronLeft, MessageCircle, Pin, Search, SlidersHorizontal, Sparkles, Zap } from "lucide-react";
+import { Bell, BellRing, Boxes as BoxesIcon, ChevronLeft, MessageCircle, X, Pin, Search, SlidersHorizontal, Sparkles, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, durSec, moneyC, usd, waitTone, when } from "@/lib/fmt";
 import { PlatformBadge, platformOf, useCreators } from "@/lib/creators";
@@ -10,6 +10,11 @@ import { useNow } from "@/lib/useNow";
 import type { Creator, Message, Presence, Queue, QueueItem, QueueTab, RevenueSale } from "@/lib/types";
 import { Avatar, Pill } from "@/components/ui";
 import { Chat } from "./Chat";
+import { BoxMenu } from "./Boxes";
+
+/** Conversation gardée en onglet (multi-conversations, 10 au plus). */
+type ChatTab = { creatorId: string; fanId: string; name: string; avatar: string | null };
+const MAX_TABS = 10;
 
 /** Événement temps réel relayé par Bloom. */
 export type LiveEvent = { creatorId: string; type: string; fanId?: string; message?: Message; data?: { fanId?: string; status?: string } };
@@ -34,6 +39,9 @@ const WINS: [string, string][] = [
   ["7j", "7 jours"],
   ["tout", "Tout"],
 ];
+
+/** Conversation encore inconnue de la file (lien, onglet, cloche) : Bloom la complète à l'ouverture. */
+const blank = (creatorId: string, fanId: string): QueueItem => ({ fanId, creatorId, name: "Fan", username: null, avatar: null, unread: 0, ai: false, handoff: false, spent: 0, subscribed: null, canSend: true, last: null, waiting: false, isNew: false, active: false, pinned: false, pinnedBy: null, tags: [], fresh: false, relance: null });
 
 /** Réglages de la messagerie gardés sur cet ordinateur. */
 function usePref<T>(key: string, init: T) {
@@ -75,6 +83,10 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
   const [live, setLive] = useState(false);
   const [menu, setMenu] = useState(false);
   const [bell, setBell] = useState(false);
+  const [boxMenu, setBoxMenu] = useState(false);
+  const [tabs, setTabs] = usePref<ChatTab[]>("tabs", []);
+  // Onglets où le fan a écrit depuis qu'on l'a quitté (point qui clignote).
+  const [tabNews, setTabNews] = useState<string[]>([]);
   const search = useRef<HTMLInputElement>(null);
   const openRef = useRef(open);
   openRef.current = open;
@@ -91,7 +103,7 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
     const fan = params.get("fan");
     if (!c || !loaded) return;
     setScope(c);
-    if (fan) setOpen((o) => o ?? ({ fanId: fan, creatorId: c, name: "Fan", username: null, avatar: null, unread: 0, ai: false, handoff: false, spent: 0, subscribed: null, canSend: true, last: null, waiting: false, isNew: false, active: false, pinned: false, pinnedBy: null, tags: [], fresh: false, relance: null } as QueueItem));
+    if (fan) setOpen((o) => o ?? (blank(c, fan)));
   }, [params, loaded, setScope]);
 
   // La file vient du serveur (qui garde toutes les conversations de Substy en mémoire).
@@ -140,6 +152,11 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
         return;
       }
       setLastEvent(e);
+      if (e.type === "new_message" && e.message?.fromFan && e.fanId) {
+        const k = e.creatorId + ":" + e.fanId;
+        const o = openRef.current;
+        if (!o || o.creatorId + ":" + o.fanId !== k) setTabNews((l) => (l.includes(k) ? l : [...l, k]));
+      }
       if (e.type === "new_message") {
         if (later.current) clearTimeout(later.current);
         later.current = setTimeout(() => loadRef.current(), 400);
@@ -164,6 +181,7 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
   const items = data?.items ?? [];
   const select = useCallback((c: QueueItem) => {
     setOpen({ ...c, unread: 0, fresh: false });
+    setTabNews((l) => l.filter((k) => k !== c.creatorId + ":" + c.fanId));
     setData((d) => d && { ...d, items: d.items.map((x) => (x.fanId === c.fanId && x.creatorId === c.creatorId ? { ...x, unread: 0, fresh: false } : x)) });
     // « Vu par l'équipe » (la ligne n'est plus en gras pour les autres).
     if (c.last?.id) api("POST", "/api/fan-meta", { creatorId: c.creatorId, fanId: c.fanId, seen: c.last.id }).catch(() => {});
@@ -235,7 +253,7 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
       {/* File */}
       <aside className={cn("flex w-full min-w-0 flex-col border-r bg-panel md:w-[360px] md:shrink-0", open && "max-md:hidden")}>
         <div className="flex flex-col gap-2 border-b p-3">
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <div className="min-w-0 flex-1">
               <h1 className="flex items-center gap-2 truncate text-2xl">
                 {cur ? (
@@ -252,9 +270,15 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
                 {data?.loading ? " · Bloom récupère encore des conversations…" : ""}
               </p>
             </div>
+            {cur ? (
+              <button onClick={() => setBoxMenu((b) => !b)} className={cn("grid size-9 place-items-center rounded-xl border bg-card text-muted hover:text-fg", boxMenu && "border-primary text-primary")} title="Boîtes : partager les fans de cette créatrice entre chatteurs">
+                <BoxesIcon className="size-4" />
+              </button>
+            ) : null}
             <button onClick={() => setBell((b) => !b)} className={cn("grid size-9 place-items-center rounded-xl border bg-card text-muted hover:text-fg", bell && "border-primary text-primary")} title="Ventes, pourboires et abonnements récents">
               <Bell className="size-4" />
             </button>
+            {boxMenu && cur ? <BoxMenu creator={cur} onClose={() => setBoxMenu(false)} onChanged={load} /> : null}
           </div>
           <div className="flex gap-0.5 rounded-2xl border bg-card p-1">
             {TABS.map((t) => {
@@ -321,7 +345,7 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
             ) : null}
           </div>
         </div>
-        {bell ? <Notifs scope={scope} byId={byId} onOpen={(cid, fanId) => (setBell(false), setScope(cid), setOpen({ ...(items.find((x) => x.fanId === fanId && x.creatorId === cid) ?? ({ fanId, creatorId: cid, name: "Fan", username: null, avatar: null, unread: 0, ai: false, handoff: false, spent: 0, subscribed: null, canSend: true, last: null, waiting: false, isNew: false, active: false, pinned: false, pinnedBy: null, tags: [], fresh: false, relance: null } as QueueItem)) }))} /> : null}
+        {bell ? <Notifs scope={scope} byId={byId} onOpen={(cid, fanId) => (setBell(false), setScope(cid), setOpen({ ...(items.find((x) => x.fanId === fanId && x.creatorId === cid) ?? blank(cid, fanId)) }))} /> : null}
         <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
           {items.map((c) => (
             <Row key={c.creatorId + ":" + c.fanId} c={c} on={open?.fanId === c.fanId && open?.creatorId === c.creatorId} onClick={() => select(c)} watchers={othersOn(c)} creator={multi ? byId.get(c.creatorId) : undefined} />
@@ -337,6 +361,36 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
 
       {/* Conversation */}
       <section className={cn("flex min-w-0 flex-1 flex-col", !open && "max-md:hidden")}>
+        {tabs.length ? (
+          <div className="scroll-thin flex shrink-0 gap-1 overflow-x-auto border-b bg-panel px-2 py-1.5">
+            {tabs.map((t) => {
+              const k = t.creatorId + ":" + t.fanId;
+              const on = open && open.creatorId + ":" + open.fanId === k;
+              const cr = byId.get(t.creatorId);
+              const item = items.find((x) => x.creatorId === t.creatorId && x.fanId === t.fanId);
+              const news = !on && (tabNews.includes(k) || !!item?.fresh);
+              return (
+                <span key={k} className={cn("flex shrink-0 items-center gap-1.5 rounded-xl border py-1 pr-1 pl-1.5 text-xs", on ? "border-primary bg-petal" : "bg-card hover:bg-card-2")}>
+                  <button
+                    onClick={() => select(item ?? ({ ...blank(t.creatorId, t.fanId), name: t.name, avatar: t.avatar } as QueueItem))}
+                    className="flex items-center gap-1.5"
+                    title={cr ? `${t.name} · ${cr.name}` : t.name}
+                  >
+                    <span className="relative">
+                      <Avatar src={t.avatar} name={t.name} size="size-5" />
+                      {news ? <span className="absolute -top-0.5 -right-0.5 size-2 animate-pulse rounded-full bg-primary" /> : null}
+                    </span>
+                    <span className={cn("max-w-24 truncate", news && "font-bold")}>{t.name}</span>
+                    {cr && multi ? <PlatformBadge c={cr} /> : null}
+                  </button>
+                  <button onClick={() => setTabs(tabs.filter((x) => x !== t))} className="rounded p-0.5 text-muted hover:text-fg" title="Fermer l’onglet">
+                    <X className="size-3" />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
         {open ? (
           <>
             <button onClick={() => setOpen(null)} className="flex items-center gap-1 border-b px-3 py-2 text-sm text-muted md:hidden">
@@ -354,6 +408,14 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
               pinned={open.pinned}
               onPin={() => meta(open, { pinned: !open.pinned }, { pinned: !open.pinned })}
               onUnread={() => (meta(open, { unread: true }, { fresh: true }), setOpen(null))}
+              kept={tabs.some((t) => t.creatorId === open.creatorId && t.fanId === open.fanId)}
+              onKeep={() =>
+                setTabs((l) =>
+                  l.some((t) => t.creatorId === open.creatorId && t.fanId === open.fanId)
+                    ? l.filter((t) => !(t.creatorId === open.creatorId && t.fanId === open.fanId))
+                    : [...l, { creatorId: open.creatorId, fanId: open.fanId, name: open.name, avatar: open.avatar }].slice(-MAX_TABS),
+                )
+              }
               onSent={() => {
                 load();
                 if (autoNext && tab === "reply") setTimeout(() => goNext(1, true), 300);
@@ -490,6 +552,7 @@ function Row({ c, on, onClick, watchers, creator }: { c: QueueItem; on: boolean;
               {usd(c.relance.price, 0)} non payé · {when(new Date(c.relance.at).toISOString())}
             </Pill>
           ) : null}
+          {c.box ? <Pill tone="info">{c.box}</Pill> : null}
           {c.handoff ? <Pill tone="warn">à reprendre</Pill> : null}
           {!c.ai ? <Pill>IA off</Pill> : null}
           {c.tags.slice(0, 3).map((t) => (

@@ -112,6 +112,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   récents / dépense ; fenêtre de temps ; recherche nom ou tag ; 300 lignes au plus.
 - Ce que Bloom garde en plus (`fan_meta`, par créatrice + fan) : épingle (toute l'équipe), tags, notes, « non lu » remis
   à la main, dernier message vu par l'équipe (ligne en gras tant que personne ne l'a ouvert).
+- Boîtes (`creator_boxes`, `user_boxes`) : les fans d'une créatrice partagés en 2 à 20 boîtes (empreinte du fanId : un fan reste
+  toujours dans la même) ; chaque chatteur coche les siennes, la file et les compteurs ne gardent que leurs fans. Réglage : boss.
+- Onglets multi-conversations (10 au plus, gardés sur l'ordinateur), point quand le fan a écrit.
 - Cloche : ventes, pourboires, abonnements des 2 derniers jours (`GET /api/notifs`). Alt+↓ fan suivant, « Enchaîner après un envoi ».
 
 ## Configuration IA — page `/app/ia` (admins, managers)

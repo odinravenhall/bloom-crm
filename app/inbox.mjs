@@ -4,7 +4,7 @@
 // « non lu » remis à la main, « vu par l'équipe ».
 import { all, db, one, run } from './store.mjs';
 import { inboxChats } from './chat.mjs';
-import { canChat, canSee } from './team.mjs';
+import { canChat, canSee, isBoss } from './team.mjs';
 import { parisDay, revenue } from './revenue.mjs';
 
 db.exec(`
@@ -16,7 +16,36 @@ db.exec(`
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (creator_id, fan_id)
   );
+  -- Boîtes de répartition (comme Raven) : les fans d'une créatrice sont partagés en N boîtes ; chaque chatteur coche les siennes.
+  CREATE TABLE IF NOT EXISTS creator_boxes (creator_id TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, names TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS user_boxes (user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, boxes TEXT NOT NULL DEFAULT '[]', PRIMARY KEY (user_id, creator_id));
 `);
+
+/** Boîte d'un fan : toujours la même (empreinte de son identifiant), réparties à peu près également. */
+export function boxOf(fanId, count) {
+  let h = 2166136261;
+  for (const ch of String(fanId)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0) % count;
+}
+const parse = (s, d) => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return d;
+  }
+};
+/** Réglage des boîtes des créatrices (seulement celles qui en ont au moins 2). */
+function boxConfig(cids) {
+  if (!cids.length) return new Map();
+  return new Map(
+    all(`SELECT creator_id, count, names FROM creator_boxes WHERE count >= 2 AND creator_id IN (${cids.map(() => '?').join(',')})`, ...cids).map((r) => [r.creator_id, { count: r.count, names: parse(r.names, []) }]),
+  );
+}
+const boxName = (cfg, i) => cfg.names[i] || `Boîte ${i + 1}`;
+/** Boîtes cochées par l'utilisateur, par créatrice (vide = toutes). */
+function myBoxes(userId) {
+  return new Map(all('SELECT creator_id, boxes FROM user_boxes WHERE user_id = ?', userId).map((r) => [r.creator_id, parse(r.boxes, [])]));
+}
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -85,6 +114,8 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       const paying = p.get('paying') === '1';
       const now = Date.now();
       const metas = metaMap(visible);
+      const boxes = boxConfig(visible);
+      const mine = myBoxes(u.id);
 
       const perCreator = {};
       const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0 };
@@ -96,7 +127,12 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
         if (!inb.complete) loading = true;
         let n = 0;
         const inScope = scope.includes(cid);
+        const cfg = boxes.get(cid);
+        const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
         for (const c of inb.chats) {
+          // Boîtes : on ne garde que les fans des boîtes cochées par ce chatteur.
+          const box = cfg ? boxOf(c.fanId, cfg.count) : null;
+          if (sel.length && !sel.includes(box)) continue;
           const m = metas.get(`${cid}:${c.fanId}`);
           const at = c.last ? Date.parse(c.last.at) || 0 : 0;
           const reply = waiting(c, m) && (!win || at >= now - win);
@@ -104,7 +140,7 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
           if (!inScope) continue;
           if (paying && !(c.spent > 0)) continue;
           if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
-          const row = { c, m, cid, at, reply };
+          const row = { c, m, cid, at, reply, box: cfg ? boxName(cfg, box) : null };
           row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
           row.active = !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
           counts.all++;
@@ -126,9 +162,10 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       keep.sort((a, b) => (sort === 'spent' ? (b.c.spent || 0) - (a.c.spent || 0) || a.at - b.at : sort === 'old' ? a.at - b.at : b.at - a.at));
       // Épinglés toujours en haut (sauf tri par dépense).
       if (sort !== 'spent') keep.sort((a, b) => (b.m?.pinned || 0) - (a.m?.pinned || 0));
-      const items = keep.slice(0, 300).map(({ c, m, cid, reply, isNew, active, relCand }) => ({
+      const items = keep.slice(0, 300).map(({ c, m, cid, reply, isNew, active, relCand, box }) => ({
         ...c,
         creatorId: cid,
+        box,
         waiting: reply,
         isNew,
         active,
@@ -141,6 +178,54 @@ export function inboxRoutes({ userFrom, send, body, creators }) {
       }));
       const replyTotal = Object.values(perCreator).reduce((a, b) => a + b, 0);
       send(res, 200, { items, counts, perCreator, replyTotal, more: keep.length > 300, loading });
+    },
+
+    // Boîtes d'une créatrice : réglage, celles cochées par moi, et l'aperçu (fans et fans à répondre par boîte).
+    'GET /api/boxes': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const cid = String(new URL(req.url, 'http://x').searchParams.get('creatorId') || '');
+      if (!canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' });
+      const r = one('SELECT count, names FROM creator_boxes WHERE creator_id = ?', cid);
+      const count = r?.count >= 2 ? r.count : 0;
+      const names = parse(r?.names, []);
+      const preview = Array.from({ length: count }, (_, i) => ({ name: names[i] || `Boîte ${i + 1}`, fans: 0, reply: 0 }));
+      if (count) {
+        const metas = metaMap([cid]);
+        const now = Date.now();
+        for (const c of inboxChats(cid).chats) {
+          const b = preview[boxOf(c.fanId, count)];
+          b.fans++;
+          const at = c.last ? Date.parse(c.last.at) || 0 : 0;
+          if (waiting(c, metas.get(`${cid}:${c.fanId}`)) && at >= now - WINDOWS['3j']) b.reply++;
+        }
+      }
+      const mine = parse(one('SELECT boxes FROM user_boxes WHERE user_id = ? AND creator_id = ?', u.id, cid)?.boxes, []).filter((i) => i < count);
+      send(res, 200, { count, names: preview.map((b) => b.name), mine, preview, canEdit: isBoss(u) });
+    },
+    // Régler le nombre de boîtes (0 = pas de boîtes, 2 à 20) et leurs noms : admins, managers, team leaders.
+    'POST /api/boxes': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      if (!isBoss(u) || !canSee(u, cid)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
+      const count = Math.round(Number(b.count) || 0);
+      if (count && (count < 2 || count > 20)) return send(res, 400, { error: 'Entre 2 et 20 boîtes' });
+      const names = (Array.isArray(b.names) ? b.names : []).slice(0, count).map((n) => String(n || '').trim().slice(0, 30));
+      run('INSERT INTO creator_boxes (creator_id, count, names, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET count = excluded.count, names = excluded.names, updated_at = excluded.updated_at', cid, count, JSON.stringify(names), Date.now());
+      send(res, 200, { ok: true });
+    },
+    // Les boîtes que je prends sur cette créatrice (vide = toutes).
+    'POST /api/boxes/mine': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      if (!canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' });
+      const boxes = [...new Set((Array.isArray(b.boxes) ? b.boxes : []).map(Number).filter((i) => Number.isInteger(i) && i >= 0 && i < 20))].sort((x, y) => x - y);
+      run('INSERT INTO user_boxes (user_id, creator_id, boxes) VALUES (?, ?, ?) ON CONFLICT(user_id, creator_id) DO UPDATE SET boxes = excluded.boxes', u.id, cid, JSON.stringify(boxes));
+      send(res, 200, { ok: true });
     },
 
     'GET /api/fan-meta': async (req, res) => {

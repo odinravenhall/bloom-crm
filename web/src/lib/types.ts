@@ -36,7 +36,9 @@ export type QueueItem = Chat & {
   tags: string[];
   fresh: boolean;
   relance: { price: number; at: number; script: string | null } | null;
+  box?: string | null;
 };
+export type Boxes = { count: number; names: string[]; mine: number[]; preview: { name: string; fans: number; reply: number }[]; canEdit: boolean };
 export type QueueTab = "reply" | "all" | "pinned" | "new" | "relance" | "active";
 export type Queue = { items: QueueItem[]; counts: Record<QueueTab, number>; perCreator: Record<string, number>; replyTotal: number; more: boolean; loading: boolean };
 export type FanMeta = { pinned: boolean; pinnedBy: string | null; tags: string[]; notes: string; notesBy: string | null; notesAt: number | null };

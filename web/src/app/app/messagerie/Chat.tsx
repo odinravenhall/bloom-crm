@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EyeOff, ImagePlus, Lock, PanelRight, Pin, ScrollText, Send, X, Zap } from "lucide-react";
+import { Copy, CopyCheck, EyeOff, ImagePlus, Lock, PanelRight, Pin, ScrollText, Send, X, Zap } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, dayLabel, hhmm, usd } from "@/lib/fmt";
 import type { AiLog, Chat as ChatT, Creator, Media, Message, Presence } from "@/lib/types";
@@ -29,6 +29,8 @@ export function Chat({
   onPin,
   onUnread,
   onSent,
+  kept,
+  onKeep,
 }: {
   creatorId: string;
   chat: ChatT;
@@ -41,6 +43,8 @@ export function Chat({
   onPin?: () => void;
   onUnread?: () => void;
   onSent?: () => void;
+  kept?: boolean;
+  onKeep?: () => void;
 }) {
   // Fiche du fan à droite : affichée ou non (gardé sur cet ordinateur).
   const [panel, setPanel] = useState(true);
@@ -232,6 +236,11 @@ export function Chat({
           {onPin ? (
             <button onClick={onPin} className={cn("grid size-8 place-items-center rounded-xl border", pinned ? "border-primary bg-petal text-primary" : "text-muted hover:text-fg")} title={pinned ? "Désépingler (pour toute l’équipe)" : "Épingler (pour toute l’équipe)"}>
               <Pin className="size-4" />
+            </button>
+          ) : null}
+          {onKeep ? (
+            <button onClick={onKeep} className={cn("grid size-8 place-items-center rounded-xl border", kept ? "border-primary bg-petal text-primary" : "text-muted hover:text-fg")} title={kept ? "Retirer des onglets" : "Garder en onglet (multi-conversations)"}>
+              {kept ? <CopyCheck className="size-4" /> : <Copy className="size-4" />}
             </button>
           ) : null}
           {onUnread ? (
