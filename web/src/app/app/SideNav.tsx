@@ -23,6 +23,7 @@ import {
   UsersRound,
   X,
   ListChecks,
+  LayoutGrid,
   MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
@@ -33,7 +34,7 @@ import { OfManagerNav } from "./OfManagerNav";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
-type Item = { href: string; label: string; icon: LucideIcon; roles?: Role[]; soon?: boolean };
+type Item = { href: string; label: string; icon: LucideIcon; roles?: Role[]; soon?: boolean; pf?: "of" | "mym" };
 type Group = { title: string | null; items: Item[]; pf?: "of" | "mym" };
 
 const CHAT: Role[] = ["admin", "manager", "lead", "chatter"];
@@ -48,6 +49,8 @@ const GROUPS: Group[] = [
   {
     title: null,
     items: [
+      // Dashboard OnlyFans (comme Infloww).
+      { href: "/app/of", label: "Dashboard", icon: LayoutGrid, roles: BOSS, pf: "of" },
       { href: "/app/messagerie", label: "Messagerie", icon: Inbox, roles: CHAT },
     ],
   },
@@ -117,7 +120,7 @@ export function SideNav({ me }: { me: Me }) {
   const { pf } = useCreators();
   const groups = GROUPS.filter((g) => !g.pf || g.pf === pf).map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.roles || i.roles.includes(me.role)).map((i) => (i.href === "/app/listes" ? { ...i, label: pf === "mym" ? "Groupes" : "Smart lists" } : i)),
+    items: g.items.filter((i) => (!i.roles || i.roles.includes(me.role)) && (!i.pf || i.pf === pf)).map((i) => (i.href === "/app/listes" ? { ...i, label: pf === "mym" ? "Groupes" : "Smart lists" } : i)),
   })).filter((g) => g.items.length);
   const logout = async () => {
     await fetch("/api/logout", { method: "POST" }).catch(() => {});

@@ -15,6 +15,7 @@ import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
 import { fanListRoutes } from './fanlists.mjs';
 import { ofBrowserRoutes } from './ofbrowser.mjs';
+import { ofDashRoutes } from './ofdash.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -383,6 +384,7 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
+Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
 Object.assign(routes, ofb.routes);
 Object.assign(routes, fanListRoutes({ userFrom, send, body, creators: () => state.creators }));
