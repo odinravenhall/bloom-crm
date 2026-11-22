@@ -647,7 +647,7 @@ export function revenue({ from, to, creators }) {
   const empty = { from, to, total: 0, prev: 0, provisional: 0, sales: 0, buyers: 0, byType: {}, byOrigin: {}, days: [], creators: [], recent: [], unmapped: creators.filter((c) => !maps.some((m) => m.creator_id === c.id)).map((c) => c.id) };
   if (!accounts.length) return empty;
   const ph = accounts.map(() => '?').join(',');
-  const rows = all(`SELECT id, account, platform, fan_id, fan_name, at, type, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
+  const rows = all(`SELECT id, account, platform, fan_id, fan_name, at, type, gross, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
   // Ventes Substy pas encore confirmées (récentes uniquement : au-delà de 24 h (MyPulse peut avoir plusieurs heures de retard), une vente non confirmée n'est pas comptée).
   const live = all(
     `SELECT l.*, m.account, a.platform FROM rv_live l JOIN rv_map m ON m.creator_id = l.creator_id JOIN rv_accounts a ON a.id = m.account
@@ -720,6 +720,7 @@ export function revenue({ from, to, creators }) {
       at: new Date(r.at).toISOString(),
       type: r.type,
       net: r.net,
+      gross: r.gross,
       currency: r.currency,
       fan: r.fan_name,
       fanId: r.platform === 'onlyfans' ? r.fan_id : null,
@@ -735,6 +736,7 @@ export function revenue({ from, to, creators }) {
       at: new Date(l.at).toISOString(),
       type: /tip/i.test(l.type || '') ? 'tip' : /post/i.test(l.type || '') ? 'post' : 'ppv',
       net: Math.round(l.gross * netRatio(l.account, l.platform)),
+      gross: l.gross,
       currency: l.currency,
       fan: l.fan_name,
       fanId: l.fan_id,

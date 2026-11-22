@@ -2,7 +2,7 @@
 // exactement dans le format de Raven, à partir de Substy (OnlyFans / MYM) et de ce que Bloom garde en plus.
 // Une conversation = « <creatorId>~<fanId> ». Les montants sont en centimes (comme Raven).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { img, inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
+import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { pinFan } from './lists.mjs';
@@ -50,7 +50,8 @@ function convOf(cid, c, m, extra = {}) {
     memberUsername: c.username || null,
     memberAvatar: img(c.avatar),
     nickname: m?.nickname || null,
-    totalSpent: cents(c.spent),
+    // Dépense du fan en brut (ce qu'il a payé), comme Infloww.
+    totalSpent: cents(c.paid ?? c.spent),
     // Substy ne dit pas si le fan est en ligne : on prend l'heure de son dernier message.
     lastSeenAt: fromFan ? last.at : null,
     lastMessageAt: last?.at || null,
@@ -319,7 +320,10 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         case 'read': {
           const c = inboxChat(x.cid, x.fanId);
           setMeta(x.cid, x.fanId, 'seen_id = ?, unread = 0', c?.last?.id || null);
-          return send(res, 200, { ok: true });
+          // Lu aussi chez Substy (et dans la liste de Bloom tout de suite).
+          patchInboxChat(x.cid, x.fanId, { unread: 0 });
+          const sub = await substy.markRead(x.cid, x.fanId).then(() => 'ok', (e) => String(e.message).slice(0, 120));
+          return send(res, 200, { ok: true, substy: sub });
         }
         case 'unread':
           setMeta(x.cid, x.fanId, 'unread = 1, seen_id = NULL');
@@ -439,7 +443,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       send(res, 200, {
         stats: {
           firstSubscriptionAt: f.subscription?.subscribedAt || undefined,
-          totalSpent: mon(f.spend?.net),
+          totalSpent: mon(f.spend?.gross ?? f.spend?.net),
           tipsTotal: mon(sb.tips),
           lastPaidAt: f.spend?.lastPurchaseAt || undefined,
           subscriptionExpireAt: f.subscription?.renewsAt || f.subscription?.expiresAt || undefined,
@@ -590,7 +594,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const kind = p.get('kind') || 'all';
       const items = r.recent
         .filter((s) => Date.parse(s.at) < before)
-        .map((s) => ({ id: s.id, at: s.at, kind: kindOf(s.type), amount: s.net, modelId: s.creatorId, fan: s.fan || null, convId: s.fanId ? convId(s.creatorId, s.fanId) : null, chatter: s.by || null }))
+        .map((s) => ({ id: s.id, at: s.at, kind: kindOf(s.type), amount: s.gross ?? s.net, modelId: s.creatorId, fan: s.fan || null, convId: s.fanId ? convId(s.creatorId, s.fanId) : null, chatter: s.by || null }))
         .filter((n) => kind === 'all' || n.kind === kind || (kind === 'sales' && n.kind === 'sale') || (kind === 'tips' && n.kind === 'tip') || (kind === 'subs' && n.kind === 'sub'));
       send(res, 200, { items });
     }],

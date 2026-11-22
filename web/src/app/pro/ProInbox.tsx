@@ -400,9 +400,18 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
             onClick={() => {
               if (select) return setSelect((s) => (s ? (s.has(c.id) ? (s.delete(c.id), new Set(s)) : new Set(s.add(c.id))) : s));
               onOpen(c);
+              // Ouvrir = lire : plus de gras tout de suite, et lu dans Bloom et chez Substy.
+              if (c.unread || c.fresh) {
+                setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === c.id ? { ...x, unread: false, fresh: false } : x)) } : d));
+                api("POST", `/api/conversations/${c.id}/action`, { action: "read" }).catch(() => {});
+              }
             }}
             onDismiss={() => markRead([c.id])}
-            onUnread={() => api("POST", `/api/conversations/${c.id}/action`, { action: "unread" }).then(() => (toast(t("Marked as unread")), load())).catch((e) => toast((e as Error).message, "err"))}
+            onUnread={() => {
+              // Non lu : de nouveau en gras tout de suite.
+              setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === c.id ? { ...x, unread: true } : x)) } : d));
+              api("POST", `/api/conversations/${c.id}/action`, { action: "unread" }).then(() => (toast(t("Marked as unread")), load())).catch((e) => toast((e as Error).message, "err"));
+            }}
             t={t}
           />
         ))}
@@ -427,7 +436,8 @@ function Row({ c, on, onClick, onDismiss, onUnread, selecting, picked, t }: { c:
     const today = new Date().toDateString() === d.toDateString();
     return today ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase() : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   })();
-  const waiting = c.needsReply;
+  // Gras + heure rouge = conversation non lue (comme Infloww) ; elle passe en lu quand on l'ouvre.
+  const waiting = !!(c.unread || c.fresh);
   return (
     <div className="relative overflow-hidden" style={{ background: "var(--pro-chip)" }}>
     <button
