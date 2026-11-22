@@ -1,11 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <circle cx="32" cy="32" r="31" fill="#fff" stroke="#efd3dc" stroke-width="2"/>
-  <g transform="translate(32 32)" fill="#f5c3d3" stroke="#d4537e" stroke-width="1.6">
-    <path d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z"/>
-    <path d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z" transform="rotate(72)"/>
-    <path d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z" transform="rotate(144)"/>
-    <path d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z" transform="rotate(216)"/>
-    <path d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z" transform="rotate(288)"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#9f67f5"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="18" fill="url(#g)"/>
+  <g transform="translate(32 33)" fill="#fff" fill-opacity="0.92">
+    <path d="M0 -3 C -8 -9, -8 -19, 0 -23 C 8 -19, 8 -9, 0 -3 Z"/>
+    <path d="M0 -3 C -8 -9, -8 -19, 0 -23 C 8 -19, 8 -9, 0 -3 Z" transform="rotate(72)"/>
+    <path d="M0 -3 C -8 -9, -8 -19, 0 -23 C 8 -19, 8 -9, 0 -3 Z" transform="rotate(144)"/>
+    <path d="M0 -3 C -8 -9, -8 -19, 0 -23 C 8 -19, 8 -9, 0 -3 Z" transform="rotate(216)"/>
+    <path d="M0 -3 C -8 -9, -8 -19, 0 -23 C 8 -19, 8 -9, 0 -3 Z" transform="rotate(288)"/>
   </g>
-  <circle cx="32" cy="32" r="5.5" fill="#f2a07b" stroke="#d4537e" stroke-width="1.4"/>
+  <circle cx="32" cy="33" r="4.5" fill="#f472b6"/>
 </svg>

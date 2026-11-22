@@ -11,12 +11,12 @@ export type Decor = "none" | "aurora" | "petals" | "fireflies" | "waves";
 export type ThemePrefs = { base: Theme; accent: string; decor: Decor; motion: boolean };
 
 export const THEMES: [Theme, string][] = [
-  ["dark", "Nuit"],
+  ["dark", "Aurore"],
   ["onyx", "Onyx"],
   ["light", "Clair"],
 ];
 export const ACCENTS: [string, string][] = [
-  ["#ff4f8b", "Rose Bloom"],
+  ["#f472b6", "Aurore"],
   ["#a78bfa", "Lavande"],
   ["#2dd4bf", "Menthe"],
   ["#38bdf8", "Ciel"],
@@ -32,7 +32,7 @@ export const DECORS: [Decor, string, string][] = [
   ["waves", "Vagues", "Des ondes lentes en bas de l’écran"],
   ["none", "Aucun", "Fond uni, le plus sobre"],
 ];
-export const THEME_DEFAULT: ThemePrefs = { base: "dark", accent: "#ff4f8b", decor: "aurora", motion: true };
+export const THEME_DEFAULT: ThemePrefs = { base: "dark", accent: "#f472b6", decor: "aurora", motion: true };
 const KEY = "bloom.theme";
 const HEX = /^#[0-9a-f]{6}$/i;
 

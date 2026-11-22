@@ -116,15 +116,16 @@ export function SideNav({ me }: { me: Me }) {
         href={i.href}
         title={compact ? i.label : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-2xl py-2 text-sm transition-colors",
+          "relative flex items-center gap-3 rounded-xl py-2 text-sm transition-colors",
           compact ? "justify-center px-0" : "px-3",
-          on ? "bg-card font-semibold text-fg shadow-sm ring-1 ring-line" : "text-muted hover:text-fg",
+          on ? "bg-primary/15 font-semibold text-fg ring-1 ring-primary/25" : "text-muted hover:bg-white/[0.04] hover:text-fg",
           i.soon && !on && "opacity-60",
         )}
       >
-        <i.icon className={cn("size-[18px] shrink-0", on && "text-primary")} />
+        {on && !compact ? <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-primary" /> : null}
+        <i.icon className={cn("size-[18px] shrink-0", on && "text-primary-soft")} />
         {compact ? null : <span className="flex-1 truncate">{i.label}</span>}
-        {i.soon && !compact ? <span className="size-1.5 rounded-full bg-sage" title="bientôt" /> : null}
+        {i.soon && !compact ? <span className="rounded-full bg-white/5 px-1.5 text-[9px] font-bold text-muted uppercase" title="bientôt">bientôt</span> : null}
       </Link>
     );
   };
@@ -133,7 +134,7 @@ export function SideNav({ me }: { me: Me }) {
     <nav className="flex flex-col gap-5">
       {groups.map((g) => (
         <div key={g.title ?? "top"} className="flex flex-col gap-0.5">
-          {g.title && !compact ? <p className="px-3 pb-1 font-display text-[13px] text-muted italic">{g.title}</p> : null}
+          {g.title && !compact ? <p className="px-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted/80 uppercase">{g.title}</p> : null}
           {g.title && compact ? <span className="mx-auto mb-1 h-px w-5 bg-line" /> : null}
           {g.items.map((i) => item(i, compact))}
         </div>

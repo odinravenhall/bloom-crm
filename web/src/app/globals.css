@@ -485,18 +485,63 @@ html[data-theme="onyx"] {
  * L'accent (--color-primary) est posé sur <html> par lib/theme.ts ; le reste en découle.
  * ---------------------------------------------------------------------------------------------- */
 html:not([data-theme]) {
-  --color-bg: #0f0d15;
-  --color-card: #17141e;
-  --color-card-2: #201c29;
-  --color-line: #2c2737;
-  --color-input: #3a3446;
-  --color-panel: rgb(12 10 18 / 0.42);
-  --color-panel-strong: rgb(12 10 18 / 0.82);
-  --color-bubble-fan: #211d2a;
+  /* Aurore : nuit violette */
+  --color-bg: #0c0a1a;
+  --color-card: #15112b;
+  --color-card-2: #1d1838;
+  --color-line: #2a2350;
+  --color-input: #3a3166;
+  --color-muted: #a59cc9;
+  --color-panel: rgb(18 14 40 / 0.55);
+  --color-panel-strong: rgb(14 11 32 / 0.82);
+  --color-bubble-fan: #1f1a3d;
 }
 html {
-  --color-bubble-me: color-mix(in oklab, var(--color-primary) 24%, var(--color-card));
+  /* Deuxième couleur, tirée de l'accent vers le violet : sert aux dégradés (boutons, bulles, barres). */
+  --color-accent-2: color-mix(in oklab, var(--color-primary) 30%, #8b5cf6);
+  --grad: linear-gradient(135deg, var(--color-primary), var(--color-accent-2));
+  --color-bubble-me: color-mix(in oklab, var(--color-primary) 55%, var(--color-accent-2));
+  --radius-card: 1.25rem;
 }
+html[data-theme="onyx"] { --color-muted: #a1a1b5; }
+
+/* ------------------------------------------------------------ Style Aurore */
+/* Dégradé sur tout ce qui est « plein » à la couleur d'accent : boutons, bulles envoyées, interrupteurs, barres. */
+.bg-primary,
+.bg-bubble-me {
+  background-image: var(--grad);
+}
+.bg-bubble-me { color: #fff; }
+.bg-bubble-me .text-muted,
+.bg-bubble-me [class*="text-muted"] { color: rgb(255 255 255 / 0.75); }
+/* Bouton principal : un léger halo de sa couleur */
+.bg-primary.text-white { box-shadow: 0 8px 22px -12px var(--color-primary); }
+/* Panneaux en verre dépoli (menu, file, fiche) */
+.bg-panel,
+.bg-panel-strong {
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+/* Cartes : liseré clair en haut, comme du verre */
+.card,
+.stat { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 30px -18px rgb(0 0 0 / 0.6); }
+html[data-theme="light"] .card,
+html[data-theme="light"] .stat { box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); }
+/* Titres en dégradé (classe à poser sur les grands titres) */
+.text-grad {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Sélection et focus aux couleurs de l'accent */
+::selection { background: color-mix(in oklab, var(--color-primary) 40%, transparent); }
+/* Mode allégé : plus de verre ni d'ombres (le plus lourd pour un PC faible) */
+html.perf-lite .bg-panel,
+html.perf-lite .bg-panel-strong { -webkit-backdrop-filter: none; backdrop-filter: none; background-color: var(--color-card); }
+html.perf-lite .card,
+html.perf-lite .stat,
+html.perf-lite .bg-primary.text-white { box-shadow: none; }
 
 /* ------------------------------------------------------------ Fonds animés de Bloom (components/Backdrop.tsx) */
 .decor { display: none; position: absolute; inset: 0; overflow: hidden; }
@@ -508,9 +553,9 @@ html[data-decor="waves"] .decor-waves { display: block; }
 html[data-decor="none"] .bd-vignette { display: none; }
 
 /* Aurore : trois lueurs floues de la couleur d'accent qui glissent lentement */
-.au-blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.22; will-change: transform; }
+.au-blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.3; will-change: transform; }
 .au-1 { width: 48vw; height: 48vw; left: -10vw; top: -14vw; background: var(--color-primary); animation: au-float-1 26s ease-in-out infinite alternate; }
-.au-2 { width: 40vw; height: 40vw; right: -8vw; top: 18vh; background: color-mix(in oklab, var(--color-primary) 55%, #7c5cff); animation: au-float-2 32s ease-in-out infinite alternate; }
+.au-2 { width: 40vw; height: 40vw; right: -8vw; top: 18vh; background: var(--color-accent-2); animation: au-float-2 32s ease-in-out infinite alternate; }
 .au-3 { width: 36vw; height: 36vw; left: 30vw; bottom: -18vw; background: color-mix(in oklab, var(--color-primary) 50%, #22d3ee); opacity: 0.14; animation: au-float-3 38s ease-in-out infinite alternate; }
 @keyframes au-float-1 { to { transform: translate(14vw, 10vh) scale(1.12); } }
 @keyframes au-float-2 { to { transform: translate(-16vw, -8vh) scale(0.9); } }

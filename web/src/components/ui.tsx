@@ -6,26 +6,28 @@ export function Logo({ href = "/app", compact }: { href?: string; compact?: bool
     <Link href={href} className="flex items-center gap-2.5">
       <BloomMark className="size-9 shrink-0" />
       {compact ? null : (
-        <span className="font-display text-[22px] leading-none font-semibold tracking-tight italic">
-          bloom<span className="ml-1 align-middle font-sans text-[10px] font-bold tracking-[0.2em] text-muted not-italic">CRM</span>
+        <span className="text-[21px] leading-none font-extrabold tracking-tight">
+          <span className="text-grad">bloom</span>
+          <span className="ml-1.5 align-middle text-[9px] font-bold tracking-[0.22em] text-muted">CRM</span>
         </span>
       )}
     </Link>
   );
 }
 
-/** Le logo : une fleur ouverte, pétales rose et cœur pêche, sur un bouton crème. */
+/** Le logo : une fleur blanche sur une pastille en dégradé de la couleur d'accent (sans identifiant SVG : le logo peut être affiché plusieurs fois). */
 export function BloomMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" aria-hidden className={className}>
-      <circle cx="32" cy="32" r="31" fill="#fff" stroke="#efd3dc" strokeWidth="2" />
-      <g transform="translate(32 32)">
-        {[0, 72, 144, 216, 288].map((r) => (
-          <path key={r} d="M0 -3 C -9 -9, -9 -21, 0 -25 C 9 -21, 9 -9, 0 -3 Z" transform={`rotate(${r})`} fill="#f5c3d3" stroke="#d4537e" strokeWidth="1.6" />
-        ))}
-        <circle r="5.5" fill="#f2a07b" stroke="#d4537e" strokeWidth="1.4" />
-      </g>
-    </svg>
+    <span className={`inline-grid shrink-0 place-items-center rounded-[30%] ${className ?? ""}`} style={{ backgroundImage: "var(--grad)" }} aria-hidden>
+      <svg viewBox="0 0 64 64" className="size-[78%]">
+        <g transform="translate(32 33)">
+          {[0, 72, 144, 216, 288].map((r) => (
+            <path key={r} d="M0 -3 C -9 -10, -9 -22, 0 -26 C 9 -22, 9 -10, 0 -3 Z" transform={`rotate(${r})`} fill="#fff" fillOpacity="0.93" />
+          ))}
+          <circle r="5" fill="var(--color-primary)" />
+        </g>
+      </svg>
+    </span>
   );
 }
 

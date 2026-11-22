@@ -12,14 +12,14 @@ import { Avatar, Pill, btnCls } from "@/components/ui";
 
 const SECTIONS = [
   { id: "compte", title: "Mon compte", text: "Ton nom, ta photo et ton rôle (venus de Discord).", icon: UserRound },
-  { id: "apparence", title: "Apparence", text: "Nuit, Onyx ou Clair, ta couleur, le fond animé.", icon: Palette },
+  { id: "apparence", title: "Apparence", text: "Aurore, Onyx ou Clair, ta couleur, le fond animé.", icon: Palette },
   { id: "optimisation", title: "Optimisation", text: "Un clic pour un CRM fluide sur PC lent ou connexion faible.", icon: Gauge },
   { id: "langue", title: "Langue", text: "La langue de l’interface.", icon: Languages },
   { id: "notifications", title: "Notifications", text: "Ventes, pourboires, nouveaux messages, son.", icon: Bell },
 ] as const;
 
 const BASE_INFO: Record<Theme, { icon: typeof Sun; text: string; swatch: string[] }> = {
-  dark: { icon: Moon, text: "Nuit légèrement prune, doux pour les yeux", swatch: ["#0f0d15", "#17141e", "#211d2a"] },
+  dark: { icon: Moon, text: "Nuit violette et lueurs : la signature de Bloom", swatch: ["#0c0a1a", "#15112b", "#1d1838"] },
   onyx: { icon: Sparkle, text: "Noir profond, contraste maximal", swatch: ["#000000", "#0b0b0e", "#141418"] },
   light: { icon: Sun, text: "Clair, pour les pièces lumineuses", swatch: ["#f4f4f6", "#ffffff", "#e9e9ee"] },
 };
