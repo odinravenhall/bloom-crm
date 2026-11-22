@@ -17,7 +17,7 @@ type Change = number | null;
 type Account = { id: string; name: string; avatar: string | null };
 type Row = {
   id: string; name: string; avatar: string | null; subscriptions: number; subscriptionsChange: Change; subNew: number; subRecurring: number; tips: number; messages: number; posts: number; streams: number;
-  total: number; totalChange: Change; contribution: number; contributionChange: Change; refunds: number; avgHourly: number; newSubs: number; renewals: number; spenders: number; avgPerSpender: number;
+  total: number; totalChange: Change; contribution: number; contributionChange: Change; refunds: number; avgHourly: number; newSubs: number | null; renewals: number; spenders: number; avgPerSpender: number;
   avgPerTx: number; replyMs: number | null; fansChatted: number | null; messagesSent: number | null; ppvSent: number | null;
   newSubsChange?: Change; newSubLtv?: number | null; spendersChange?: Change; avgPerSpenderChange?: Change; avgPerTxChange?: Change;
   replyMsChange?: Change; fansChattedChange?: Change; messagesSentChange?: Change; ppvSentChange?: Change;
@@ -83,7 +83,7 @@ const METRICS: Metric[] = [
   { key: "visitors", label: "Profile visitors", on: true, get: null },
   { key: "guestVisitors", label: "Guest profile visitors", on: false, get: null },
   { key: "userVisitors", label: "User profile visitors", on: false, get: null },
-  { key: "newSubs", label: "New subscribers", on: true, get: (r) => numChange(r.newSubs, r.newSubsChange), sort: (r) => r.newSubs },
+  { key: "newSubs", label: "New subscribers", on: true, get: (r) => numChange(r.newSubs ?? "- -", r.newSubsChange), sort: (r) => r.newSubs ?? -1 },
   { key: "renewals", label: "Subscriber renewals", on: true, get: (r) => numChange(r.renewals, null), sort: (r) => r.renewals },
   { key: "ltv", label: "New subscriber LTV", on: true, get: (r) => (r.newSubLtv == null ? <span className="font-mono">- -</span> : money(r.newSubLtv)), sort: (r) => r.newSubLtv ?? -1 },
   { key: "conversion", label: "New subscriber conversion", on: true, get: null },

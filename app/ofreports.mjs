@@ -39,23 +39,30 @@ function accountsFor(u, creators) {
     .filter((a) => seesAll(u) || (a.creatorId && canSee({ ...u, pf: null }, a.creatorId)));
 }
 
-/** Nouveaux abonnés par créatrice Substy sur la période (revenue.overview → totalNewSubs, avec l'évolution en %). */
+/** Nouveaux abonnés par créatrice Substy sur la période et celle d'avant (revenue.overview → totalNewSubs). */
 const subsCache = new Map();
+async function subsCount(substy, cid, from, to) {
+  const key = `${cid}|${from}|${to}`;
+  const hit = subsCache.get(key);
+  if (hit && hit.t > Date.now() - 10 * 60_000) return hit.v;
+  try {
+    const r = await Promise.race([substy.revenue([cid], from, to), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15_000))]);
+    const n = Number(r?.totalNewSubs);
+    if (!Number.isFinite(n)) return null;
+    subsCache.set(key, { t: Date.now(), v: n });
+    return n;
+  } catch {
+    return null;
+  }
+}
 async function newSubsFor(substy, cids, from, to) {
   const out = new Map();
+  const days = daysBetween(from, to);
+  const pFrom = addDay(from, -days);
+  const pTo = addDay(from, -1);
   await Promise.all(cids.map(async (cid) => {
-    const key = `${cid}|${from}|${to}`;
-    const hit = subsCache.get(key);
-    if (hit && hit.t > Date.now() - 10 * 60_000) return out.set(cid, hit.v);
-    try {
-      const r = await Promise.race([substy.revenue([cid], from, to), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15_000))]);
-      const n = Number(r?.totalNewSubs);
-      if (!Number.isFinite(n)) return;
-      const d = Number(r?.totalNewSubsDelta);
-      const v = { v: n, change: Number.isFinite(d) ? round(d) : null };
-      subsCache.set(key, { t: Date.now(), v });
-      out.set(cid, v);
-    } catch {}
+    const [n, p] = await Promise.all([subsCount(substy, cid, from, to), subsCount(substy, cid, pFrom, pTo)]);
+    if (n != null) out.set(cid, { v: n, prev: p });
   }));
   return out;
 }
@@ -183,7 +190,9 @@ function report(u, creators, p, newSubs = null) {
       const pm = c.creatorId ? prevMsg.get(c.creatorId) : null;
       const spenders = c.spenders.size;
       const prevSpenders = c.prevSpenders.size;
-      const ns = c.creatorId ? newSubs?.get(c.creatorId) : null;
+      // Substy ne compte pas les abonnés des créatrices qu'il ne suit pas (0 alors qu'elle gagne de l'argent) : « - - ».
+      const ns0 = c.creatorId ? newSubs?.get(c.creatorId) : null;
+      const ns = ns0 && !(ns0.v === 0 && c.total > 0) ? ns0 : null;
       const avgSp = spenders ? c.total / spenders : 0;
       const prevAvgSp = prevSpenders ? c.prevTotal / prevSpenders : 0;
       const avgTx = c.tx ? c.total / c.tx : 0;
@@ -207,8 +216,8 @@ function report(u, creators, p, newSubs = null) {
         refunds: round(c.refunds),
         avgHourly: round(c.total / hours),
         // Nouveaux abonnés : comptés par Substy (OnlyFans), les abonnements gratuits n'étant pas des ventes Infloww.
-        newSubs: ns ? ns.v : c.newSubs,
-        newSubsChange: ns ? ns.change : null,
+        newSubs: ns ? ns.v : null,
+        newSubsChange: ns && ns.prev != null ? pct(ns.v, ns.prev) : null,
         newSubLtv: ns?.v ? round(c.total / ns.v) : null,
         renewals: c.renewals,
         spenders,
