@@ -72,6 +72,8 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
   const { from, to } = range(p, custom);
   const [rev, setRev] = useState<RevenueR | null>(null);
   const [live, setLive] = useState<Live | null>(null);
+  // « À reprendre » par créatrice : fans sans IA (coupée ou passés à la main) qui attendent, comme l'onglet de la messagerie.
+  const [manual, setManual] = useState<Record<string, number> | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -86,7 +88,16 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
       setBusy(false);
     }
   }, [from, to]);
-  const loadLive = useCallback(() => (model ? Promise.resolve() : api<Live>("GET", "/api/dashboard").then(setLive).catch(() => {})), [model]);
+  const loadLive = useCallback(
+    () =>
+      model
+        ? Promise.resolve()
+        : Promise.all([
+            api<Live>("GET", "/api/dashboard").then(setLive).catch(() => {}),
+            api<{ handoffCounts?: Record<string, number> }>("GET", "/api/rv/inbox?tab=handoff&window=72").then((r) => setManual(r.handoffCounts ?? null)).catch(() => {}),
+          ]),
+    [model],
+  );
   useEffect(() => {
     loadRev();
   }, [loadRev]);
@@ -428,11 +439,11 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
                   {!model ? (
                     // Colonnes de largeur fixe : les barres ont toutes la même longueur. Un clic ouvre ces conversations.
                     <div className="hidden shrink-0 items-center text-xs sm:flex">
-                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&only=unread`} className="w-[78px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Ouvrir les messages non lus">
+                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&tab=reply`} className="w-[78px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Ouvrir « À répondre » de cette créatrice">
                         <b className="text-fg tabular-nums">{count(l?.unread)}</b> non lus
                       </Link>
-                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&only=handoff`} className="w-[104px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Ouvrir les conversations où l’IA a passé la main">
-                        <b className="text-amber-300 tabular-nums">{count(l?.handoff)}</b> à reprendre
+                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&tab=handoff`} className="w-[104px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Fans sans IA (coupée ou passés à la main) qui attendent une réponse">
+                        <b className="text-amber-300 tabular-nums">{manual ? (manual[c.id] ?? 0) : count(l?.handoff)}</b> à reprendre
                       </Link>
                       <span className="w-[96px] px-1.5 text-right text-muted" title="Vendu par l’IA de Substy (chiffre de Substy)">
                         {rev?.ai?.perCreator[c.id]?.net ? (

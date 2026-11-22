@@ -187,11 +187,11 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const u = me(req, res);
       if (!u) return;
       const p = new URL(req.url, 'http://x').searchParams;
-      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply' }[p.get('tab')] || 'reply';
+      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply', handoff: 'manual' }[p.get('tab')] || 'reply';
       const w = Number(p.get('window'));
       const hidden = hiddenOf(u);
       const model = p.get('model') || '';
-      const { keep, counts, perCreator, rel, boxes, mine } = computeQueue(u, creators(), {
+      const { keep, counts, perCreator, manualPerCreator, rel, boxes, mine } = computeQueue(u, creators(), {
         hide: model ? [] : hidden,
         scope: model || 'all',
         tab,
@@ -226,8 +226,10 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       send(res, 200, {
         items,
         counts: perCreator,
+        // « À reprendre » (fans sans IA qui attendent) par créatrice : pour l'Accueil.
+        handoffCounts: manualPerCreator,
         allReply,
-        totals: { reply: counts.reply, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active },
+        totals: { reply: counts.reply, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active, handoff: counts.manual },
         boxes: bx,
         hidden,
       });

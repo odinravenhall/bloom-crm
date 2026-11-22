@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Crown, Lock, Pencil, Pin, KeyRound, Eye, EyeOff, SlidersHorizontal, Inbox as InboxIcon, MessageCircle, BellRing, Sparkles, Check, X } from "lucide-react";
+import { Search, Crown, Lock, Pencil, Pin, KeyRound, Eye, EyeOff, SlidersHorizontal, Inbox as InboxIcon, MessageCircle, BellRing, Sparkles, Check, X, Hand } from "lucide-react";
 import { MiniCard } from "@/rv/components/ScoreCard";
 import { newSubDay } from "@/rv/components/NewSub";
 import { FanAvatar } from "@/rv/components/FanAvatar";
@@ -29,8 +29,7 @@ type Me = { id: number; name: string; admin: boolean };
 const TABS = [
   { k: "all", label: "Tous les fans" },
   { k: "pinned", label: "Épinglés (pastille : épinglés à qui répondre)" },
-  { k: "online", label: "En ligne (pastille : nombre de fans connectés, pour info)" },
-  { k: "new", label: "New subs : arrivés depuis moins de 3 jours" },
+  { k: "handoff", label: "À reprendre : fans sans IA (coupée, ou passés à la main par l’IA) qui attendent une réponse" },
   { k: "relance", label: "Relances : PPV payant envoyé, pas débloqué, et le fan n’a rien dit depuis 5 min (moins de 24 h)" },
   { k: "reply", label: "À répondre" },
 ] as const;
@@ -71,7 +70,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   const [tab, setTab] = useStored<string>("tab", "reply");
   // « Priorité » n'existe plus dans la barre : ceux qui l'avaient ouverte retombent sur « À répondre ».
   useEffect(() => {
-    if (tab === "vip") setTab("reply");
+    if (tab === "vip" || tab === "online" || tab === "new") setTab("reply");
   }, [tab, setTab]);
   const [sort, setSort] = useStored<string>("sort", "oldest");
   const [win, setWin] = useStored<number>("win", 72);
@@ -117,12 +116,6 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   const seq = useRef(0);
   useTick(15_000);
 
-  // Filtre ouvert depuis un lien de l'Accueil (?model=…&only=handoff|unread) : « à reprendre » ou « non lus ».
-  const [only, setOnly] = useState<"" | "handoff" | "unread">(() => {
-    if (typeof window === "undefined") return "";
-    const o = new URLSearchParams(window.location.search).get("only");
-    return o === "handoff" || o === "unread" ? o : "";
-  });
   const load = useCallback(async () => {
     const s = ++seq.current;
     const p = new URLSearchParams({ tab: tab === "unread" ? "reply" : tab, sort, window: String(win) });
@@ -130,12 +123,11 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
     if (q.trim()) p.set("q", q.trim());
     if (paying) p.set("paying", "1");
     if (online) p.set("online", "1");
-    if (only) p.set("only", only);
     try {
       const r = await api<QueueResp>("GET", "/api/inbox?" + p);
       if (s === seq.current) setData(r);
     } catch {}
-  }, [tab, sort, win, model, q, paying, online, only]);
+  }, [tab, sort, win, model, q, paying, online]);
 
   useEffect(() => {
     load();
@@ -215,15 +207,14 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   // Lien direct vers une conversation : /app/inbox?c=<id> (depuis « Messages envoyés », une fiche modèle…)
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    const o = sp.get("only");
-    if (o === "handoff" || o === "unread") {
-      // Le lien passe avant les préférences gardées sur l'ordinateur (onglet, modèle), relues juste après.
+    // Lien de l'Accueil : ?model=…&tab=reply|handoff (passe avant les préférences gardées sur l'ordinateur).
+    const lt = sp.get("tab");
+    if (lt === "reply" || lt === "handoff" || lt === "all") {
       try {
-        localStorage.setItem("crm.tab", JSON.stringify("all"));
+        localStorage.setItem("crm.tab", JSON.stringify(lt));
         localStorage.setItem("crm.model", JSON.stringify(sp.get("model") || ""));
       } catch {}
-      setOnly(o);
-      setTab("all");
+      setTab(lt);
       setModel(sp.get("model") || "");
     }
     const id = sp.get("c");
@@ -352,7 +343,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
           <div className="flex gap-1 rounded-xl border bg-card-2/60 p-1">
             {TABS.filter((t) => t.k !== "pinned" || (totals.pinned ?? 0) > 0 || tab === "pinned").map((t) => {
               const n =
-                t.k === "reply" ? totals.reply : t.k === "new" ? totals.newSubs ?? 0 : t.k === "relance" ? totals.relances ?? 0 : t.k === "pinned" ? totals.pinnedReply ?? 0 : t.k === "online" ? totals.online ?? 0 : 0;
+                t.k === "reply" ? totals.reply : t.k === "handoff" ? totals.handoff ?? 0 : t.k === "relance" ? totals.relances ?? 0 : t.k === "pinned" ? totals.pinnedReply ?? 0 : 0;
               const on = tab === t.k || (t.k === "reply" && tab === "unread");
               return (
                 <button
@@ -367,8 +358,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
                 >
                   {t.k === "all" ? "Tous" : null}
                   {t.k === "pinned" ? <Pin className="size-4" /> : null}
-                  {t.k === "online" ? <span className={cn("size-2.5 rounded-full ring-2", on ? "bg-white ring-white/30" : "bg-current ring-current/25")} /> : null}
-                  {t.k === "new" ? <Sparkles className="size-4" /> : null}
+                  {t.k === "handoff" ? <Hand className="size-4" /> : null}
                   {t.k === "relance" ? <BellRing className="size-4" /> : null}
                   {t.k === "reply" ? <MessageCircle className="size-4" /> : null}
                   {/* Même pastille partout (couleur du thème), comme sur les photos des modèles */}
@@ -383,12 +373,6 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un fan, un tag…" className="h-9 w-full rounded-xl border border-input bg-card-2/60 pr-3 pl-9 text-sm outline-none focus:border-primary" />
           </div>
-          {only ? (
-            <button onClick={() => setOnly("")} className="flex items-center gap-1.5 self-start rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold" title="Retirer le filtre">
-              {only === "handoff" ? "Seulement « à reprendre » (l’IA a passé la main)" : "Seulement les non lus"}
-              <X className="size-3.5" />
-            </button>
-          ) : null}
           <div className="flex gap-2">
             <FilterMenu sort={sort} setSort={setSort} paying={paying} setPaying={setPaying} online={online} setOnline={setOnline} reply={tab === "reply"} />
             {tab === "reply" ? (

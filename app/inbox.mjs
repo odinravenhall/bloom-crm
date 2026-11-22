@@ -58,7 +58,7 @@ function myBoxes(userId) {
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const WINDOWS = { '6h': 6 * HOUR, '24h': 24 * HOUR, '3j': 72 * HOUR, '7j': 168 * HOUR, tout: 0 };
-const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active'];
+const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active', 'manual'];
 export const tagsOf = (s) => String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 /** Le fan attend une réponse : dernier message de lui, non lu chez Substy, « à reprendre » (l'IA a passé la main), ou remis « non lu » dans Bloom. */
@@ -111,7 +111,8 @@ export function computeQueue(u, list, o = {}) {
   const mine = myBoxes(u.id);
 
   const perCreator = {};
-  const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0, unread: 0, pinnedReply: 0 };
+  const manualPerCreator = {};
+  const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0, unread: 0, pinnedReply: 0, manual: 0 };
   const rows = [];
   const relCands = [];
   let loading = false;
@@ -119,6 +120,7 @@ export function computeQueue(u, list, o = {}) {
     const inb = inboxChats(cid);
     if (!inb.complete) loading = true;
     let n = 0;
+    let nm = 0;
     const inScope = scope.includes(cid);
     const cfg = boxes.get(cid);
     const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
@@ -136,6 +138,7 @@ export function computeQueue(u, list, o = {}) {
       const box = split?.get(c.fanId) ?? null;
       if (reply && sel.length && sel.length < cfg.count && !sel.includes(box)) continue;
       if (reply) n++;
+      if (reply && (!c.ai || c.handoff)) nm++;
       if (!inScope) continue;
       if (paying && !(c.spent > 0)) continue;
       if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
@@ -149,6 +152,9 @@ export function computeQueue(u, list, o = {}) {
       if (c.unread > 0 || m?.unread) counts.unread++;
       if (row.isNew) counts.new++;
       if (row.active) counts.active++;
+      // « À reprendre » : fans sans IA (coupée, ou passés à la main par l'IA) qui attendent une réponse — pour les chatteurs.
+      row.manual = reply && (!c.ai || !!c.handoff);
+      if (row.manual) counts.manual++;
       if (c.last?.fromCreator && c.last.id && at <= now - 5 * MIN && at >= now - 24 * HOUR) relCands.push(c), (row.relCand = true);
       if (o.activeOnly && !row.active) continue;
       // Filtre venu d'un lien (Accueil) : seulement les fans « à reprendre » (l'IA a passé la main) ou non lus.
@@ -157,17 +163,18 @@ export function computeQueue(u, list, o = {}) {
       rows.push(row);
     }
     perCreator[cid] = n;
+    manualPerCreator[cid] = nm;
   }
   const rel = relances(relCands);
   counts.relance = rows.filter((r) => r.relCand && rel.has(r.c.last.id)).length;
 
   const keep = rows.filter((r) =>
-    tab === 'reply' ? r.reply : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
+    tab === 'reply' ? r.reply : tab === 'manual' ? r.manual : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
   );
   keep.sort((a, b) => (sort === 'spent' ? (b.c.spent || 0) - (a.c.spent || 0) || a.at - b.at : sort === 'old' ? a.at - b.at : b.at - a.at));
   // Épinglés toujours en haut (sauf tri par dépense).
   if (sort !== 'spent') keep.sort((a, b) => (b.m?.pinned || 0) - (a.m?.pinned || 0));
-  return { keep, counts, perCreator, rel, loading, boxes, mine, visible, scope };
+  return { keep, counts, perCreator, manualPerCreator, rel, loading, boxes, mine, visible, scope };
 }
 
 export function inboxRoutes({ userFrom, send, body, creators }) {

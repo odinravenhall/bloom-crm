@@ -65,4 +65,4 @@ export type LiveMsg = {
 export type Script = { id: string; name: string; content: string; price: number | null; tags: string[]; medias: Media[]; sentCount: number; paidCount: number; paidTotal: number };
 
 export type BoxInfo = { modelId: string; config: { enabled: boolean; count: number; names: string[] }; mine: number[]; perBox: Record<number, number> };
-export type QueueResp = { items: (Conv & { box: number | null; relance?: { ppv: number | null; step: string | null; at: string | null } })[]; counts: Record<string, number>; allReply: number; totals: { reply: number; unread: number; all: number; newSubs?: number; relances?: number; pinned?: number; pinnedReply?: number; online?: number }; boxes: BoxInfo | null; hidden?: string[] };
+export type QueueResp = { items: (Conv & { box: number | null; relance?: { ppv: number | null; step: string | null; at: string | null } })[]; counts: Record<string, number>; allReply: number; totals: { reply: number; unread: number; all: number; newSubs?: number; relances?: number; pinned?: number; pinnedReply?: number; online?: number; handoff?: number }; boxes: BoxInfo | null; hidden?: string[] };
