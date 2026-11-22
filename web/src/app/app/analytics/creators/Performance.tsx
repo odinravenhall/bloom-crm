@@ -32,12 +32,13 @@ const PCH: { key: Channel; label: string; color: string }[] = [
 // Montants comme Infloww dans cet onglet : « $1670.4 », « $412 ».
 const amt = (v: number) => `$${+v.toFixed(2)}`;
 const pctTxt = (c: number) => `${c.toFixed(2)}%`;
-// Graduations « rondes » comme Infloww (pas de 1, 2 ou 5 × 10ⁿ, 5 intervalles environ) : 454 → 0, 100 … 500.
+// Graduations comme Infloww : pas de 1, 2 ou 10 × 10ⁿ, au plus 8 intervalles (454 → 0, 100 … 500 ; 7 300 → 0, 1 000 … 8 000 ;
+// 380 → 0, 100 … 400 ; 37 → 0, 10 … 40).
 export const niceTicks = (max: number) => {
   if (max <= 0) return [0, 1];
-  const raw = max / 5;
+  const raw = max / 8;
   const p = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw)!;
+  const step = [1, 2, 10].map((m) => m * p).find((s) => s >= raw)!;
   const top = Math.ceil(max / step) * step;
   return Array.from({ length: Math.round(top / step) + 1 }, (_, i) => +(i * step).toFixed(6));
 };
