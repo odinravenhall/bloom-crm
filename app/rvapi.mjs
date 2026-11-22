@@ -2,7 +2,7 @@
 // exactement dans le format de Raven, à partir de Substy (OnlyFans / MYM) et de ce que Bloom garde en plus.
 // Une conversation = « <creatorId>~<fanId> ». Les montants sont en centimes (comme Raven).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { aiLogView, inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
+import { inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { parisDay, revenue } from './revenue.mjs';
@@ -247,7 +247,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (!x) return;
       const cursor = new URL(req.url, 'http://x').searchParams.get('cursor') || undefined;
       const c = inboxChat(x.cid, x.fanId);
-      const [r, ai] = await Promise.all([substy.messages(x.cid, x.fanId, { limit: 30, cursor }), cursor ? null : substy.aiLogs(x.cid, x.fanId).catch(() => null)]);
+      const r = await substy.messages(x.cid, x.fanId, { limit: 30, cursor });
       const logs = all('SELECT s.text, s.at, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? ORDER BY s.at DESC LIMIT 200', x.cid, x.fanId);
       const who = (m) => {
         if (!m.isSentByCreator) return null;
@@ -257,15 +257,6 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const views = (r?.items || []).map((m) => messageView(m, who(m)));
       const sentBy = Object.fromEntries(views.filter((v) => v.by?.kind === 'bloom').map((v) => [String(v.id), v.by.name]));
       const data = views.map((v) => liveMsg(v, x.fanId, c?.name || 'Fan'));
-      // L'IA coupée / rallumée (Substy) : affichée comme une ligne d'information dans le fil, au bon moment.
-      if (ai) {
-        const oldest = views.length ? Math.min(...views.map((v) => Date.parse(v.at))) : 0;
-        for (const l of (ai.items || []).map(aiLogView)) {
-          if (Date.parse(l.at) < oldest) continue;
-          const what = l.on === false ? 'IA coupée' : l.on === true ? 'IA rallumée' : l.action;
-          data.push({ message: { id: `ai-${l.id}`, content: `${what}${l.by ? ` par ${l.by}` : ''}${l.reason ? ` · ${l.reason}` : ''}`, type: 'information', createdAt: l.at }, medias: [], reactions: [] });
-        }
-      }
       data.sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));
       // Lu par le fan : notre dernier message marqué lu.
       const readAt = views.filter((v) => !v.fromFan && v.read).map((v) => v.at).sort().pop() || null;
@@ -363,6 +354,59 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
     }],
 
     // ---------------------------------------------------------------- fiche du fan
+    // Bloc « Substy » de la fiche : IA sur ce fan, ventes faites par l'IA, scripts de Substy envoyés (étapes, achats).
+    ['GET', /^\/api\/rv\/conversations\/([^/]+)\/substy$/, async (req, res, id) => {
+      const x = conv(req, res, decodeURIComponent(id));
+      if (!x) return;
+      const [f, list, msgs] = await Promise.all([
+        substy.fan(x.cid, x.fanId).catch(() => null),
+        substy.fanScripts(x.cid, x.fanId).catch(() => []),
+        substy.messages(x.cid, x.fanId, { limit: 30 }).catch(() => null),
+      ]);
+      // Dernier envoi de chaque script : Substy ne le donne pas, on le lit sur les messages récents (ils portent leur script).
+      const lastBy = new Map();
+      for (const m of msgs?.items || []) {
+        const sid = m.script?.id;
+        if (sid && (!lastBy.has(sid) || Date.parse(m.createdAt) > Date.parse(lastBy.get(sid)))) lastBy.set(sid, m.createdAt);
+      }
+      const scripts = (list || [])
+        .map((sc) => {
+          const steps = (sc.templates || [])
+            .slice()
+            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+            .map((t, i) => ({
+              id: t.id,
+              index: i,
+              name: plain(t.name) || `Étape ${i + 1}`,
+              text: plain(t.content),
+              price: cents(t.price),
+              medias: (t.medias || []).length,
+              sent: !!t.alreadySent,
+              bought: /paid|purchas|bought|unlock/i.test(String(t.purchaseState?.status || '')),
+            }));
+          const sent = steps.filter((s) => s.sent).length;
+          const lastAt = lastBy.get(sc.id) || null;
+          return {
+            id: sc.id,
+            name: plain(sc.name),
+            total: steps.length,
+            sent,
+            bought: steps.filter((s) => s.bought).length,
+            lastAt,
+            status: sent >= steps.length && steps.length ? 'done' : lastAt && Date.now() - Date.parse(lastAt) < 48 * 3600_000 ? 'active' : 'paused',
+            steps,
+          };
+        })
+        .filter((s) => s.sent > 0)
+        .sort((a, b) => (Date.parse(b.lastAt || 0) || 0) - (Date.parse(a.lastAt || 0) || 0));
+      // Ventes de l'IA à ce fan (PPV envoyés par l'IA de Substy puis achetés), vues par Bloom.
+      const sale = one(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(l.gross), 0) AS gross, MAX(l.currency) AS currency FROM rv_live l JOIN msg_log m ON m.id = l.message_id WHERE l.creator_id = ? AND l.fan_id = ? AND m.kind = 'ai'`,
+        x.cid,
+        x.fanId,
+      );
+      send(res, 200, { ai: !!f?.aiEnabled, sales: { amount: sale?.gross || 0, count: sale?.n || 0 }, scripts });
+    }],
     ['GET', /^\/api\/rv\/conversations\/([^/]+)\/fan$/, async (req, res, id) => {
       const x = conv(req, res, decodeURIComponent(id));
       if (!x) return;

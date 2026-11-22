@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { Check, Moon, Sparkle, Sun } from "lucide-react";
 import { cn } from "@/lib/fmt";
 import { ROLE_LABEL, type Me } from "@/lib/types";
-import { THEMES, useTheme, type Theme } from "@/lib/theme";
+import { ACCENTS, DECORS, THEMES, useThemePrefs, type Theme } from "@/lib/theme";
 import { Avatar, Pill } from "@/components/ui";
 
-const THEME_INFO: Record<Theme, { icon: typeof Sun; text: string; swatch: string[] }> = {
-  light: { icon: Sun, text: "Crème, rose pétale et sauge", swatch: ["#f8f3ee", "#ffffff", "#d4537e", "#6f9478"] },
-  dark: { icon: Moon, text: "Prune profond, doux pour les yeux", swatch: ["#17131a", "#201b24", "#e07a9e", "#93bd9e"] },
-  onyx: { icon: Sparkle, text: "Noir profond, contraste maximal", swatch: ["#050505", "#0e0e0f", "#ea7aa0", "#93bd9e"] },
+const BASE_INFO: Record<Theme, { icon: typeof Sun; text: string; swatch: string[] }> = {
+  dark: { icon: Moon, text: "Nuit légèrement prune, doux pour les yeux", swatch: ["#0f0d15", "#17141e", "#211d2a"] },
+  onyx: { icon: Sparkle, text: "Noir profond, contraste maximal", swatch: ["#000000", "#0b0b0e", "#141418"] },
+  light: { icon: Sun, text: "Clair, pour les pièces lumineuses", swatch: ["#f4f4f6", "#ffffff", "#e9e9ee"] },
 };
 const LANG_KEY = "bloom.lang";
 
 /** Paramètres de chacun : apparence, langue, compte. Gardés sur cet ordinateur. */
 export function Preferences({ me }: { me: Me }) {
-  const { theme, setTheme } = useTheme();
+  const { prefs, setPrefs } = useThemePrefs();
   const [lang, setLang] = useState("fr");
   useEffect(() => {
     try {
@@ -47,25 +47,61 @@ export function Preferences({ me }: { me: Me }) {
 
       {section(
         "Apparence",
-        "Le thème de Bloom.",
-        <div className="grid gap-3 sm:grid-cols-3">
-          {THEMES.map(([t, label]) => {
-            const info = THEME_INFO[t];
-            return (
-              <button key={t} onClick={() => setTheme(t)} className={cn("rounded-3xl border bg-card p-4 text-left transition-colors", theme === t ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40")}>
-                <div className="flex overflow-hidden rounded-2xl border">
-                  {info.swatch.map((c) => (
-                    <span key={c} className="h-12 flex-1" style={{ background: c }} />
-                  ))}
-                </div>
-                <p className="mt-3 flex items-center gap-2 font-semibold">
-                  <info.icon className="size-4 text-primary" /> {label}
-                  {theme === t ? <Check className="ml-auto size-4 text-primary" /> : null}
-                </p>
-                <p className="text-xs text-muted">{info.text}</p>
-              </button>
-            );
-          })}
+        "Le style de Bloom : la base, ta couleur, le fond animé. Gardé sur cet ordinateur.",
+        <div className="flex flex-col gap-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {THEMES.map(([t, label]) => {
+              const info = BASE_INFO[t];
+              return (
+                <button key={t} onClick={() => setPrefs({ base: t })} className={cn("rounded-2xl border bg-card p-3 text-left transition-colors", prefs.base === t ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40")}>
+                  <div className="flex overflow-hidden rounded-xl border">
+                    {info.swatch.map((c) => (
+                      <span key={c} className="h-10 flex-1" style={{ background: c }} />
+                    ))}
+                    <span className="h-10 flex-1" style={{ background: prefs.accent }} />
+                  </div>
+                  <p className="mt-2 flex items-center gap-2 font-semibold">
+                    <info.icon className="size-4 text-primary" /> {label}
+                    {prefs.base === t ? <Check className="ml-auto size-4 text-primary" /> : null}
+                  </p>
+                  <p className="text-xs text-muted">{info.text}</p>
+                </button>
+              );
+            })}
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold">Couleur</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {ACCENTS.map(([c, label]) => (
+                <button key={c} onClick={() => setPrefs({ accent: c })} title={label} className={cn("grid size-9 place-items-center rounded-full ring-offset-2 ring-offset-bg", prefs.accent === c && "ring-2 ring-fg")} style={{ background: c }}>
+                  {prefs.accent === c ? <Check className="size-4 text-white" /> : null}
+                </button>
+              ))}
+              <label className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold text-muted" title="Ta propre couleur">
+                <input type="color" value={prefs.accent} onChange={(e) => setPrefs({ accent: e.target.value })} className="size-6 cursor-pointer rounded-full border-0 bg-transparent p-0" /> Perso
+              </label>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold">Fond animé</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {DECORS.map(([d, label, text]) => (
+                <button key={d} onClick={() => setPrefs({ decor: d })} className={cn("rounded-2xl border bg-card px-4 py-3 text-left", prefs.decor === d ? "border-primary ring-2 ring-primary/30" : "hover:border-primary/40")}>
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    {label} {prefs.decor === d ? <Check className="ml-auto size-4 text-primary" /> : null}
+                  </p>
+                  <p className="text-xs text-muted">{text}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border bg-card px-4 py-3">
+            <input type="checkbox" checked={!prefs.motion} onChange={(e) => setPrefs({ motion: !e.target.checked })} className="size-4" />
+            <span>
+              <b className="block text-sm">Réduire les animations</b>
+              <span className="text-xs text-muted">Fond immobile : pour un ordinateur lent ou si ça te gêne.</span>
+            </span>
+          </label>
         </div>,
       )}
 

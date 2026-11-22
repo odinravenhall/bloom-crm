@@ -22,7 +22,11 @@ export function aiLogView(l) {
   return { id: l.id, at: l.createdAt, on, action: l.action || '', reason: l.reason || '', by: l.employee?.name || null };
 }
 /** Images de Substy : les chemins « /api/creators/… » passent par le relais de Bloom. */
-export const img = (u) => (!u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : u);
+/** Photo de Substy : un chemin, une adresse, ou un objet { url, thumbUrl } (photos de profil des fans). */
+export const img = (u) => {
+  if (u && typeof u === 'object') u = u.thumbUrl || u.url || null;
+  return !u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : String(u);
+};
 export const mediaView = (m) => ({
   id: m.id,
   type: (m.type || '').toLowerCase(),

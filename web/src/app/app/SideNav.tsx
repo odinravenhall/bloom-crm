@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   Bot,
-  Clock,
   FlaskConical,
   Flower2,
   Home,
@@ -21,7 +20,6 @@ import {
   Send,
   Settings,
   UsersRound,
-  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -51,7 +49,6 @@ const GROUPS: Group[] = [
       { href: "/app/scripts", label: "Scripts & séquences", icon: ScrollText, roles: CHAT },
       { href: "/app/vault", label: "Vault", icon: Images, roles: CHAT },
       { href: "/app/envoi", label: "Envoi groupé", icon: Send, roles: CHAT },
-      { href: "/app/programmes", label: "Programmés", icon: Clock, roles: CHAT, soon: true },
     ],
   },
   {
@@ -66,7 +63,6 @@ const GROUPS: Group[] = [
     items: [
       { href: "/app/equipe", label: "Équipe", icon: UsersRound, roles: BOSS },
       { href: "/app/stats", label: "Performances", icon: BarChart3, roles: BOSS },
-      { href: "/app/paies", label: "Paies", icon: Wallet, roles: MANAGE, soon: true },
     ],
   },
   {

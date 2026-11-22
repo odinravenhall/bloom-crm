@@ -12,6 +12,7 @@ import { useNow } from "@/rv/lib/useNow";
 import { Avatar, Pill } from "@/rv/components/ui";
 import type { Conv, LiveMsg, Media, Model } from "./types";
 import type { Lib, LibScript, LibSequence } from "./scriptTypes";
+import { AI_EVENT } from "./SubstyCard";
 import { LibraryPicker, SequenceBar } from "./LibraryPicker";
 import { VaultPicker } from "./VaultPicker";
 import { BadgePicker } from "./BadgePicker";
@@ -78,13 +79,22 @@ export function Chat({
   // IA de Substy sur ce fan (Bloom).
   const [ai, setAi] = useState(!!conv.ai);
   useEffect(() => setAi(!!conv.ai), [conv.id, conv.ai]);
+  // Le bloc Substy de la fiche a changé l'IA : on suit.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const x = (e as CustomEvent<{ id: string; on: boolean }>).detail;
+      if (x?.id === conv.id) setAi(x.on);
+    };
+    window.addEventListener(AI_EVENT, on);
+    return () => window.removeEventListener(AI_EVENT, on);
+  }, [conv.id]);
   const toggleAi = async () => {
     const on = !ai;
     setAi(on);
     try {
       await api("POST", `/api/conversations/${conv.id}/action`, { action: "ai", on });
-      toast(on ? "IA rallumée sur ce fan" : "IA coupée : tu réponds à la main");
-      loadMsgs();
+      window.dispatchEvent(new CustomEvent(AI_EVENT, { detail: { id: conv.id, on } }));
+      toast(on ? "IA Substy rallumée sur ce fan" : "IA Substy coupée : tu réponds à la main");
     } catch (e) {
       setAi(!on);
       toast((e as Error).message, "err");

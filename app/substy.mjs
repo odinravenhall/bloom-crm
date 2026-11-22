@@ -152,6 +152,8 @@ export class SubstySession {
     return this.call('chats.messages', { creatorId, fanId, limit, isUnread: false, direction: 'forward', ...(cursor ? { cursor } : {}) });
   }
   fan(creatorId, fanId) { return this.call('fans.get', { creatorId, fanId }); }
+  /** Photo, nom et pseudo de chaque créatrice sur sa plateforme (OnlyFans / MYM). */
+  platformDetails(creatorIds) { return this.call('creators.getCreatorPlatformDetails', { creatorIds }); }
   validate(content) { return this.call('agency.bannedWords.validateContent', { content }); }
   vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }
   vaultMedias(creatorId, { listId, cursor, limit = 40 } = {}) {

@@ -12,6 +12,7 @@ import { ScoreCard } from "@/rv/components/ScoreCard";
 import { NewSubBadge } from "@/rv/components/NewSub";
 import { PpvTimeline } from "./PpvTimeline";
 import { FanScripts, FreeMedias } from "./FanScripts";
+import { SubstyCard } from "./SubstyCard";
 import type { Conv, Model } from "./types";
 
 type Stats = {
@@ -192,6 +193,7 @@ export function FanPanel({ conv, model, onChanged, admin, onErased }: { conv: Co
         {tab === "fiche" ? (
           <div className="flex flex-col gap-4">
             {/* Où en est le fan dans les scripts : juste au-dessus des notes */}
+            <SubstyCard key={`sb-${conv.id}`} convId={conv.id} />
             <FanScripts key={`s-${conv.id}`} convId={conv.id} />
             <FanSheet key={conv.id} conv={conv} fan={fan} onChanged={onChanged} />
           </div>

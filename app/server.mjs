@@ -61,7 +61,12 @@ async function syncCreators({ restart = false } = {}) {
     streamStops.clear();
   }
   const list = (await substy.creators()) || [];
-  state.creators = list.map(creatorView);
+  // Photos de profil des créatrices (Substy les donne à part) ; on garde la précédente si l'appel échoue.
+  const ids0 = list.map((c) => c.id || c.creatorId).filter(Boolean);
+  const det = ids0.length ? await substy.platformDetails(ids0).catch(() => null) : null;
+  const pics = new Map((Array.isArray(det) ? det : []).map((d) => [d.id, d.avatar || null]));
+  const before = new Map((state.creators || []).map((c) => [c.id, c.avatar]));
+  state.creators = list.map(creatorView).map((c) => ({ ...c, avatar: c.avatar || pics.get(c.id) || before.get(c.id) || null }));
   setCreators(state.creators);
   const ids = state.creators.map((c) => c.id).filter(Boolean);
   warmInbox(ids);
