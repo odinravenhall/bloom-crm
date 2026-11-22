@@ -125,6 +125,7 @@ export type Member = {
 export type Presence = { userId: number; name: string; avatar: string | null; fanId: string | null };
 
 /** Scripts de Substy (séquences d'étapes, partagées avec l'IA). */
+export type QuickReply = { id: number; title: string; text: string; all: boolean; uses: number; by: string | null; mine: boolean };
 export type MassMessage = { id: string; text: string; price: number; medias: number; included: string[]; excluded: string[]; fans: number; onlineOnly: boolean; status: string; scheduledAt: string | null; createdAt: string | null; recipients: number | null; sent: number | null; viewed: number | null; purchased: number | null; gross: number | null; net: number | null; currency: string; canUnsend: boolean; unsendDeadline: string | null; revertedBy: string | null };
 export type FanList = { id: string; name: string; type: string; fans: number };
 export type Script = { id: string; name: string; description: string; position: number; enabled: boolean; ai: boolean; human: boolean; steps: number; medias: number | null; totalPrice: number | null; minPrice: number | null; maxPrice: number | null };

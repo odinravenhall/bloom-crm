@@ -40,6 +40,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS inbox_cache (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (creator_id, fan_id));
   -- Journal des modifications de la configuration IA faites depuis Bloom (qui, quoi, quand)
   CREATE TABLE IF NOT EXISTS ai_changes (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, what TEXT NOT NULL, detail TEXT, at INTEGER NOT NULL);
+  -- Messages rapides de la messagerie (creator_id NULL = pour toutes les créatrices)
+  CREATE TABLE IF NOT EXISTS quick_replies (id INTEGER PRIMARY KEY, creator_id TEXT, title TEXT NOT NULL, text TEXT NOT NULL, user_id INTEGER NOT NULL, uses INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS login_links (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
 `);
 // Colonnes ajoutées après coup (ignorées si déjà là : la base en ligne n'est jamais recréée).

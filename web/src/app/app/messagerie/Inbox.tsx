@@ -12,6 +12,15 @@ import { Avatar, Pill, inputCls } from "@/components/ui";
 import { Chat } from "./Chat";
 
 type Tab = "all" | "todo";
+// Filtres rapides de la liste (cumulables) et tri.
+type Filter = "unread" | "aioff" | "handoff" | "spender";
+const FILTERS: [Filter, string][] = [
+  ["unread", "Non lus"],
+  ["handoff", "À reprendre"],
+  ["aioff", "IA coupée"],
+  ["spender", "50 $ et plus"],
+];
+const SPENDER = 50;
 /** Événement temps réel relayé par Bloom. */
 export type LiveEvent = { creatorId: string; type: string; fanId?: string; message?: Message; data?: { fanId?: string; status?: string } };
 type InboxR = { items: ChatT[]; at: number; complete: boolean; total: number };
@@ -25,11 +34,14 @@ const waitingSince = (c: ChatT) => (c.last ? Date.parse(c.last.at) : 0);
 const fresh = (fanId: string): ChatT => ({ fanId, name: "Fan", username: null, avatar: null, unread: 0, ai: false, handoff: false, spent: 0, subscribed: null, canSend: true, last: null });
 
 /** Messagerie : toutes les conversations de la créatrice choisie (chargées d'un coup) + conversation ouverte. */
-export function Inbox() {
+export function Inbox({ boss = false }: { boss?: boolean }) {
   const params = useSearchParams();
   const { creatorId, setCreator, loaded, creators } = useCreators();
   const [tab, setTab] = useState<Tab>(() => (["todo", "unread", "handoff"].includes(params.get("f") || "") ? "todo" : "all"));
   const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<Filter[]>([]);
+  const [sort, setSort] = useState<"recent" | "spent">("recent");
+  const search = useRef<HTMLInputElement>(null);
   const [chats, setChats] = useState<ChatT[]>([]);
   const [progress, setProgress] = useState<{ loading: boolean; n: number }>({ loading: false, n: 0 });
   const [open, setOpen] = useState<ChatT | null>(null);
@@ -164,10 +176,40 @@ export function Inbox() {
     [chats, minute],
   );
   const shown = useMemo(() => {
-    const base = tab === "todo" ? todo : chats;
+    let l = tab === "todo" ? todo : chats;
     const s = q.trim().toLowerCase();
-    return s ? base.filter((c) => c.name.toLowerCase().includes(s) || (c.username || "").toLowerCase().includes(s)) : base;
-  }, [tab, todo, chats, q]);
+    if (s) l = l.filter((c) => c.name.toLowerCase().includes(s) || (c.username || "").toLowerCase().includes(s));
+    if (filters.includes("unread")) l = l.filter((c) => c.unread > 0);
+    if (filters.includes("handoff")) l = l.filter((c) => c.handoff);
+    if (filters.includes("aioff")) l = l.filter((c) => !c.ai);
+    if (filters.includes("spender")) l = l.filter((c) => c.spent >= SPENDER);
+    if (sort === "spent") l = [...l].sort((a, b) => b.spent - a.spent);
+    return l;
+  }, [tab, todo, chats, q, filters, sort]);
+
+  // Raccourcis : Alt+↓ / Alt+↑ conversation suivante / précédente, Ctrl+K (⌘K) chercher un fan.
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        search.current?.focus();
+        search.current?.select();
+        return;
+      }
+      if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp") && shown.length) {
+        e.preventDefault();
+        const i = open ? shown.findIndex((c) => c.fanId === open.fanId) : -1;
+        const n = e.key === "ArrowDown" ? Math.min(shown.length - 1, i + 1) : Math.max(0, i - 1);
+        const c = shown[n];
+        if (c && c.fanId !== open?.fanId) {
+          select(c);
+          document.querySelector(`[data-fan="${CSS.escape(c.fanId)}"]`)?.scrollIntoView({ block: "nearest" });
+        }
+      }
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -199,7 +241,35 @@ export function Inbox() {
             </div>
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
-              <input className={cn(inputCls, "pl-9")} placeholder="Rechercher un fan…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input
+                ref={search}
+                className={cn(inputCls, "pl-9")}
+                placeholder="Rechercher un fan…  (Ctrl+K)"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && shown[0]) select(shown[0]);
+                  if (e.key === "Escape") (setQ(""), e.currentTarget.blur());
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {FILTERS.map(([k, l]) => (
+                <button
+                  key={k}
+                  onClick={() => setFilters((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))}
+                  className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-semibold", filters.includes(k) ? "border-primary bg-petal text-primary-soft" : "bg-card text-muted hover:text-fg")}
+                >
+                  {l}
+                </button>
+              ))}
+              <button
+                onClick={() => setSort((s) => (s === "recent" ? "spent" : "recent"))}
+                title="Changer le tri"
+                className={cn("ml-auto rounded-full border px-2.5 py-0.5 text-[11px] font-semibold", sort === "spent" ? "border-primary bg-petal text-primary-soft" : "bg-card text-muted hover:text-fg")}
+              >
+                {sort === "spent" ? "Tri : dépense" : "Tri : récent"}
+              </button>
             </div>
             {progress.loading ? <p className="text-[11px] text-muted">Bloom récupère toutes les conversations chez Substy… {progress.n}</p> : null}
           </div>
@@ -212,7 +282,7 @@ export function Inbox() {
             ) : null}
             {!shown.length && creators.length ? (
               <p className="p-6 text-center text-sm text-muted">
-                {progress.loading || !creatorId ? "Chargement…" : tab === "todo" ? "Personne n’attend de réponse 🎉" : q ? "Aucun fan trouvé" : "Aucune conversation"}
+                {progress.loading || !creatorId ? "Chargement…" : q || filters.length ? "Aucun fan ne correspond" : tab === "todo" ? "Personne n’attend de réponse 🎉" : "Aucune conversation"}
               </p>
             ) : null}
           </div>
@@ -225,13 +295,14 @@ export function Inbox() {
               <button onClick={() => setOpen(null)} className="flex items-center gap-1 border-b px-3 py-2 text-sm text-muted md:hidden">
                 <ChevronLeft className="size-4" /> Conversations
               </button>
-              <Chat key={creatorId + open.fanId} creatorId={creatorId} chat={open} lastEvent={lastEvent} onPatch={patchChat} watchers={othersOn(open.fanId)} />
+              <Chat key={creatorId + open.fanId} creatorId={creatorId} chat={open} lastEvent={lastEvent} onPatch={patchChat} watchers={othersOn(open.fanId)} boss={boss} />
             </>
           ) : (
             <div className="grid flex-1 place-items-center text-center text-sm text-muted">
               <div>
                 <p className="text-4xl">🌸</p>
                 <p className="mt-2">Choisis une conversation</p>
+                <p className="mt-3 text-xs">Alt+↓ / Alt+↑ : conversation suivante / précédente · Ctrl+K (⌘K sur Mac) : chercher un fan · / : messages rapides</p>
               </div>
             </div>
           )}
@@ -244,7 +315,7 @@ export function Inbox() {
 function Row({ c, on, onClick, watchers }: { c: ChatT; on: boolean; onClick: () => void; watchers: Presence[] }) {
   const waiting = needsReply(c);
   return (
-    <button onClick={onClick} className={cn("cv-row relative flex w-full items-start gap-3 border-b border-line/50 px-3 py-2.5 text-left transition-colors", on ? "bg-petal/60" : "hover:bg-white/[0.03]")}>
+    <button data-fan={c.fanId} onClick={onClick} className={cn("cv-row relative flex w-full items-start gap-3 border-b border-line/50 px-3 py-2.5 text-left transition-colors", on ? "bg-petal/60" : "hover:bg-white/[0.03]")}>
       {on ? <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-primary" /> : null}
       <Avatar src={c.avatar} name={c.name} size="size-10" />
       <span className="min-w-0 flex-1">

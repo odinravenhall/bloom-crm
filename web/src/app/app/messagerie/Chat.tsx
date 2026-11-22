@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, Lock, ScrollText, Send, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ImagePlus, Lock, ScrollText, Send, X, Zap } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, dayLabel, hhmm, usd } from "@/lib/fmt";
 import type { AiLog, Chat as ChatT, Media, Message, Presence } from "@/lib/types";
@@ -10,11 +10,12 @@ import type { LiveEvent } from "./Inbox";
 import { FanPanel } from "./FanPanel";
 import { VaultPicker } from "./VaultPicker";
 import { ScriptPicker } from "./ScriptPicker";
+import { QuickMenu, fillQuick, matchQuick, useQuickReplies } from "./QuickReplies";
 
 type Page = { items: Message[]; olderCursor: string | null; aiLog?: AiLog[] };
 
 /** Une conversation : messages (avec l'historique IA coupée / rallumée), IA on/off, envoi texte ou PPV. */
-export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { creatorId: string; chat: ChatT; lastEvent: LiveEvent | null; onPatch: (fanId: string, p: Partial<ChatT>) => void; watchers?: Presence[] }) {
+export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [], boss = false }: { creatorId: string; chat: ChatT; lastEvent: LiveEvent | null; onPatch: (fanId: string, p: Partial<ChatT>) => void; watchers?: Presence[]; boss?: boolean }) {
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [aiLog, setAiLog] = useState<AiLog[]>([]);
   const [older, setOlder] = useState<string | null>(null);
@@ -114,6 +115,23 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+
+  // Messages rapides : « / » en début de message, ou le bouton « Rapides ».
+  const quick = useQuickReplies(creatorId);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickIdx, setQuickIdx] = useState(0);
+  const slash = text.startsWith("/") && !text.includes("\n");
+  const quickQuery = slash ? text.slice(1) : "";
+  const quickItems = useMemo(() => matchQuick(quick.list, quickQuery), [quick.list, quickQuery]);
+  const menu = slash || quickOpen;
+  useEffect(() => setQuickIdx(0), [quickQuery, menu]);
+  const pickQuick = (r: { id: number; text: string }) => {
+    const t = fillQuick(r.text, chat.name);
+    setText((cur) => (slash || !cur.trim() ? t : cur.replace(/\s*$/, " ") + t));
+    setQuickOpen(false);
+    api("POST", "/api/quick/used", { id: r.id }).catch(() => {});
+    requestAnimationFrame(() => input.current?.focus());
+  };
   const send = async () => {
     if ((!text.trim() && !sel.length) || sending) return;
     setSending(true);
@@ -238,19 +256,50 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
           </div>
         ) : null}
 
-        <footer className="border-t bg-panel px-4 py-3">
+        <footer className="relative border-t bg-panel px-4 py-3">
+          {menu ? (
+            <QuickMenu
+              creatorId={creatorId}
+              boss={boss}
+              items={quickItems}
+              active={quickIdx}
+              query={quickQuery}
+              onPick={pickQuick}
+              onClose={() => (setQuickOpen(false), slash && setText(""))}
+              onChanged={quick.reload}
+            />
+          ) : null}
           <textarea
             ref={input}
             rows={2}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
+              if (menu) {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setQuickOpen(false);
+                  if (slash) setText("");
+                  return;
+                }
+                if (quickItems.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                  e.preventDefault();
+                  setQuickIdx((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + quickItems.length) % quickItems.length);
+                  return;
+                }
+                if (quickItems.length && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+                  e.preventDefault();
+                  pickQuick(quickItems[Math.min(quickIdx, quickItems.length - 1)]);
+                  return;
+                }
+              }
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send();
               }
             }}
-            placeholder={chat.canSend ? "Écrire au fan…  (Entrée : envoyer · Maj+Entrée : saut de ligne)" : "Ce fan ne peut pas recevoir de message"}
+            placeholder={chat.canSend ? "Écrire au fan…  (Entrée : envoyer · Maj+Entrée : saut de ligne · / : messages rapides)" : "Ce fan ne peut pas recevoir de message"}
             className="max-h-56 min-h-16 w-full resize-y rounded-xl border border-input bg-card-2/60 px-3 py-2 text-sm outline-none placeholder:text-muted/70 focus:border-primary"
           />
           <div className="mt-2 flex items-center gap-2">
@@ -259,6 +308,9 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
             </button>
             <button onClick={() => setScripts(true)} className={btnCls.ghost}>
               <ScrollText className="size-4" /> Scripts
+            </button>
+            <button onClick={() => (setQuickOpen((o) => !o), input.current?.focus())} className={cn(btnCls.ghost, menu && "text-primary-soft")}>
+              <Zap className="size-4" /> Rapides
             </button>
             {err ? <span className="truncate text-xs font-semibold text-rose-300">{err}</span> : null}
             <button onClick={send} disabled={sending || (!text.trim() && !sel.length)} className={cn(btnCls.primary, "ml-auto")}>

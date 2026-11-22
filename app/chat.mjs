@@ -502,6 +502,53 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       );
     },
 
+    // ------------------------------------------------ messages rapides (« / » dans la zone de message)
+    'GET /api/quick': async (req, res) => {
+      const cid = q(req).get('creatorId');
+      if (!authC(req, res, cid)) return;
+      const rows = all(
+        `SELECT r.id, r.creator_id, r.title, r.text, r.uses, r.user_id, u.name AS by FROM quick_replies r LEFT JOIN users u ON u.id = r.user_id
+         WHERE r.creator_id IS NULL OR r.creator_id = ? ORDER BY r.uses DESC, r.title COLLATE NOCASE`,
+        String(cid),
+      );
+      send(res, 200, rows.map((r) => ({ id: r.id, title: r.title, text: r.text, all: r.creator_id == null, uses: r.uses, by: r.by || null, mine: r.user_id === userFrom(req)?.id })));
+    },
+    'POST /api/quick': async (req, res) => {
+      const b = await body(req);
+      const u = authC(req, res, b.creatorId);
+      if (!u) return;
+      const title = String(b.title || '').trim().slice(0, 60);
+      const text = String(b.text || '').trim().slice(0, 2000);
+      if (!title || !text) return send(res, 400, { error: 'Un nom et un texte' });
+      // « Pour toutes les créatrices » : réservé aux admins, managers et team leaders.
+      const forAll = !!b.all && isBoss(u);
+      if (b.id) {
+        const r = one('SELECT user_id FROM quick_replies WHERE id = ?', Number(b.id));
+        if (!r) return send(res, 404, { error: 'Introuvable' });
+        if (r.user_id !== u.id && !isBoss(u)) return send(res, 403, { error: 'Seul son auteur ou un manager peut le modifier' });
+        run('UPDATE quick_replies SET title = ?, text = ?, creator_id = ? WHERE id = ?', title, text, forAll ? null : String(b.creatorId), Number(b.id));
+      } else run('INSERT INTO quick_replies (creator_id, title, text, user_id, at) VALUES (?, ?, ?, ?, ?)', forAll ? null : String(b.creatorId), title, text, u.id, Date.now());
+      send(res, 200, { ok: true });
+    },
+    'POST /api/quick/delete': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const r = one('SELECT user_id, creator_id FROM quick_replies WHERE id = ?', Number(b.id));
+      if (!r) return send(res, 404, { error: 'Introuvable' });
+      if (r.user_id !== u.id && !isBoss(u)) return send(res, 403, { error: 'Seul son auteur ou un manager peut le supprimer' });
+      if (r.creator_id && !canSee(u, r.creator_id)) return send(res, 403, { error: 'Pas ta créatrice' });
+      run('DELETE FROM quick_replies WHERE id = ?', Number(b.id));
+      send(res, 200, { ok: true });
+    },
+    'POST /api/quick/used': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      const b = await body(req);
+      run('UPDATE quick_replies SET uses = uses + 1 WHERE id = ?', Number(b.id));
+      send(res, 200, { ok: true });
+    },
+
     // ------------------------------------------------ envois groupés
     'GET /api/mass': async (req, res) => {
       const p = q(req);

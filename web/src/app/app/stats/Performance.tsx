@@ -100,8 +100,9 @@ export function Performance() {
               </select>
             </div>
             <Table
+              className="mx-0 rounded-2xl border bg-card md:mx-0"
               head={
-                <tr>
+                <>
                   <th className={thCls}>#</th>
                   <th className={thCls}>Chatteur</th>
                   <th className={cn(thCls, "text-right")}>Chiffre</th>
@@ -112,7 +113,7 @@ export function Performance() {
                   <th className={cn(thCls, "text-right")}>Panier moyen</th>
                   <th className={cn(thCls, "text-right")} title="Envoyés depuis Bloom sur la période">Messages / PPV envoyés</th>
                   <th className={thCls}>Créatrices</th>
-                </tr>
+                </>
               }
             >
               {sellers.map((s, i) => {
@@ -169,13 +170,14 @@ export function Performance() {
           <section>
             <h2 className="mb-3 text-2xl">Par créatrice</h2>
             <Table
+              className="mx-0 rounded-2xl border bg-card md:mx-0"
               head={
-                <tr>
+                <>
                   <th className={thCls}>Créatrice</th>
                   <th className={cn(thCls, "text-right")}>Chiffre</th>
                   <th className={cn(thCls, "text-right")}>Abonnements</th>
                   <th className={thCls}>Meilleurs chatteurs</th>
-                </tr>
+                </>
               }
             >
               {data.creators.map((c) => {

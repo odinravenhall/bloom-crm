@@ -7,10 +7,10 @@ export const metadata: Metadata = { title: "Messagerie" };
 export const dynamic = "force-dynamic";
 
 export default async function Messagerie() {
-  await requireMe(CHAT_ROLES);
+  const me = await requireMe(CHAT_ROLES);
   return (
     <Suspense>
-      <Inbox />
+      <Inbox boss={me.role !== "chatter"} />
     </Suspense>
   );
 }
