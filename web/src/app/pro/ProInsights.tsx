@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChevronUp, Eye, GripVertical, Info, Lock, MapPin, NotebookText, Pencil, Settings, Tags, TriangleAlert, X } from "lucide-react";
+import { ChevronUp, Eye, GripVertical, Info, Lock, MapPin, NotebookText, Pencil, Settings, Tags, X } from "lucide-react";
 import { api, mediaThumb, toast } from "@/rv/lib/client";
 import { money } from "@/rv/lib/fmt";
 import type { Conv, LiveMsg } from "@/rv/inbox/types";
@@ -89,7 +89,6 @@ function Insights({ conv, fan, reload, t }: { conv: Conv; fan: Fan | null; reloa
   const ppv = Math.max(0, total - tips);
   const expired = s.subscriptionExpireAt ? Date.parse(s.subscriptionExpireAt) < Date.now() : false;
   const days = s.firstSubscriptionAt || conv.subscribedAt ? Math.max(1, Math.round((Date.now() - Date.parse((s.firstSubscriptionAt || conv.subscribedAt)!)) / 864e5)) : null;
-  const power = total <= 0 ? t("Insufficient data") : total < 5000 ? t("Low") : total < 30000 ? t("Medium") : t("High");
   return (
     <>
       <h3 className="mb-3 text-[15px] font-semibold">{t("Fan insights")}</h3>
@@ -108,10 +107,6 @@ function Insights({ conv, fan, reload, t }: { conv: Conv; fan: Fan | null; reloa
         <Row k="PPV" v={<span className="text-right">{money(ppv, 0)} <span className="font-normal" style={{ color: "var(--of-muted)" }}>{t("Total")}</span></span>} />
         <Row k="Tip" v={<span>{money(tips, 0)} <span className="font-normal" style={{ color: "var(--of-muted)" }}>{t("Total")}</span></span>} />
         <Row k={t("Highest spend")} v="-" />
-      </Card>
-      <Card title={t("Organization metrics")}>
-        <Row k={<span className="flex items-center gap-1">{t("Spending power")} <Info className="size-3.5" /></span>} v={power} />
-        <Row k={t("Chargeback risk")} v={<span className="flex items-center gap-1 rounded-full px-2 text-[11px] text-white" style={{ background: "#3d9a3d" }}><TriangleAlert className="size-3" /> {t("Low")}</span>} />
       </Card>
       <Card title={t("Subscription")}>
         <Row k={t("Status")} v={t(expired ? "Expired" : "Active")} color={expired ? "#f26b6b" : GREEN} />
