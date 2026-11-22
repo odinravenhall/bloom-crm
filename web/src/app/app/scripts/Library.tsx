@@ -6,7 +6,7 @@ import { api, toast } from "@/lib/api";
 import { cn, moneyC, num, usd } from "@/lib/fmt";
 import { platformOf, useCreators } from "@/lib/creators";
 import type { LibGroup, LibItem, Library as LibraryT, Media } from "@/lib/types";
-import { Pill, btnCls, inputCls } from "@/components/ui";
+import { Pill, btnCls, areaCls, inputCls } from "@/components/ui";
 import { VaultPicker } from "../messagerie/VaultPicker";
 
 const WORD: Record<LibGroup["kind"], { one: string; item: string; add: string; empty: string }> = {
@@ -338,7 +338,7 @@ function ItemEditor({ creatorId, kind, groupId, item, onClose, onSaved }: { crea
           <label className="text-sm font-semibold">Nom</label>
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "sequence" ? "ex. 1, PPV1, question âge" : "ex. VIP 1, relance douce"} />
           <label className="mt-1 text-sm font-semibold">Message</label>
-          <textarea className={cn(inputCls, "min-h-32 py-3")} value={text} onChange={(e) => setText(e.target.value)} placeholder="Le message envoyé au fan. {prenom} = prénom du fan." autoFocus />
+          <textarea className={cn(areaCls, "min-h-32")} value={text} onChange={(e) => setText(e.target.value)} placeholder="Le message envoyé au fan. {prenom} = prénom du fan." autoFocus />
           <label className="mt-1 text-sm font-semibold">Consigne pour le chatteur</label>
           <div className="flex flex-wrap gap-1">
             {NOTES.map((n) => (

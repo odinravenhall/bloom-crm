@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, toast } from "@/lib/api";
 import { ago, cn } from "@/lib/fmt";
-import { Avatar, Card, Page, PageHeader, Pill, btnCls, inputCls } from "@/components/ui";
+import { Avatar, Card, Page, PageHeader, Pill, btnCls, areaCls, inputCls } from "@/components/ui";
 import { Integrations } from "./Integrations";
 
 type Status = {
@@ -94,7 +94,7 @@ export function Settings() {
           <div className="mt-5 border-t pt-4">
             <p className="text-sm font-semibold">Relier à nouveau</p>
             <p className="mt-1 text-xs text-muted">Session Substy expirée ou autre compte : colle une nouvelle valeur du cookie « __client » de clerk.substy.ai.</p>
-            <textarea className={cn(inputCls, "mt-2 h-20 py-2")} spellCheck={false} value={client} onChange={(e) => setClient(e.target.value)} />
+            <textarea className={cn(areaCls, "mt-2 h-20")} spellCheck={false} value={client} onChange={(e) => setClient(e.target.value)} />
             <button className={cn(btnCls.secondary, "mt-2")} disabled={!client.trim()} onClick={relink}>
               Relier
             </button>

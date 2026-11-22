@@ -139,7 +139,10 @@ export function Table({ head, children, className }: { head: React.ReactNode; ch
 }
 
 export const inputCls =
-  "h-10 w-full rounded-full border border-input bg-card px-4 text-sm outline-none transition-colors placeholder:text-muted/70 focus:border-primary";
+  "h-10 w-full rounded-xl border border-input bg-card px-3.5 text-sm outline-none transition-colors placeholder:text-muted/70 focus:border-primary";
+/** Zone de texte sur plusieurs lignes (même style que les champs, sans hauteur fixe). */
+export const areaCls =
+  "block w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted/70 focus:border-primary";
 
 export const btnCls = {
   primary:

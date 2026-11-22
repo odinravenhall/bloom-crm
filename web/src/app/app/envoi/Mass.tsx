@@ -7,7 +7,7 @@ import { cn, eur, num, usd, when } from "@/lib/fmt";
 import { CreatorTabs, PLATFORM, platformOf, useCreators } from "@/lib/creators";
 import type { FanList, MassMessage, Media } from "@/lib/types";
 import { VaultPicker } from "../messagerie/VaultPicker";
-import { Pill, btnCls, inputCls } from "@/components/ui";
+import { Pill, btnCls, areaCls, inputCls } from "@/components/ui";
 
 type Page = { total: number; page: number; pages: number; items: MassMessage[] };
 
@@ -260,7 +260,7 @@ function Draft({ creatorId, creatorName, lists, onClose, onSent }: { creatorId: 
         <div className="scroll-thin grid min-h-0 flex-1 gap-5 overflow-y-auto p-5 md:grid-cols-[1fr_300px]">
           <div className="flex flex-col gap-3">
             <label className="text-sm font-semibold">Message</label>
-            <textarea className={cn(inputCls, "min-h-40 py-3")} value={text} onChange={(e) => setText(e.target.value)} placeholder="Le message que recevront les fans…" />
+            <textarea className={cn(areaCls, "min-h-40")} value={text} onChange={(e) => setText(e.target.value)} placeholder="Le message que recevront les fans…" />
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setVault(true)} className={btnCls.ghost}>
                 <ImagePlus className="size-4" /> Médias / PPV
@@ -289,12 +289,12 @@ function Draft({ creatorId, creatorName, lists, onClose, onSent }: { creatorId: 
             </label>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
               <span className="font-semibold">Quand</span>
-              <input type="datetime-local" className={cn(inputCls, "w-auto")} value={later} onChange={(e) => setLater(e.target.value)} />
+              <input type="datetime-local" className="h-10 rounded-xl border border-input bg-card px-3 text-sm outline-none focus:border-primary" value={later} onChange={(e) => setLater(e.target.value)} />
               <span className="text-xs text-muted">{later ? "programmé (ton heure)" : "vide = tout de suite"}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-semibold">Retirer tout seul</span>
-              <select className={cn(inputCls, "w-auto")} value={unsend} onChange={(e) => setUnsend(Number(e.target.value))}>
+              <select className="h-10 rounded-xl border border-input bg-card px-3 text-sm outline-none focus:border-primary" value={unsend} onChange={(e) => setUnsend(Number(e.target.value))}>
                 {UNSEND.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}

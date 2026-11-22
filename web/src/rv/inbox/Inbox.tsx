@@ -914,7 +914,7 @@ function ModelMenu({ x, y, target, models, hidden, onClose, onSet }: { x: number
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-      <div className="pop fixed z-50 w-64 overflow-hidden rounded-2xl border bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl" style={{ left: x + 6, top: Math.max(8, top) }}>
+      <div className="pop fixed z-50 w-72 overflow-hidden rounded-2xl border bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl" style={{ left: x + 6, top: Math.max(8, top) }}>
         {target ? (
           <button onClick={() => onSet([...list, target.id])} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-card-2">
             <EyeOff className="size-4 text-muted" />
@@ -926,12 +926,34 @@ function ModelMenu({ x, y, target, models, hidden, onClose, onSet }: { x: number
         ) : (
           <>
             <p className="px-3 pt-1.5 pb-1 text-[11px] font-bold tracking-wide text-muted uppercase">Modèles dans la messagerie</p>
+            {/* Trier d'un clic : seulement OnlyFans, seulement MYM, ou toutes. */}
+            {(() => {
+              const isMym = (m: Model) => /mym/i.test(m.platform || "");
+              const onlyOf = models.length > 0 && models.every((m) => isMym(m) === hidden.has(m.id)) && models.some((m) => !isMym(m));
+              const onlyMym = models.length > 0 && models.every((m) => !isMym(m) === hidden.has(m.id)) && models.some((m) => isMym(m));
+              const all = list.length === 0;
+              const btn = "flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors";
+              return (
+                <div className="flex gap-1 px-1.5 pb-1.5">
+                  <button onClick={() => onSet([])} className={cn(btn, all ? "border-primary bg-primary/15 text-fg" : "text-muted hover:text-fg")}>
+                    Toutes
+                  </button>
+                  <button onClick={() => onSet(models.filter(isMym).map((m) => m.id))} className={cn(btn, onlyOf ? "border-primary bg-primary/15 text-fg" : "text-muted hover:text-fg")} title="Seulement les modèles OnlyFans">
+                    <PlatformLogo platform="onlyfans" className="size-4 rounded-[4px]" /> OnlyFans
+                  </button>
+                  <button onClick={() => onSet(models.filter((m) => !isMym(m)).map((m) => m.id))} className={cn(btn, onlyMym ? "border-primary bg-primary/15 text-fg" : "text-muted hover:text-fg")} title="Seulement les modèles MYM">
+                    <PlatformLogo platform="mym" className="size-4 rounded-[4px]" /> MYM
+                  </button>
+                </div>
+              );
+            })()}
             {models.map((m) => {
               const off = hidden.has(m.id);
               return (
                 <button key={m.id} onClick={() => onSet(off ? list.filter((id) => id !== m.id) : [...list, m.id])} className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left text-sm hover:bg-card-2">
                   <Avatar src={m.avatar} name={m.displayName} size="size-7" rounded="rounded-lg" className={off ? "opacity-40 grayscale" : ""} />
                   <span className={cn("min-w-0 flex-1 truncate", off && "text-muted line-through")}>{m.displayName}</span>
+                  <PlatformLogo platform={m.platform} className={cn("size-4 rounded-[4px]", off && "opacity-40 grayscale")} />
                   {off ? <EyeOff className="size-4 text-muted" /> : <Eye className="size-4 text-primary-soft" />}
                 </button>
               );
