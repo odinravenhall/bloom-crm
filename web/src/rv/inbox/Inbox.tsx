@@ -16,6 +16,7 @@ import { api } from "@/rv/lib/client";
 import { ago, cn, dur, durSec, money, clock, waitTone, curOf, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import { Avatar, Pill } from "@/rv/components/ui";
 import { Toaster } from "@/rv/components/Toaster";
+import { PlatformLogo } from "@/components/PlatformLogo";
 import type { BoxInfo, Conv, Model, QueueResp } from "./types";
 import { Chat } from "./Chat";
 import { FanPanel } from "./FanPanel";
@@ -280,7 +281,9 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
             <span className="relative">
               <Avatar src={m.avatar} name={m.displayName} size="size-11" rounded="rounded-2xl" />
               {/* Bloom : OnlyFans ou MYM (deux comptes peuvent avoir le même prénom). */}
-              <span className={cn("absolute -bottom-1 left-1/2 -translate-x-1/2 rounded px-1 text-[8px] leading-3 font-extrabold text-white ring-2 ring-bg", /mym/i.test(m.platform || "") ? "bg-amber-500" : "bg-sky-500")}>{/mym/i.test(m.platform || "") ? "MYM" : "OF"}</span>
+              <span className="absolute -right-1 -bottom-1 rounded-[5px] ring-2 ring-bg">
+                <PlatformLogo platform={m.platform} className="size-[15px] rounded-[4px]" />
+              </span>
             </span>
           </RailButton>
         ))}
@@ -321,7 +324,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
               return (
                 <button key={m.id || "all"} onClick={() => setModel(m.id)} className={cn("relative flex shrink-0 items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-xs font-semibold", on ? "border-primary bg-primary/15 text-fg" : "bg-card-2/60 text-muted")}>
                   {m.id ? <Avatar src={m.avatar} name={m.displayName} size="size-6" /> : <span className="grid size-6 place-items-center rounded-full bg-card-2 text-[9px] font-extrabold">ALL</span>}
-                  {m.displayName} {"platform" in m ? <span className="text-[10px] font-bold text-muted">{/mym/i.test(m.platform || "") ? "MYM" : "OF"}</span> : null}
+                  {m.displayName} {"platform" in m ? <PlatformLogo platform={m.platform} className="size-3.5 rounded-[3px]" /> : null}
                   {n ? <span className="rounded-full bg-primary px-1.5 text-[10px] leading-4 text-white tabular-nums">{n}</span> : null}
                 </button>
               );
@@ -860,7 +863,11 @@ function QueueItem({ c, on, model, meId, onClick, onToggleUnread, boxLabel, rela
           {c.preview}
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1 empty:hidden">
-          {model ? <Pill tone="accent">{model.displayName} · {/mym/i.test(model.platform || "") ? "MYM" : "OF"}</Pill> : null}
+          {model ? (
+            <Pill tone="accent">
+              <PlatformLogo platform={model.platform} className="size-3 rounded-[3px]" /> {model.displayName}
+            </Pill>
+          ) : null}
           {relance?.ppv ? (
             <Pill tone="warn" title="PPV envoyé, pas encore payé">
               <Lock className="size-3" /> {money(relance.ppv, 0, curOf(c.modelId))} non payé

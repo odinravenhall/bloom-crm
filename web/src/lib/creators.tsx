@@ -5,6 +5,7 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { api } from "./api";
 import type { Creator } from "./types";
 import { Avatar } from "@/components/ui";
+import { PlatformLogo } from "@/components/PlatformLogo";
 import { cn } from "./fmt";
 
 type Ctx = { creators: Creator[]; creatorId: string | null; creator: Creator | null; setCreator: (id: string) => void; loaded: boolean };
@@ -21,15 +22,8 @@ export const PLATFORM: Record<Platform, string> = { of: "OnlyFans", mym: "MYM" }
 export function PlatformBadge({ c, className }: { c: { platform?: string | null } | null | undefined; className?: string }) {
   const p = platformOf(c);
   return (
-    <span
-      title={PLATFORM[p]}
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-md px-1.5 py-px text-[10px] leading-4 font-bold tracking-wide",
-        p === "mym" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300",
-        className,
-      )}
-    >
-      {p === "mym" ? "MYM" : "OF"}
+    <span title={PLATFORM[p]} className={cn("inline-flex shrink-0 items-center", className)}>
+      <PlatformLogo platform={p === "mym" ? "mym" : "onlyfans"} className="size-4 rounded-[4px]" />
     </span>
   );
 }

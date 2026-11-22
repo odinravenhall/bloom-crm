@@ -23,6 +23,11 @@ export function aiLogView(l) {
 }
 /** Images de Substy : les chemins « /api/creators/… » passent par le relais de Bloom. */
 /** Photo de Substy : un chemin, une adresse, ou un objet { url, thumbUrl } (photos de profil des fans). */
+/** Photos de profil des créatrices (Substy les donne à part ; le serveur les met à jour chaque minute). */
+const CREATOR_PICS = new Map();
+export function setCreatorPics(list) {
+  for (const c of list) if (c.id && c.avatar) CREATOR_PICS.set(String(c.id), c.avatar);
+}
 export const img = (u) => {
   if (u && typeof u === 'object') u = u.thumbUrl || u.url || null;
   return !u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : String(u);
@@ -319,7 +324,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     name: c.name || c.pseudo || c.displayName || c.username || 'Créatrice',
     username: c.username || c.platformUsername || null,
     platform: c.platform || null,
-    avatar: img(c.avatar || c.avatarUrl || c.profilePicture || null),
+    avatar: img(c.avatar || c.avatarUrl || c.profilePicture || CREATOR_PICS.get(String(c.id || c.creatorId)) || null),
     ai: c.setting?.enable ?? null,
   });
 

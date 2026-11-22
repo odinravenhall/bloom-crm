@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
-import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
+import { broadcast, chatRoutes, setCreatorPics, warmInbox } from './chat.mjs';
 import { libraryRoutes } from './library.mjs';
 import { inboxRoutes } from './inbox.mjs';
 import { rvRoutes } from './rvapi.mjs';
@@ -70,6 +70,7 @@ async function syncCreators({ restart = false } = {}) {
   const before = new Map((state.creators || []).map((c) => [c.id, c.avatar]));
   state.creators = list.map(creatorView).map((c) => ({ ...c, avatar: pics.get(pidOf.get(c.id)) || c.avatar || before.get(c.id) || null }));
   setCreators(state.creators);
+  setCreatorPics(state.creators);
   const ids = state.creators.map((c) => c.id).filter(Boolean);
   warmInbox(ids);
   for (const id of ids) if (!streamStops.has(id)) {
