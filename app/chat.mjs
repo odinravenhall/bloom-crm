@@ -502,6 +502,49 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       );
     },
 
+    // ------------------------------------------------ envois groupés
+    'GET /api/mass': async (req, res) => {
+      const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
+      const page = Math.max(1, Number(p.get('page')) || 1);
+      const r = (await substy.massMessages(String(p.get('creatorId')), page, 20)) || {};
+      const money = (m) => (m == null ? null : Number(m) / 100);
+      send(res, 200, {
+        total: r.total || 0,
+        page: r.page || page,
+        pages: r.totalPages || 1,
+        items: (r.items || []).map((m) => ({
+          id: String(m.id),
+          text: plain(m.text || ''),
+          price: Number(m.price) || 0,
+          medias: (m.mediaIds || []).length,
+          included: (m.includedListIds || []).map(String),
+          excluded: (m.excludedListIds || []).map(String),
+          fans: (m.userIds || []).length,
+          onlineOnly: !!m.includeOnlineFans,
+          status: String(m.status || ''),
+          scheduledAt: m.scheduledAt || null,
+          createdAt: m.createdAt || null,
+          recipients: m.recipientCount ?? null,
+          sent: m.sentCount ?? null,
+          viewed: m.viewedCount ?? null,
+          purchased: m.purchasedCount ?? null,
+          gross: money(m.revenueGrossMinor),
+          net: money(m.revenueNetMinor),
+          currency: m.revenueCurrency || 'USD',
+          canUnsend: !!m.canUnsend,
+          unsendDeadline: m.unsendDeadline || null,
+          revertedBy: m.revertedByName || null,
+        })),
+      });
+    },
+    'GET /api/fan-lists': async (req, res) => {
+      const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
+      const r = (await substy.fanLists(String(p.get('creatorId')))) || {};
+      send(res, 200, (r.items || []).map((l) => ({ id: String(l.id), name: String(l.name || ''), type: String(l.type || ''), fans: Number(l.fanCount) || 0 })));
+    },
+
     // ------------------------------------------------ équipe
     // Présence : la messagerie signale la conversation ouverte (toutes les 20 s) ; réponse = qui d'autre est sur la créatrice.
     'POST /api/presence': async (req, res) => {

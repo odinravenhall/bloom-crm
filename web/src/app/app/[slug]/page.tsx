@@ -4,7 +4,6 @@ import { Page, Soon } from "@/components/ui";
 
 // Rubriques prévues, pas encore faites.
 const SOON: Record<string, [string, string]> = {
-  envoi: ["Envoi groupé", "Envoyer un message ou un PPV à une liste de fans, et suivre combien l’ont acheté."],
   "ia-test": ["Tester l’IA", "Discuter avec l’IA comme un fan pour vérifier ses réponses avant de la laisser chatter."],
   programmes: ["Messages programmés", "Voir, créer et annuler les messages programmés de chaque fan."],
   chatteurs: ["Chatteurs", "Les chatteurs de l’équipe, leurs créatrices et leurs chiffres."],

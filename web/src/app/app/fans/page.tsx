@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import { CHAT_ROLES, requireMe } from "@/lib/server";
-import { Fans } from "./Fans";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Fans" };
-export const dynamic = "force-dynamic";
-
-export default async function FansPage() {
-  await requireMe(CHAT_ROLES);
-  return <Fans />;
+// L'ancienne page Fans n'existe plus : tout se fait depuis la messagerie.
+export default function FansPage() {
+  redirect("/app/messagerie");
 }

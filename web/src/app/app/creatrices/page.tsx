@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, Images, Inbox } from "lucide-react";
+import { Images, Inbox } from "lucide-react";
 import { useCreators } from "@/lib/creators";
 import { Avatar, Page, PageHeader, Pill, btnCls } from "@/components/ui";
 
@@ -29,7 +29,6 @@ export default function Creatrices() {
               {(
                 [
                   ["/app/messagerie", "Messagerie", Inbox],
-                  ["/app/fans", "Fans", Heart],
                   ["/app/vault", "Vault", Images],
                 ] as const
               ).map(([href, label, Icon]) => (

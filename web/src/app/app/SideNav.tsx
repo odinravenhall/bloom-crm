@@ -9,7 +9,6 @@ import {
   Clock,
   FlaskConical,
   Flower2,
-  Heart,
   Home,
   Images,
   Inbox,
@@ -49,10 +48,9 @@ const GROUPS: Group[] = [
   {
     title: "Chatting",
     items: [
-      { href: "/app/fans", label: "Fans", icon: Heart, roles: CHAT },
       { href: "/app/scripts", label: "Scripts & séquences", icon: ScrollText, roles: CHAT },
       { href: "/app/vault", label: "Vault", icon: Images, roles: CHAT },
-      { href: "/app/envoi", label: "Envoi groupé", icon: Send, roles: CHAT, soon: true },
+      { href: "/app/envoi", label: "Envoi groupé", icon: Send, roles: CHAT },
       { href: "/app/programmes", label: "Programmés", icon: Clock, roles: CHAT, soon: true },
     ],
   },

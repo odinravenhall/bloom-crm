@@ -74,7 +74,7 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
   l'API interne de Substy, écoute le temps réel, sert `/api/*` et `/media`, et fait tourner le **bot Discord « Bloom »**.
 - `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec SA direction artistique « floraison » (thème clair crème / prune / rose pétale / sauge, titres Fraunces, texte Manrope, aucune animation décorative) — ne pas recopier le look de Raven. Elle relaie `/api/*` et `/media` vers
   l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,
-  `/app/fans`, `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
+  `/app/scripts`, `/app/envoi` (envoi groupé : historique + listes, envoi à venir), `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
   Menu à GAUCHE (`app/app/SideNav.tsx`) : tout visible, petits titres en serif, réductible en icônes — pas l'accordéon de Raven. Thèmes clair / sombre / onyx (`lib/theme.ts`, variables dans `globals.css`).
 - `docker-compose.yml` : `app` (API, réseau interne) + `web` (alias `bloom-web` sur le réseau du Caddy de /root/zebre).
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
@@ -87,7 +87,7 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 | Admin | admin | tout, y compris Branchements |
 | Manager | manager | toutes les créatrices, chiffres, équipe (managers des modèles et du chatting) |
 | Team Leader | lead | ses créatrices : messagerie, chiffres, équipe ; change les accès de ses chatteurs |
-| Chatteur | chatter | messagerie / fans / vault de ses créatrices |
+| Chatteur | chatter | messagerie / scripts / envoi groupé / vault de ses créatrices |
 | Modèle | model | uniquement l'Accueil avec son chiffre d'affaires (toutes plateformes), pas les conversations |
 
 Le bot crée tout seul les rôles qui manquent sur le serveur (Team Leader reçoit les droits de salons du Manager).
