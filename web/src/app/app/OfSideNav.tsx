@@ -37,7 +37,7 @@ const NAV: (Entry | "divider")[] = [
     children: [
       { label: "Creator reports", icon: SquareUser, href: "/app/analytics/creators" },
       { label: "Employee reports", icon: ContactRound, href: "/app/analytics/employees" },
-      { label: "Fan reports", icon: UserRound, href: soon("Fan reports") },
+      { label: "Fan reports", icon: UserRound, href: "/app/analytics/fans" },
       { label: "Message dashboard", icon: Activity, href: "/app/messages" },
     ],
   },
