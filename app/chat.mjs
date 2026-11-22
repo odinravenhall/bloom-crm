@@ -1,6 +1,7 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { onMessageAlert } from './alerts.mjs';
+import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
@@ -268,6 +269,8 @@ function logMessage(creatorId, fanId, m) {
     run('INSERT OR IGNORE INTO msg_log (id, creator_id, fan_id, at, from_fan, kind, price, tip, medias, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       String(m.id), creatorId, fanId ? String(fanId) : null, Date.parse(m.at) || Date.now(), m.fromFan ? 1 : 0, m.fromFan ? 'fan' : m.by?.kind || null, m.price || 0, m.tip ? 1 : 0, m.medias.length,
       m.by?.kind === 'bloom' || m.by?.kind === 'employee' ? m.by.name : null);
+    // Texte, temps de réponse… pour « Messages envoyés ».
+    enrichMessage(creatorId, fanId, m);
     if (Date.now() - pruned > 3600_000) {
       pruned = Date.now();
       run('DELETE FROM msg_log WHERE at < ?', Date.now() - 120 * 864e5);

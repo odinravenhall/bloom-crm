@@ -211,6 +211,8 @@ export class SubstySession {
   /** Dernières ventes de l'agence (PPV, pourboires, posts), comme « Live latest purchases » de Substy. */
   recentSales() { return this.call('agency.getRecentSales'); }
   aiLogs(creatorId, fanId, limit = 50) { return this.call('creators.fans.getFanAiLogs', { creatorId, fanId, limit }); }
+  /** Supprimer (« unsend ») un message envoyé au fan. Format relevé sur le site de Substy (22/11/2026), sans rien supprimer. */
+  unsend(creatorId, fanId, messageId) { return this.call('messages.unsend', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
   send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {
     return this.call('messages.send', {

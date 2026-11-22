@@ -23,6 +23,7 @@ import {
   UsersRound,
   X,
   ListChecks,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/fmt";
@@ -65,6 +66,7 @@ const GROUPS: Group[] = [
     title: "Équipe",
     items: [
       { href: "/app/equipe", label: "Équipe", icon: UsersRound, roles: BOSS },
+      { href: "/app/messages", label: "Messages envoyés", icon: MessagesSquare, roles: BOSS },
       { href: "/app/stats", label: "Performances", icon: BarChart3, roles: BOSS },
     ],
   },
