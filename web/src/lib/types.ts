@@ -121,7 +121,11 @@ export type RevenueR = {
   creators: RevenueCreator[];
   recent: RevenueSale[];
   unmapped: string[];
+  /** Chiffres de l'IA de Substy (Substy les compte lui-même), en centimes d'euro. */
+  ai?: AiStats | null;
 };
+export type AiPart = { net: number; gross: number; tips: number; ppvSent: number; ppvPaid: number; messages: number; unlockRate: number };
+export type AiStats = AiPart & { perCreator: Record<string, AiPart>; days: { day: string; ai: number; employee: number }[] };
 
 /** Page Équipe. */
 export type Member = {

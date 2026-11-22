@@ -9,7 +9,7 @@ import { broadcast, chatRoutes, setCreatorPics, warmInbox } from './chat.mjs';
 import { libraryRoutes } from './library.mjs';
 import { inboxRoutes } from './inbox.mjs';
 import { rvRoutes } from './rvapi.mjs';
-import { matchLive, parisDay, performance, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
+import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
@@ -155,6 +155,40 @@ async function linkSubsty(client) {
   return { who, creators: list.map(creatorView) };
 }
 
+/**
+ * Chiffres de l'IA de Substy sur une période (agency.employees.getEmployeesStats), convertis en centimes d'euro.
+ * Gardés 2 minutes en mémoire (l'Accueil se rafraîchit chaque minute).
+ */
+const aiCache = new Map();
+async function aiStats(from, to, ids) {
+  if (!ids.length) return null;
+  const key = `${from}|${to}|${[...ids].sort().join(',')}`;
+  const hit = aiCache.get(key);
+  if (hit && Date.now() - hit.at < 120_000) return hit.v;
+  const d = await substy.employeesStats({ startDate: from, endDate: to, creatorIds: ids });
+  const cur = d?.currency || 'USD';
+  const eurC = (v, day = to) => toEur(Math.round((Number(v) || 0) * 100), cur, day);
+  const perCreator = {};
+  const t = { net: 0, gross: 0, tips: 0, ppvSent: 0, ppvPaid: 0, messages: 0 };
+  for (const a of d?.ai || []) {
+    const m = a.stats?.messages || {};
+    const cid = a.creators?.[0]?.id;
+    const x = { net: eurC(m.sumGeneratedNet), gross: eurC(m.sumGeneratedGross), tips: eurC(m.sumTipsNet), ppvSent: m.amountPpvSent || 0, ppvPaid: m.amountPpvPaid || 0, messages: m.amountMessagesSent || 0 };
+    x.unlockRate = x.ppvSent ? x.ppvPaid / x.ppvSent : 0;
+    if (cid) perCreator[cid] = x;
+    for (const k of Object.keys(t)) t[k] += x[k];
+  }
+  const v = {
+    ...t,
+    unlockRate: t.ppvSent ? t.ppvPaid / t.ppvSent : 0,
+    perCreator,
+    days: (d?.chartData || []).map((p) => ({ day: String(p.date).slice(0, 10), ai: eurC(p.ai, String(p.date).slice(0, 10)), employee: eurC(p.employee, String(p.date).slice(0, 10)) })),
+  };
+  aiCache.set(key, { at: Date.now(), v });
+  if (aiCache.size > 50) aiCache.delete(aiCache.keys().next().value);
+  return v;
+}
+
 // Période demandée (?from=&to=, AAAA-MM-JJ, heure de Paris) : aujourd'hui par défaut, 400 jours au plus.
 function period(req) {
   const p = new URL(req.url, 'http://x').searchParams;
@@ -272,7 +306,12 @@ const routes = {
     if (!me) return send(res, 401, { error: 'Connecte-toi' });
     // Managers, team leaders et modèles (une modèle ne voit que son propre chiffre).
     if (!isBoss(me) && me.role !== 'model') return send(res, 403, { error: 'Réservé aux managers, team leaders et modèles' });
-    send(res, 200, revenue({ ...period(req), creators: state.creators.filter((c) => canSee(me, c.id)) }));
+    const per = period(req);
+    const creators = state.creators.filter((c) => canSee(me, c.id));
+    const out = revenue({ ...per, creators });
+    // Ventes de l'IA de Substy (Substy les compte lui-même ; les ventes d'Infloww / MyPulse ne disent pas qui a vendu).
+    if (isBoss(me)) out.ai = await aiStats(per.from, per.to, creators.map((c) => c.id)).catch((e) => (console.warn('[bloom] stats IA :', e.message), null));
+    send(res, 200, out);
   },
   // Performances : le chiffre par chatteur (Bloom, Infloww / MyPulse, IA) et par créatrice. Admins, managers, team leaders.
   'GET /api/performance': async (req, res) => {

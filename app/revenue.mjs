@@ -491,7 +491,7 @@ function fxRate(day) {
   }
   return fxCache.map.get(day) ?? fxCache.last;
 }
-const toEur = (cents, currency, day) => (currency === 'USD' ? Math.round(cents * fxRate(day)) : cents);
+export const toEur = (cents, currency, day) => (currency === 'USD' ? Math.round(cents * fxRate(day)) : cents);
 // Part nette d'une vente Substy (prix affiché = brut) : OnlyFans garde 20 % ; MYM : rapport net / brut observé sur les ventes déjà rapprochées.
 function netRatio(account, platform) {
   if (platform === 'onlyfans') return 0.8;

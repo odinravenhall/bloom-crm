@@ -153,6 +153,11 @@ export class SubstySession {
   }
   fan(creatorId, fanId) { return this.call('fans.get', { creatorId, fanId }); }
   /** Photo, nom et pseudo de chaque créatrice sur sa plateforme (OnlyFans / MYM). */
+  /**
+   * Statistiques des « employés » de Substy, IA comprises (page Statistiques → Employés) : pour chaque IA, ses ventes,
+   * PPV envoyés / achetés, messages, taux de déblocage, et une courbe par jour (ia / employés). Montants dans `currency`.
+   */
+  employeesStats({ startDate, endDate, creatorIds } = {}) { return this.call('agency.employees.getEmployeesStats', { startDate, endDate, ...(creatorIds?.length ? { creatorIds } : {}) }); }
   platformDetails(creatorIds) { return this.call('creators.getCreatorPlatformDetails', { creatorIds }); }
   validate(content) { return this.call('agency.bannedWords.validateContent', { content }); }
   vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }

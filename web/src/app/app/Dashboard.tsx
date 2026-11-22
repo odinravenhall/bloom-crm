@@ -117,7 +117,26 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
     }
     return [...m.values()];
   }, [rev]);
-  const origins = useMemo(() => ORIGINS.map((o) => ({ ...o, value: (rev?.byOrigin[o.k] || 0) / 100 })).filter((o) => o.value > 0), [rev]);
+  // D'où vient l'argent. Les ventes Infloww / MyPulse ne disent pas si c'est l'IA de Substy qui a vendu : on prend le chiffre
+  // de l'IA donné par Substy, et on le retire de « autres » puis des chatteurs (pour ne pas compter deux fois).
+  const origins = useMemo(() => {
+    const v: Record<string, number> = { ...(rev?.byOrigin ?? {}) };
+    const ai = rev?.ai?.net ?? 0;
+    if (ai > (v.ai || 0)) {
+      let extra = ai - (v.ai || 0);
+      v.ai = ai;
+      for (const k of ["other", "chatter"]) {
+        const take = Math.min(extra, v[k] || 0);
+        v[k] = (v[k] || 0) - take;
+        extra -= take;
+      }
+    }
+    return ORIGINS.map((o) => ({ ...o, value: (v[o.k] || 0) / 100 })).filter((o) => o.value > 0);
+  }, [rev]);
+  const aiDays = useMemo(() => {
+    if (!rev?.ai?.days.length) return [];
+    return rev.ai.days.map((d) => ({ label: new Date(d.day + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }), ai: d.ai / 100, employee: d.employee / 100 }));
+  }, [rev]);
   const types = useMemo(() => TYPES.map((t) => ({ ...t, value: (rev?.byType[t.k] || 0) / 100 })).filter((t) => t.value > 0), [rev]);
   const ranked = useMemo(
     () =>
@@ -129,7 +148,7 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
   const topEur = Math.max(1, ...ranked.map((x) => x.r?.eur || 0));
   const delta = rev ? pctChange(rev.total, rev.prev) : null;
   const basket = rev && rev.sales ? rev.total / rev.sales : 0;
-  const substy = rev ? (rev.byOrigin.ai || 0) + (rev.byOrigin.substy || 0) : 0;
+  const substy = rev ? (rev.ai?.net ?? 0) || (rev.byOrigin.ai || 0) + (rev.byOrigin.substy || 0) : 0;
   const ofEur = rev ? rev.creators.filter((c) => c.platform === "onlyfans").reduce((a, c) => a + c.eur, 0) : 0;
   const mymEur = rev ? rev.creators.filter((c) => c.platform === "mym").reduce((a, c) => a + c.eur, 0) : 0;
   const hour = new Date().getHours();
@@ -220,7 +239,15 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
         </div>
         <Kpi icon={ShoppingBag} label="Ventes" value={rev ? num(rev.sales) : "—"} sub={rev ? `panier moyen ${eur(basket, 0)}` : undefined} />
         <Kpi icon={Users} label="Fans acheteurs" value={rev ? num(rev.buyers) : "—"} sub={rev && rev.buyers ? `${eur(rev.total / rev.buyers, 0)} par fan` : undefined} />
-        {model ? null : <Kpi icon={Sparkles} label="Fait par l’IA Substy" value={rev ? eur(substy, 0) : "—"} sub={rev && rev.total ? `${Math.round((substy / rev.total) * 100)} % du chiffre` : undefined} accent />}
+        {model ? null : (
+          <Kpi
+            icon={Sparkles}
+            label="Fait par l’IA Substy"
+            value={rev ? eur(substy, 0) : "—"}
+            sub={rev ? `${rev.total ? Math.round((substy / rev.total) * 100) : 0} % du chiffre${rev.ai ? ` · ${rev.ai.ppvPaid}/${rev.ai.ppvSent} PPV achetés` : ""}` : undefined}
+            accent
+          />
+        )}
         <Kpi icon={Wallet} label="OnlyFans · MYM" value={rev ? `${short(ofEur / 100)} · ${short(mymEur / 100)}` : "—"} sub="en euros" />
       </div>
 
@@ -258,6 +285,61 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
           <p className="py-20 text-center text-sm text-muted">{rev ? "Aucune vente sur la période" : "Chargement…"}</p>
         )}
       </section>
+
+      {/* L'IA de Substy : ses ventes et son travail sur la période (chiffres de Substy). */}
+      {!model && rev?.ai ? (
+        <section className="card rounded-2xl border bg-card p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-lg bg-primary text-white">
+              <Sparkles className="size-4" />
+            </span>
+            <div className="mr-auto">
+              <h2 className="text-lg font-bold">IA Substy</h2>
+              <p className="text-xs text-muted">Ce que l’IA a vendu et envoyé sur la période, d’après Substy.</p>
+            </div>
+            <Legend config={{ ai: { label: "IA", color: "var(--color-primary)" }, employee: { label: "Équipe", color: "color-mix(in oklab, var(--color-primary) 40%, var(--color-card))" } }} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+            <div className="grid grid-cols-2 gap-2 self-start">
+              {(
+                [
+                  ["Ventes nettes", eur(rev.ai.net, 0)],
+                  ["Pourboires", eur(rev.ai.tips, 0)],
+                  ["PPV achetés", `${num(rev.ai.ppvPaid)} / ${num(rev.ai.ppvSent)}`],
+                  ["Taux de déblocage", `${Math.round(rev.ai.unlockRate * 100)} %`],
+                  ["Messages envoyés", num(rev.ai.messages)],
+                  ["Par PPV acheté", rev.ai.ppvPaid ? eur(rev.ai.net / rev.ai.ppvPaid, 0) : "—"],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="rounded-xl border bg-card-2/50 px-3 py-2">
+                  <p className="text-[11px] text-muted">{k}</p>
+                  <p className="text-lg font-bold tabular-nums">{v}</p>
+                </div>
+              ))}
+            </div>
+            {aiDays.length > 1 ? (
+              <ChartContainer config={{ ai: { label: "IA", color: "var(--color-primary)" }, employee: { label: "Équipe", color: "color-mix(in oklab, var(--color-primary) 40%, var(--color-card))" } }} className="h-[220px]">
+                <AreaChart data={aiDays} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="ai-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="var(--color-ai)" stopOpacity={0.45} />
+                      <stop offset="1" stopColor="var(--color-ai)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 6" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} minTickGap={24} />
+                  <YAxis width={56} tickLine={false} axisLine={false} tickFormatter={short} />
+                  <ChartTooltip cursor={{ stroke: "var(--color-line)" }} content={<ChartTooltipContent format={euros} />} />
+                  <Area dataKey="employee" type="monotone" stroke="var(--color-employee)" strokeWidth={1.5} fill="transparent" isAnimationActive={false} />
+                  <Area dataKey="ai" type="monotone" stroke="var(--color-ai)" strokeWidth={2} fill="url(#ai-fill)" isAnimationActive={false} />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <p className="grid place-items-center text-sm text-muted">Choisis au moins 2 jours pour voir la courbe.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {/* D'où vient l'argent + par type de vente */}
       {!model ? (
@@ -351,6 +433,11 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
                       <span className="text-muted" title="À reprendre (l’IA a passé la main)">
                         <b className="text-amber-300">{count(l?.handoff)}</b> à reprendre
                       </span>
+                      {rev?.ai?.perCreator[c.id]?.net ? (
+                        <span className="text-muted" title="Vendu par l’IA de Substy (chiffre de Substy)">
+                          <b className="text-fg">{eur(rev.ai.perCreator[c.id].net, 0)}</b> par l’IA
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="w-28 text-right">
