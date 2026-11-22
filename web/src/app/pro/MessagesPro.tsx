@@ -98,7 +98,7 @@ export function MessagesPro() {
 
   // Pastilles : fans à qui répondre (rouge) et notifications non vues (vert), par créatrice.
   const loadCounts = useCallback(() => {
-    api<{ counts: Record<string, number> }>("GET", "/api/inbox?tab=reply&window=72")
+    api<{ counts: Record<string, number> }>("GET", "/api/inbox?tab=reply")
       .then((r) => setReply(r.counts || {}))
       .catch(() => {});
     if (models.length) Promise.all(models.map(async (m) => [m.id, await notifCount(m.id)] as const)).then((l) => setNotifs(Object.fromEntries(l)));

@@ -64,7 +64,7 @@ export function FanReports() {
   }, [range, gran, net, acc, sort, nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const load = () =>
-      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply&window=72")
+      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply")
         .then((r) => setUnread(r.counts || {}))
         .catch(() => {});
     load();

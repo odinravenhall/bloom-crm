@@ -206,7 +206,9 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         only: ['handoff', 'unread'].includes(p.get('only')) ? p.get('only') : undefined,
         list: p.get('list') ? listMembers(p.get('list')) || { creatorId: '', fans: new Set() } : undefined,
       });
-      const items = keep.slice(0, 300).map((r) =>
+      // « limit=all » (Messages Pro) : toutes les conversations ; sinon 300 comme avant.
+      const lim = p.get('limit') === 'all' ? keep.length : Math.min(Number(p.get('limit')) || 300, 20000);
+      const items = keep.slice(0, lim).map((r) =>
         convOf(r.cid, r.c, r.m, {
           box: r.boxIdx != null ? r.boxIdx + 1 : null,
           relance: r.relCand && rel.has(r.c.last.id) ? { ppv: cents(rel.get(r.c.last.id).price), step: rel.get(r.c.last.id).script, at: iso(rel.get(r.c.last.id).at) } : undefined,

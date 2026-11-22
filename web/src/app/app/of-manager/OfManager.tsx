@@ -62,7 +62,7 @@ export function OfManager({ page }: { page: string }) {
   // Messages à répondre par modèle (pastilles de la liste, comme Infloww).
   useEffect(() => {
     const load = () =>
-      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply&window=72")
+      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply")
         .then((r) => setUnread(r.counts || {}))
         .catch(() => {});
     load();

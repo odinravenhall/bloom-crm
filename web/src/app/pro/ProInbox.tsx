@@ -56,17 +56,20 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
     });
 
   // Liste demandée au serveur selon la puce (All / Pinned / Unread = à répondre, même règle que la pastille de
-  // l'onglet : fans qui attendent depuis moins de 72 h), et compteurs des puces calculés par le serveur.
+  // l'onglet : tous les fans qui attendent, sans limite de temps), et compteurs des puces calculés par le serveur.
   const [totals, setTotals] = useState<{ reply: number; pinned: number } | null>(null);
+  // Affichage par paquets de 200 au fil du défilement (toutes les conversations sont chargées).
+  const [shown, setShown] = useState(200);
+  useEffect(() => setShown(200), [chip, q, model.id]);
   const load = useCallback(() => {
     setBusy(true);
     const tab = chip === "pinned" ? "pinned" : chip === "unread" || chip === "priority" ? "reply" : "all";
-    const qs = new URLSearchParams({ model: model.id, tab, sort: p.order, ...(tab === "reply" ? { window: "72" } : {}), ...(q ? { q } : {}), ...(online ? { online: "1" } : {}) });
+    const qs = new URLSearchParams({ model: model.id, tab, sort: p.order, limit: "all", ...(q ? { q } : {}), ...(online ? { online: "1" } : {}) });
     api<QueueResp>("GET", `/api/inbox?${qs}`)
       .then(setData)
       .catch((e) => toast((e as Error).message, "err"))
       .finally(() => setBusy(false));
-    api<QueueResp>("GET", `/api/inbox?${new URLSearchParams({ model: model.id, tab: "reply", window: "72" })}`)
+    api<QueueResp>("GET", `/api/inbox?${new URLSearchParams({ model: model.id, tab: "reply", limit: "1" })}`)
       .then((r) => setTotals({ reply: r.totals.reply, pinned: r.totals.pinned ?? 0 }))
       .catch(() => {});
   }, [model.id, p.order, q, online, chip]);
@@ -350,8 +353,14 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
       ) : null}
 
       {/* Conversations */}
-      <div className="of-scroll min-h-0 flex-1 overflow-y-auto">
-        {shownList.map((c) => (
+      <div
+        className="of-scroll min-h-0 flex-1 overflow-y-auto"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (el.scrollHeight - el.scrollTop - el.clientHeight < 600 && shown < shownList.length) setShown((n) => n + 200);
+        }}
+      >
+        {shownList.slice(0, shown).map((c) => (
           <Row
             key={c.id}
             c={c}

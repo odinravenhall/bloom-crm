@@ -106,7 +106,7 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
   // Pastille de Messages Pro : fans qui attendent une réponse (comme Infloww).
   useEffect(() => {
     const load = () =>
-      api<{ allReply?: number }>("GET", "/api/rv/inbox?tab=reply&window=72")
+      api<{ allReply?: number }>("GET", "/api/rv/inbox?tab=reply")
         .then((r) => setUnread(r.allReply ?? 0))
         .catch(() => {});
     load();

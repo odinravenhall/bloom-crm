@@ -56,7 +56,7 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
   const [unread, setUnread] = useState<Record<string, number>>({});
   useEffect(() => {
     const load = () =>
-      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply&window=72")
+      api<{ counts: Record<string, number> }>("GET", "/api/rv/inbox?tab=reply")
         .then((r) => setUnread(r.counts || {}))
         .catch(() => {});
     load();
