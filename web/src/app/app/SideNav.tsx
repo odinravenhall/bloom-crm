@@ -38,12 +38,14 @@ const CHAT: Role[] = ["admin", "manager", "lead", "chatter"];
 const BOSS: Role[] = ["admin", "manager", "lead"];
 const MANAGE: Role[] = ["admin", "manager"];
 
+// Accueil : tout en haut, au-dessus du choix de plateforme (il montre toute l'agence).
+const HOME: Item = { href: "/app", label: "Accueil", icon: Home, roles: ["admin", "manager", "lead", "model"] };
+
 // Menu de gauche : tout est visible, rangé sous de petits titres. Chaque rôle ne voit que ce qui le concerne.
 const GROUPS: Group[] = [
   {
     title: null,
     items: [
-      { href: "/app", label: "Accueil", icon: Home, roles: ["admin", "manager", "lead", "model"] },
       { href: "/app/messagerie", label: "Messagerie", icon: Inbox, roles: CHAT },
     ],
   },
@@ -208,6 +210,7 @@ export function SideNav({ me }: { me: Me }) {
       </div>
       {mobile ? (
         <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col justify-between overflow-y-auto bg-bg px-4 py-4 md:hidden">
+          {HOME.roles!.includes(me.role) ? <nav className="mb-2">{item(HOME, false)}</nav> : null}
           <div className="mb-4">
             <PlatformSwitch compact={false} />
           </div>
@@ -224,6 +227,7 @@ export function SideNav({ me }: { me: Me }) {
             {narrow ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
         </div>
+        {HOME.roles!.includes(me.role) ? <nav className="-mb-3">{item(HOME, narrow)}</nav> : null}
         <PlatformSwitch compact={narrow} />
         {links(narrow)}
         <div className="mt-auto border-t pt-4">{footer(narrow)}</div>

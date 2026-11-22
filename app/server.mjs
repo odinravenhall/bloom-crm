@@ -112,10 +112,10 @@ function userFrom(req) {
   if (!m) return null;
   const u = one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
   if (!u) return null;
-  // Plateforme choisie en haut du menu (cookie « bloom_pf » : of, mym ou all) ; les pages communes (IA, équipe, réglages) voient tout.
-  // (« all » ou rien : vue d'ensemble de toute l'agence.)
-  const pf = /(?:^|;\s*)bloom_pf=(of|mym)(?:;|$)/.exec(req.headers.cookie || '')?.[1] || null;
-  const common = /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
+  // Plateforme choisie en haut du menu (cookie « bloom_pf » : OnlyFans par défaut). Voient toute l'agence : l'Accueil
+  // (« pf=all » dans l'adresse) et les pages communes (IA, équipe, réglages).
+  const pf = /(?:^|;\s*)bloom_pf=(of|mym)(?:;|$)/.exec(req.headers.cookie || '')?.[1] || 'of';
+  const common = /[?&]pf=all(&|$)/.test(req.url || '') || /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
   return { ...u, pf: common ? null : pf };
 }
 function login(res, userId) {

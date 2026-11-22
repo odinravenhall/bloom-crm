@@ -80,7 +80,7 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
   const loadRev = useCallback(async () => {
     setBusy(true);
     try {
-      setRev(await api<RevenueR>("GET", `/api/revenue?from=${from}&to=${to}`));
+      setRev(await api<RevenueR>("GET", `/api/revenue?from=${from}&to=${to}&pf=all`));
       setErr("");
     } catch (e) {
       setErr((e as Error).message);
@@ -93,8 +93,8 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
       model
         ? Promise.resolve()
         : Promise.all([
-            api<Live>("GET", "/api/dashboard").then(setLive).catch(() => {}),
-            api<{ handoffCounts?: Record<string, number> }>("GET", "/api/rv/inbox?tab=handoff&window=72").then((r) => setManual(r.handoffCounts ?? null)).catch(() => {}),
+            api<Live>("GET", "/api/dashboard?pf=all").then(setLive).catch(() => {}),
+            api<{ handoffCounts?: Record<string, number> }>("GET", "/api/rv/inbox?tab=handoff&window=72&pf=all").then((r) => setManual(r.handoffCounts ?? null)).catch(() => {}),
           ]),
     [model],
   );

@@ -1,26 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Layers } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/fmt";
 import { platformOf, useCreators } from "@/lib/creators";
 import { PlatformLogo } from "@/components/PlatformLogo";
 import { PF_LABEL, setPf, type Pf } from "@/lib/platform";
 
 const Icon = ({ p, className = "size-5" }: { p: Pf | "reveal"; className?: string }) =>
-  p === "all" ? (
-    <span className={cn("grid shrink-0 place-items-center rounded-[5px] bg-card-2", className)}>
-      <Layers className="size-3.5" />
-    </span>
-  ) : p === "reveal" ? (
+  p === "reveal" ? (
     <span className={cn("grid shrink-0 place-items-center rounded-[5px] bg-card-2 text-[10px] font-black", className)}>R</span>
   ) : (
     <PlatformLogo platform={p === "mym" ? "mym" : "onlyfans"} className={cn("rounded-[5px]", className)} />
   );
 
 /**
- * Choix de la plateforme, en haut du menu : toute l'agence (vue d'ensemble), OnlyFans ou MYM (Reveal bientôt).
- * Sur OnlyFans ou MYM, tout le CRM ne montre que les modèles de cette plateforme ; l'IA et l'équipe restent communes.
+ * Choix de la plateforme, sous l'Accueil : OnlyFans ou MYM, une seule à la fois (Reveal bientôt).
+ * Tout le CRM ne montre que les modèles de cette plateforme ; seuls l'Accueil (toute l'agence), l'IA et l'équipe sont communs.
  */
 export function PlatformSwitch({ compact }: { compact: boolean }) {
   const { allCreators, pf } = useCreators();
@@ -33,7 +29,7 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
     return () => document.removeEventListener("mousedown", out);
   }, [open]);
 
-  const count = (p: Pf) => (p === "all" ? allCreators.length : allCreators.filter((c) => platformOf(c) === p).length);
+  const count = (p: Pf) => allCreators.filter((c) => platformOf(c) === p).length;
   const choose = (p: Pf) => {
     setOpen(false);
     if (p === pf) return;
@@ -42,7 +38,6 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
     window.location.reload();
   };
   const OPTIONS: { p: Pf; sub: string }[] = [
-    { p: "all", sub: "Vue d’ensemble, stats globales" },
     { p: "of", sub: `${count("of")} modèle${count("of") > 1 ? "s" : ""}` },
     { p: "mym", sub: `${count("mym")} modèle${count("mym") > 1 ? "s" : ""}` },
   ];

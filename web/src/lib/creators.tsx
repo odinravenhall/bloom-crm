@@ -8,10 +8,10 @@ import { Avatar } from "@/components/ui";
 import { PlatformLogo } from "@/components/PlatformLogo";
 import { cn } from "./fmt";
 import { usePathname } from "next/navigation";
-import { getPf, isCommonPage, type Pf } from "./platform";
+import { getPf, isCommonPage, setPf, type Pf } from "./platform";
 
 type Ctx = { creators: Creator[]; allCreators: Creator[]; pf: Pf; creatorId: string | null; creator: Creator | null; setCreator: (id: string) => void; loaded: boolean };
-const C = createContext<Ctx>({ creators: [], allCreators: [], pf: "all", creatorId: null, creator: null, setCreator: () => {}, loaded: false });
+const C = createContext<Ctx>({ creators: [], allCreators: [], pf: "of", creatorId: null, creator: null, setCreator: () => {}, loaded: false });
 const KEY = "bloom.creator";
 const RECENT = "bloom.creator.recent";
 
@@ -36,11 +36,11 @@ export const sortCreators = (l: Creator[]) => [...l].sort((a, b) => Number(platf
 /** Créatrices de l'agence + celle choisie (gardée d'une page à l'autre). */
 export function CreatorsProvider({ children }: { children: React.ReactNode }) {
   const [allCreators, setCreators] = useState<Creator[]>([]);
-  const [pf, setPfState] = useState<Pf>("all");
+  const [pf, setPfState] = useState<Pf>("of");
   useEffect(() => setPfState(getPf()), []);
   // Plateforme choisie en haut du menu : seulement ses créatrices, sauf sur les pages communes (IA, équipe…).
   const path = usePathname() || "";
-  const creators = useMemo(() => (isCommonPage(path) || pf === "all" ? allCreators : allCreators.filter((c) => platformOf(c) === pf)), [allCreators, pf, path]);
+  const creators = useMemo(() => (isCommonPage(path) ? allCreators : allCreators.filter((c) => platformOf(c) === pf)), [allCreators, pf, path]);
   const [creatorId, setId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -52,7 +52,19 @@ export function CreatorsProvider({ children }: { children: React.ReactNode }) {
         try {
           id = new URLSearchParams(location.search).get("c") || localStorage.getItem(KEY);
         } catch {}
-        setId(list.some((c) => c.id === id) ? id : (list.find((c) => getPf() === "all" || platformOf(c) === getPf())?.id ?? list[0]?.id ?? null));
+        // Lien vers une conversation ou une modèle de l'autre plateforme (depuis l'Accueil, Messages envoyés…) :
+        // on passe sur sa plateforme.
+        try {
+          const sp = new URLSearchParams(location.search);
+          const target = (sp.get("c") || "").split("~")[0] || sp.get("model") || "";
+          const tc = list.find((c) => c.id === target);
+          if (tc && !isCommonPage(location.pathname) && platformOf(tc) !== getPf()) {
+            setPf(platformOf(tc));
+            location.reload();
+            return;
+          }
+        } catch {}
+        setId(list.some((c) => c.id === id) ? id : (list.find((c) => platformOf(c) === getPf())?.id ?? list[0]?.id ?? null));
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
