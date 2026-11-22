@@ -164,7 +164,7 @@ function typeOf(raw) {
   if (/messag|ppv|priv|push|média|media/.test(t)) return 'ppv';
   return 'other';
 }
-const REFUND = /refund|chargeback|revers|rembours|annul/i;
+const REFUND = /refund|chargeback|revers|rembours|annul|^undo$/i; // Infloww : « undo » = remboursée
 
 const tx = (fn) => {
   db.exec('BEGIN');

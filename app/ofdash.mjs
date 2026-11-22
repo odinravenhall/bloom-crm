@@ -8,7 +8,7 @@ import { canSee, isBoss, seesAll } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
 
 const DAY = 864e5;
-const REFUND = /refund|chargeback|revers|rembours|annul/i;
+const REFUND = /refund|chargeback|revers|rembours|annul|^undo$/i; // Infloww : « undo » = remboursée
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
 /** Bornes de la période (heure de Paris). La semaine commence le dimanche (comme Infloww) ou le lundi (réglage). */
