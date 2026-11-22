@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { Backdrop } from "@/components/Backdrop";
 import { Toaster } from "@/components/Toaster";
 import { themeBootScript } from "@/lib/theme";
 import { bloomPerfBoot } from "@/lib/perf";
 
-// Police de Bloom (style Aurore). La variable garde son nom : tout le CSS la lit déjà.
-const jakarta = Outfit({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta" });
+// Police de Bloom : Geist, sobre et professionnelle. La variable garde son nom : tout le CSS la lit déjà.
+const jakarta = Geist({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta" });
 
 export const metadata: Metadata = {
   title: { default: "Bloom CRM", template: "%s · Bloom CRM" },
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
-export const viewport: Viewport = { themeColor: "#0c0a1a", width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content" };
+export const viewport: Viewport = { themeColor: "#09090b", width: "device-width", initialScale: 1, viewportFit: "cover", interactiveWidget: "resizes-content" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

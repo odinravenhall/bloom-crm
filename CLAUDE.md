@@ -72,8 +72,10 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 
 - `app/` (Node 24, sans dépendance) = l'**API** : garde la session Substy côté serveur (chiffrée dans `data/`), appelle
   l'API interne de Substy, écoute le temps réel, sert `/api/*` et `/media`, et fait tourner le **bot Discord « Bloom »**.
-- `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec le style « Aurore » choisi par l'agence le 22/11/2026 (nuit violette, lueurs, dégradés de l'accent via `--grad`,
-  panneaux en verre, police Outfit ; bloc « Style Aurore » de `app/globals.css`) sur la mise en page de Raven, et SES fonds : thèmes de Bloom
+- `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec un style NOIR ET BLANC sobre et professionnel (demande de l'agence, 22/11/2026) : thème « Noir » par défaut,
+  accent blanc (texte noir dessus via `--color-on-primary`), police Geist, pas de fond animé par défaut ; couleurs et fonds
+  animés restent au choix dans Paramètres → Apparence. Graphiques : `components/ui/chart.tsx` (façon shadcn, sur Recharts),
+  en nuances de la couleur principale. Menu à catégories dépliables. Sur la mise en page de Raven, et SES fonds : thèmes de Bloom
   (`lib/theme.ts` : base Nuit / Onyx / Clair, couleur d'accent, fond animé Aurore / Pétales / Lucioles / Vagues / Aucun,
   « Réduire les animations ») dans Paramètres → Apparence. L'agence veut des couleurs et du mouvement qui donnent envie de chatter. Elle relaie `/api/*` et `/media` vers
   l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,

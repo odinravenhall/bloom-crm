@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  ChevronDown,
   BarChart3,
   Bot,
   FlaskConical,
@@ -75,6 +76,7 @@ const GROUPS: Group[] = [
 ];
 const isOn = (path: string, href: string) => (href === "/app" ? path === "/app" : path === href || path.startsWith(href + "/"));
 const KEY = "bloom.nav-small";
+const OPEN_KEY = "bloom.nav-open";
 
 export function SideNav({ me }: { me: Me }) {
   const path = usePathname();
@@ -108,6 +110,27 @@ export function SideNav({ me }: { me: Me }) {
     window.location.href = "/connexion";
   };
 
+  // Catégories qu'on déroule (gardé sur cet ordinateur) ; celle de la page ouverte se déroule toute seule.
+  const [openG, setOpenG] = useState<string[] | null>(null);
+  useEffect(() => {
+    try {
+      setOpenG(JSON.parse(localStorage.getItem(OPEN_KEY) || "null"));
+    } catch {
+      setOpenG(null);
+    }
+  }, []);
+  const isOpenG = (g: { title: string | null; items: Item[] }) =>
+    !g.title || g.items.some((i) => isOn(path, i.href)) || (openG ? openG.includes(g.title) : true);
+  const toggleG = (t: string) =>
+    setOpenG((cur) => {
+      const base = cur ?? groups.filter((g) => g.title).map((g) => g.title as string);
+      const next = base.includes(t) ? base.filter((x) => x !== t) : [...base, t];
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
   const item = (i: Item, compact: boolean) => {
     const on = isOn(path, i.href);
     return (
@@ -116,29 +139,38 @@ export function SideNav({ me }: { me: Me }) {
         href={i.href}
         title={compact ? i.label : undefined}
         className={cn(
-          "relative flex items-center gap-3 rounded-xl py-2 text-sm transition-colors",
-          compact ? "justify-center px-0" : "px-3",
-          on ? "bg-primary/15 font-semibold text-fg ring-1 ring-primary/25" : "text-muted hover:bg-white/[0.04] hover:text-fg",
-          i.soon && !on && "opacity-60",
+          "group/item flex items-center gap-2.5 rounded-lg py-1.5 text-[13px] transition-colors",
+          compact ? "justify-center px-0" : "px-1.5",
+          on ? "bg-white/[0.06] font-semibold text-fg" : "text-muted hover:bg-white/[0.03] hover:text-fg",
+          i.soon && !on && "opacity-55",
         )}
       >
-        {on && !compact ? <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-primary" /> : null}
-        <i.icon className={cn("size-[18px] shrink-0", on && "text-primary-soft")} />
+        <span className={cn("grid size-7 shrink-0 place-items-center rounded-md border transition-colors", on ? "border-transparent bg-primary text-white" : "border-line bg-card-2/60 group-hover/item:border-input")}>
+          <i.icon className="size-[15px]" />
+        </span>
         {compact ? null : <span className="flex-1 truncate">{i.label}</span>}
-        {i.soon && !compact ? <span className="rounded-full bg-white/5 px-1.5 text-[9px] font-bold text-muted uppercase" title="bientôt">bientôt</span> : null}
+        {i.soon && !compact ? <span className="rounded border border-line px-1 text-[9px] font-semibold text-muted uppercase" title="bientôt">bientôt</span> : null}
       </Link>
     );
   };
 
   const links = (compact: boolean) => (
-    <nav className="flex flex-col gap-5">
-      {groups.map((g) => (
-        <div key={g.title ?? "top"} className="flex flex-col gap-0.5">
-          {g.title && !compact ? <p className="px-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted/80 uppercase">{g.title}</p> : null}
-          {g.title && compact ? <span className="mx-auto mb-1 h-px w-5 bg-line" /> : null}
-          {g.items.map((i) => item(i, compact))}
-        </div>
-      ))}
+    <nav className="flex flex-col gap-3">
+      {groups.map((g) => {
+        const open = compact || isOpenG(g);
+        return (
+          <div key={g.title ?? "top"} className="flex flex-col gap-0.5">
+            {g.title && !compact ? (
+              <button onClick={() => toggleG(g.title as string)} className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[10.5px] font-semibold tracking-[0.12em] text-muted/80 uppercase hover:text-fg">
+                <span className="flex-1 text-left">{g.title}</span>
+                <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
+              </button>
+            ) : null}
+            {g.title && compact ? <span className="mx-auto my-1 h-px w-5 bg-line" /> : null}
+            {open ? g.items.map((i) => item(i, compact)) : null}
+          </div>
+        );
+      })}
     </nav>
   );
 

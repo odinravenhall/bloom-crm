@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Clock, Gift, Image as ImageIcon, Lock, RefreshCw, UserRound } from "lucide-react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
+import { ArrowUpRight, CalendarRange, Clock, Gift, Image as ImageIcon, Lock, RefreshCw, ShoppingBag, Sparkles, TrendingDown, TrendingUp, UserRound, Users, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, eur, moneyC, num, when } from "@/lib/fmt";
 import { PlatformBadge, useCreators } from "@/lib/creators";
 import type { Count, Dashboard as Live, RevenueR, Role } from "@/lib/types";
 import { Avatar, Pill } from "@/components/ui";
-import { AreaStack, DeltaPct, pctChange } from "@/components/charts";
+import { ChartContainer, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { pctChange } from "@/components/charts";
 
 type P = "today" | "yesterday" | "7d" | "30d" | "month" | "year" | "custom";
 const PERIODS: [P, string][] = [
@@ -33,22 +35,35 @@ function range(p: P, custom: { from: string; to: string }) {
   return custom;
 }
 const fmtDay = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+const euros = (v: number) => `${Math.round(v).toLocaleString("fr-FR")} €`;
+const short = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k€` : `${Math.round(v)} €`);
 
-// D'où vient l'argent.
-const ORIGINS: [string, string, string][] = [
-  ["ai", "IA Substy", "var(--chart-1)"],
-  ["bloom", "Chatteurs Bloom", "var(--chart-4)"],
-  ["substy", "Automatisations Substy", "var(--chart-5)"],
-  ["chatter", "Chatteurs Infloww / MyPulse", "var(--chart-2)"],
-  ["sub", "Abonnements", "var(--chart-3)"],
-  ["other", "Autres", "var(--chart-7)"],
+// D'où vient l'argent : nuances de la couleur principale (blanc et gris par défaut), de la plus forte à la plus discrète.
+const ORIGINS: { k: string; label: string; color: string }[] = [
+  { k: "ai", label: "IA Substy", color: "var(--color-primary)" },
+  { k: "bloom", label: "Chatteurs Bloom", color: "var(--color-accent-2)" },
+  { k: "chatter", label: "Chatteurs Infloww / MyPulse", color: "color-mix(in oklab, var(--color-primary) 55%, var(--color-card))" },
+  { k: "substy", label: "Automatisations Substy", color: "color-mix(in oklab, var(--color-primary) 38%, var(--color-card))" },
+  { k: "sub", label: "Abonnements", color: "color-mix(in oklab, var(--color-primary) 26%, var(--color-card))" },
+  { k: "other", label: "Autres", color: "color-mix(in oklab, var(--color-primary) 16%, var(--color-card))" },
 ];
-const TYPES: Record<string, string> = { ppv: "PPV", tip: "Pourboire", sub: "Abonnement", post: "Post", stream: "Live", other: "Autre" };
+const TYPES: { k: string; label: string; color: string }[] = [
+  { k: "ppv", label: "PPV", color: "var(--color-primary)" },
+  { k: "tip", label: "Pourboires", color: "color-mix(in oklab, var(--color-primary) 70%, var(--color-card))" },
+  { k: "sub", label: "Abonnements", color: "color-mix(in oklab, var(--color-primary) 45%, var(--color-card))" },
+  { k: "post", label: "Posts", color: "color-mix(in oklab, var(--color-primary) 30%, var(--color-card))" },
+  { k: "other", label: "Autres", color: "color-mix(in oklab, var(--color-primary) 18%, var(--color-card))" },
+];
+const TYPE_LABEL: Record<string, string> = { ppv: "PPV", tip: "Pourboire", sub: "Abonnement", post: "Post", stream: "Live", other: "Autre" };
 const SALE_ICON: Record<string, typeof Lock> = { ppv: Lock, tip: Gift, post: ImageIcon, sub: UserRound };
 const count = (c: Count | undefined) => (c?.n == null ? "—" : `${c.n}${c.more ? "+" : ""}`);
-const inbox = (creatorId: string, extra = "") => `/app/messagerie?c=${encodeURIComponent(creatorId)}${extra}`;
+// Messagerie : une conversation précise = « <créatrice>~<fan> ».
+const inboxLink = (creatorId: string, fanId?: string | null) => (fanId ? `/app/messagerie?c=${encodeURIComponent(`${creatorId}~${fanId}`)}` : "/app/messagerie");
 
-export function Dashboard({ role }: { role: Role }) {
+const AREA: ChartConfig = { onlyfans: { label: "OnlyFans", color: "var(--color-primary)" }, mym: { label: "MYM", color: "var(--color-accent-2)" } };
+
+/** Accueil : le chiffre de la période, sa courbe, d'où vient l'argent, les créatrices et les dernières ventes. */
+export function Dashboard({ role, name }: { role: Role; name?: string }) {
   // Une modèle voit seulement son chiffre : pas d'origine des ventes, pas de conversations.
   const model = role === "model";
   const { creators } = useCreators();
@@ -86,57 +101,80 @@ export function Dashboard({ role }: { role: Role }) {
   }, [loadRev, loadLive]);
 
   const byId = useMemo(() => new Map(creators.map((c) => [c.id, c])), [creators]);
-  const of = rev?.creators.filter((c) => c.platform === "onlyfans") ?? [];
-  const mym = rev?.creators.filter((c) => c.platform === "mym") ?? [];
-  const sum = (l: typeof of, k: "net" | "eur") => l.reduce((a, c) => a + c[k], 0);
-  const official = rev ? Math.max(1, rev.total - rev.provisional) : 1;
-  const substy = rev ? (rev.byOrigin.ai || 0) + (rev.byOrigin.bloom || 0) + (rev.byOrigin.substy || 0) : 0;
-  const chart = useMemo(() => {
+  // Courbe : par jour (par mois au-delà de 3 mois), en euros, OnlyFans et MYM.
+  const series = useMemo(() => {
     if (!rev) return [];
     const byMonth = rev.days.length > 92;
-    const m = new Map<string, { label: string; onlyfans: number; mym: number }>();
+    const m = new Map<string, { label: string; onlyfans: number; mym: number; total: number }>();
     for (const d of rev.days) {
       const key = byMonth ? d.day.slice(0, 7) : d.day;
       const label = new Date(d.day + "T12:00:00").toLocaleDateString("fr-FR", byMonth ? { month: "short", year: "2-digit" } : { day: "numeric", month: "short" });
-      const x = m.get(key) ?? { label, onlyfans: 0, mym: 0 };
+      const x = m.get(key) ?? { label, onlyfans: 0, mym: 0, total: 0 };
       x.onlyfans += d.onlyfans / 100;
       x.mym += (d.mym + d.provisional) / 100;
+      x.total = x.onlyfans + x.mym;
       m.set(key, x);
     }
     return [...m.values()];
   }, [rev]);
+  const origins = useMemo(() => ORIGINS.map((o) => ({ ...o, value: (rev?.byOrigin[o.k] || 0) / 100 })).filter((o) => o.value > 0), [rev]);
+  const types = useMemo(() => TYPES.map((t) => ({ ...t, value: (rev?.byType[t.k] || 0) / 100 })).filter((t) => t.value > 0), [rev]);
+  const ranked = useMemo(
+    () =>
+      creators
+        .map((c) => ({ c, r: rev?.creators.find((x) => x.creatorId === c.id), l: live?.creators.find((x) => x.id === c.id) }))
+        .sort((a, b) => (b.r?.eur || 0) - (a.r?.eur || 0)),
+    [creators, rev, live],
+  );
+  const topEur = Math.max(1, ...ranked.map((x) => x.r?.eur || 0));
+  const delta = rev ? pctChange(rev.total, rev.prev) : null;
+  const basket = rev && rev.sales ? rev.total / rev.sales : 0;
+  const substy = rev ? (rev.byOrigin.ai || 0) + (rev.byOrigin.substy || 0) : 0;
+  const ofEur = rev ? rev.creators.filter((c) => c.platform === "onlyfans").reduce((a, c) => a + c.eur, 0) : 0;
+  const mymEur = rev ? rev.creators.filter((c) => c.platform === "mym").reduce((a, c) => a + c.eur, 0) : 0;
+  const hour = new Date().getHours();
+  const hello = hour < 6 ? "Bonne nuit" : hour < 18 ? "Bonjour" : "Bonsoir";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 px-4 py-6 md:px-8 md:py-10">
-      {/* En-tête : période en premier */}
+    <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-4 py-6 md:px-8 md:py-8">
+      {/* En-tête */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl md:text-5xl">Accueil</h1>
-          <p className="mt-1 text-sm text-muted">{from === to ? fmtDay(from) : `Du ${fmtDay(from)} au ${fmtDay(to)}`} · ventes réelles Infloww et MyPulse, nettes</p>
+          <p className="text-sm text-muted">
+            {hello}
+            {name ? ` ${name.split(" ")[0]}` : ""} 👋
+          </p>
+          <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+            <span className="text-grad">Accueil</span>
+          </h1>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+            <CalendarRange className="size-4" />
+            {from === to ? fmtDay(from) : `Du ${fmtDay(from)} au ${fmtDay(to)}`} · ventes réelles Infloww et MyPulse, nettes
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-0.5 rounded-xl border bg-card/70 p-1">
             {PERIODS.map(([k, l]) => (
-              <button key={k} onClick={() => setP(k)} className={cn("rounded-full border px-3 py-1.5 text-sm font-semibold", p === k ? "border-primary bg-petal text-primary-soft" : "bg-card text-muted hover:text-fg")}>
+              <button key={k} onClick={() => setP(k)} className={cn("rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors", p === k ? "bg-primary text-white" : "text-muted hover:text-fg")}>
                 {l}
               </button>
             ))}
           </div>
           {p === "custom" ? (
             <div className="flex items-center gap-1.5">
-              <input type="date" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} className="h-9 rounded-full border bg-card px-3 text-sm" />
+              <input type="date" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} className="h-9 rounded-lg border bg-card px-2.5 text-sm" />
               <span className="text-muted">→</span>
-              <input type="date" value={custom.to} min={custom.from} max={parisDay(Date.now())} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} className="h-9 rounded-full border bg-card px-3 text-sm" />
+              <input type="date" value={custom.to} min={custom.from} max={parisDay(Date.now())} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} className="h-9 rounded-lg border bg-card px-2.5 text-sm" />
             </div>
           ) : null}
-          <button onClick={() => (loadRev(), loadLive())} disabled={busy} title="Actualiser" className="grid size-9 place-items-center rounded-full border bg-card text-muted hover:text-fg">
+          <button onClick={() => (loadRev(), loadLive())} disabled={busy} title="Actualiser" className="grid size-9 place-items-center rounded-xl border bg-card text-muted hover:text-fg">
             <RefreshCw className={cn("size-4", busy && "animate-spin")} />
           </button>
         </div>
       </div>
 
       {err ? <p className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">{err}</p> : null}
-      {rev?.unmapped.length ? (
+      {rev?.unmapped.length && !model ? (
         <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {rev.unmapped.map((id) => byId.get(id)?.name ?? id).join(", ")} : pas encore reliée(s) à Infloww / MyPulse.{" "}
           <Link href="/app/reglages" className="font-semibold underline">
@@ -145,193 +183,234 @@ export function Dashboard({ role }: { role: Role }) {
         </p>
       ) : null}
 
-      {/* Bandeau : le chiffre, sa composition, les repères */}
-      <section className="card grid gap-8 rounded-[2rem] border bg-card p-6 md:p-8 lg:grid-cols-[1.1fr_1.6fr_0.9fr]">
-        <div>
-          <p className="text-sm font-semibold text-muted">Chiffre d’affaires net</p>
-          <p className="mt-1 font-display text-5xl font-semibold tabular-nums md:text-6xl">{rev ? eur(rev.total, 0) : "—"}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            {rev ? <DeltaPct v={pctChange(rev.total, rev.prev)} suffix={p === "today" ? "vs hier" : "vs période d’avant"} /> : null}
-            {rev?.provisional ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted">
-                <Clock className="size-3.5" /> dont {eur(rev.provisional, 0)} en attente de confirmation
+      {/* Les chiffres clés */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="card relative col-span-2 flex flex-col overflow-hidden rounded-2xl border bg-card p-5 lg:row-span-2">
+          <div className="pointer-events-none absolute -top-16 -right-10 size-48 rounded-full opacity-25 blur-3xl" style={{ backgroundImage: "var(--grad)" }} />
+          <p className="flex items-center gap-2 text-sm font-semibold text-muted">
+            <Wallet className="size-4 text-primary-soft" /> Chiffre d’affaires net
+          </p>
+          <div className="mt-1 flex flex-wrap items-end gap-3">
+            <p className="text-4xl font-extrabold tracking-tight tabular-nums md:text-5xl">{rev ? eur(rev.total, 0) : "—"}</p>
+            {delta != null && isFinite(delta) ? (
+              <span className={cn("mb-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-bold tabular-nums", delta >= 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300")}>
+                {delta >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+                {Math.abs(delta).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} % {p === "today" ? "vs hier" : "vs avant"}
               </span>
             ) : null}
           </div>
-        </div>
-        <div className={model ? "hidden" : ""}>
-          <div className="flex items-baseline justify-between">
-            <p className="text-sm font-semibold text-muted">D’où vient l’argent</p>
-            <p className="text-sm">
-              Substy : <b className="tabular-nums">{eur(substy, 0)}</b> <span className="text-muted">({rev?.total ? Math.round((substy / rev.total) * 100) : 0} %)</span>
+          {rev?.provisional ? (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
+              <Clock className="size-3.5" /> dont {eur(rev.provisional, 0)} en attente de confirmation
             </p>
-          </div>
-          <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-card-2">
-            {ORIGINS.map(([k, , color]) => (rev?.byOrigin[k] ? <span key={k} style={{ width: `${(rev.byOrigin[k] / official) * 100}%`, background: color }} /> : null))}
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-            {ORIGINS.map(([k, label, color]) => (
-              <div key={k} className={cn("flex items-center gap-2 text-sm", !rev?.byOrigin[k] && "opacity-40")}>
-                <span className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />
-                <span className="min-w-0 flex-1 truncate text-muted">{label}</span>
-                <b className="tabular-nums">{eur(rev?.byOrigin[k] || 0, 0)}</b>
-              </div>
-            ))}
-          </div>
+          ) : null}
+          {series.length > 1 ? (
+            <ChartContainer config={{ total: { label: "Chiffre", color: "var(--color-primary)" } }} className="mt-auto h-20 pt-3">
+              <AreaChart data={series} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="kpi-spark" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="var(--color-primary)" stopOpacity={0.45} />
+                    <stop offset="1" stopColor="var(--color-primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area dataKey="total" type="monotone" stroke="var(--color-primary)" strokeWidth={2} fill="url(#kpi-spark)" isAnimationActive={false} />
+              </AreaChart>
+            </ChartContainer>
+          ) : null}
         </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:grid-cols-1 lg:border-l lg:pl-8">
-          {[
-            ["OnlyFans", rev ? moneyC(sum(of, "net"), "USD", 0) : "—"],
-            ["MYM", rev ? eur(sum(mym, "net"), 0) : "—"],
-            ["Ventes", rev ? num(rev.sales) : "—"],
-            ["Fans acheteurs", rev ? num(rev.buyers) : "—"],
-          ].map(([k, v]) => (
-            <div key={k} className="flex items-baseline justify-between gap-3">
-              <dt className="text-muted">{k}</dt>
-              <dd className="font-display text-xl font-semibold tabular-nums">{v}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+        <Kpi icon={ShoppingBag} label="Ventes" value={rev ? num(rev.sales) : "—"} sub={rev ? `panier moyen ${eur(basket, 0)}` : undefined} />
+        <Kpi icon={Users} label="Fans acheteurs" value={rev ? num(rev.buyers) : "—"} sub={rev && rev.buyers ? `${eur(rev.total / rev.buyers, 0)} par fan` : undefined} />
+        {model ? null : <Kpi icon={Sparkles} label="Fait par l’IA Substy" value={rev ? eur(substy, 0) : "—"} sub={rev && rev.total ? `${Math.round((substy / rev.total) * 100)} % du chiffre` : undefined} accent />}
+        <Kpi icon={Wallet} label="OnlyFans · MYM" value={rev ? `${short(ofEur / 100)} · ${short(mymEur / 100)}` : "—"} sub="en euros" />
+      </div>
 
       {/* Courbe */}
-      <section>
-        <div className="mb-2 flex items-center gap-4 text-sm">
-          <h2 className="text-2xl">Évolution</h2>
-          <span className="flex items-center gap-1.5 text-muted">
-            <span className="size-2.5 rounded-full" style={{ background: "var(--chart-1)" }} /> OnlyFans
-          </span>
-          <span className="flex items-center gap-1.5 text-muted">
-            <span className="size-2.5 rounded-full" style={{ background: "var(--chart-2)" }} /> MYM
-          </span>
+      <section className="card rounded-2xl border bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">Évolution du chiffre</h2>
+          <div className="ml-auto">
+            <ChartContainer config={AREA} className="hidden">
+              <AreaChart data={[]} />
+            </ChartContainer>
+            <Legend config={AREA} />
+          </div>
         </div>
-        {chart.length ? (
-          <AreaStack
-            data={chart}
-            format={(v) => `${Math.round(v).toLocaleString("fr-FR")} €`}
-            series={[
-              { key: "onlyfans", label: "OnlyFans", color: "var(--chart-1)" },
-              { key: "mym", label: "MYM", color: "var(--chart-2)" },
-            ]}
-          />
+        {series.length ? (
+          <ChartContainer config={AREA} className="h-[280px]">
+            <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                {Object.keys(AREA).map((k) => (
+                  <linearGradient key={k} id={`evo-${k}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor={`var(--color-${k})`} stopOpacity={0.5} />
+                    <stop offset="1" stopColor={`var(--color-${k})`} stopOpacity={0.02} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid vertical={false} strokeDasharray="3 6" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} minTickGap={24} />
+              <YAxis width={56} tickLine={false} axisLine={false} tickFormatter={short} />
+              <ChartTooltip cursor={{ stroke: "var(--color-line)" }} content={<ChartTooltipContent format={euros} total />} />
+              <Area dataKey="mym" type="monotone" stackId="a" stroke="var(--color-mym)" strokeWidth={2} fill="url(#evo-mym)" isAnimationActive={false} />
+              <Area dataKey="onlyfans" type="monotone" stackId="a" stroke="var(--color-onlyfans)" strokeWidth={2} fill="url(#evo-onlyfans)" isAnimationActive={false} />
+            </AreaChart>
+          </ChartContainer>
         ) : (
-          <p className="py-16 text-center text-sm text-muted">{rev ? "Aucune vente" : "Chargement…"}</p>
+          <p className="py-20 text-center text-sm text-muted">{rev ? "Aucune vente sur la période" : "Chargement…"}</p>
         )}
       </section>
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
-        {/* Créatrices : un tableau */}
-        <section>
-          <h2 className="mb-3 text-2xl">Créatrices</h2>
-          <div className="overflow-x-auto rounded-3xl border bg-card">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted">
-                  <th className="px-4 py-3 font-semibold">Créatrice</th>
-                  <th className="px-3 py-3 text-right font-semibold">Chiffre</th>
-                  <th className="px-3 py-3 font-semibold">Évolution</th>
-                  <th className="px-3 py-3 text-right font-semibold">Ventes</th>
-                  {model ? null : (
-                    <>
-                      <th className="px-3 py-3 text-right font-semibold">Non lues</th>
-                      <th className="px-3 py-3 text-right font-semibold">À reprendre</th>
-                      <th className="px-3 py-3 font-semibold">IA</th>
-                      <th />
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {creators.map((c) => {
-                  const r = rev?.creators.find((x) => x.creatorId === c.id);
-                  const l = live?.creators.find((x) => x.id === c.id);
-                  const unmapped = rev?.unmapped.includes(c.id);
-                  const mymC = /mym/i.test(c.platform || "");
-                  return (
-                    <tr key={c.id} className="hover:bg-white/[0.03]">
-                      <td className="px-4 py-3">
-                        <span className="flex items-center gap-3">
-                          <Avatar src={c.avatar} name={c.name} size="size-9" />
-                          <span>
-                            <b className="flex items-center gap-1.5">
-                              {c.name} <PlatformBadge c={c} />
-                            </b>
-                            <span className="text-xs text-muted">{l ? (l.live ? "en direct" : "connexion…") : mymC ? "MYM" : "OnlyFans"}</span>
-                          </span>
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right font-display text-lg font-semibold tabular-nums">
-                        {unmapped ? <span className="font-sans text-xs text-amber-300">pas reliée</span> : r ? moneyC(r.net, r.currency, 0) : rev ? moneyC(0, mymC ? "EUR" : "USD", 0) : "—"}
-                        {r?.provisional ? <span className="block font-sans text-[11px] font-normal text-muted">+ {eur(r.provisional, 0)} en attente</span> : null}
-                      </td>
-                      <td className="px-3 py-3">{r ? <DeltaPct v={pctChange(r.eur, r.prev)} /> : null}</td>
-                      <td className="px-3 py-3 text-right tabular-nums">{r?.sales ?? 0}</td>
-                      {model ? null : (
-                      <>
-                      <td className="px-3 py-3 text-right tabular-nums">
-                        <Link href={inbox(c.id, "&f=todo")} className="font-semibold text-primary-soft hover:underline">
-                          {count(l?.unread)}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">
-                        <Link href={inbox(c.id, "&f=todo")} className="font-semibold text-amber-300 hover:underline">
-                          {count(l?.handoff)}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3">{c.ai === false ? <Pill>coupée</Pill> : c.ai ? <Pill tone="accent">active</Pill> : null}</td>
-                      <td className="px-3 py-3 text-right">
-                        <Link href={inbox(c.id)} title="Ouvrir la messagerie" className="inline-grid size-8 place-items-center rounded-full text-muted hover:bg-card-2 hover:text-fg">
-                          <ArrowUpRight className="size-4" />
-                        </Link>
-                      </td>
-                      </>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* D'où vient l'argent + par type de vente */}
+      {!model ? (
+        <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr]">
+          <section className="card rounded-2xl border bg-card p-5">
+            <h2 className="text-lg font-bold">D’où vient l’argent</h2>
+            <p className="text-xs text-muted">Qui a fait chaque vente : l’IA, l’équipe dans Bloom, les chatteurs Infloww / MyPulse…</p>
+            {origins.length ? (
+              <div className="mt-3 grid items-center gap-4 sm:grid-cols-[200px_1fr]">
+                <ChartContainer config={Object.fromEntries(origins.map((o) => [o.k, { label: o.label, color: o.color }]))} className="h-[200px]">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent format={euros} />} />
+                    <Pie data={origins} dataKey="value" nameKey="k" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                      {origins.map((o) => (
+                        <Cell key={o.k} fill={o.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <div className="flex flex-col gap-2">
+                  {origins.map((o) => {
+                    const total = origins.reduce((a, x) => a + x.value, 0) || 1;
+                    return (
+                      <div key={o.k} className="flex items-center gap-2.5 text-sm">
+                        <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: o.color }} />
+                        <span className="min-w-0 flex-1 truncate text-muted">{o.label}</span>
+                        <span className="text-xs text-muted tabular-nums">{Math.round((o.value / total) * 100)} %</span>
+                        <b className="w-20 text-right tabular-nums">{euros(o.value)}</b>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="py-12 text-center text-sm text-muted">{rev ? "Aucune vente sur la période" : "Chargement…"}</p>
+            )}
+          </section>
+          <section className="card rounded-2xl border bg-card p-5">
+            <h2 className="text-lg font-bold">Par type de vente</h2>
+            <p className="text-xs text-muted">PPV, pourboires, abonnements, posts.</p>
+            {types.length ? (
+              <ChartContainer config={Object.fromEntries(types.map((t) => [t.k, { label: t.label, color: t.color }]))} className="mt-3 h-[200px]">
+                <BarChart data={types} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="label" width={92} tickLine={false} axisLine={false} />
+                  <ChartTooltip cursor={{ fill: "rgb(255 255 255 / 0.04)" }} content={<ChartTooltipContent format={euros} labelKey="label" />} />
+                  <Bar dataKey="value" radius={8} barSize={22} isAnimationActive={false}>
+                    {types.map((t) => (
+                      <Cell key={t.k} fill={t.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <p className="py-12 text-center text-sm text-muted">{rev ? "Aucune vente sur la période" : "Chargement…"}</p>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        {/* Classement des créatrices */}
+        <section className="card rounded-2xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-bold">Créatrices</h2>
+            <span className="text-xs text-muted">classées par chiffre</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {ranked.map(({ c, r, l }, i) => {
+              const unmapped = rev?.unmapped.includes(c.id);
+              const mymC = /mym/i.test(c.platform || "");
+              const d = r ? pctChange(r.eur, r.prev) : null;
+              return (
+                <div key={c.id} className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.03]">
+                  <span className={cn("w-5 text-center text-xs font-bold tabular-nums", i < 3 ? "text-primary-soft" : "text-muted")}>{i + 1}</span>
+                  <Avatar src={c.avatar} name={c.name} size="size-9" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                      {c.name} <PlatformBadge c={c} />
+                      {l && !model ? <span className={cn("size-1.5 rounded-full", l.live ? "bg-emerald-400" : "bg-amber-400")} title={l.live ? "en direct" : "connexion…"} /> : null}
+                    </p>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-card-2">
+                      <div className="h-full rounded-full" style={{ width: `${((r?.eur || 0) / topEur) * 100}%`, backgroundImage: "var(--grad)" }} />
+                    </div>
+                  </div>
+                  {!model ? (
+                    <div className="hidden items-center gap-3 text-xs sm:flex">
+                      <span className="text-muted" title="Messages non lus">
+                        <b className="text-fg">{count(l?.unread)}</b> non lus
+                      </span>
+                      <span className="text-muted" title="À reprendre (l’IA a passé la main)">
+                        <b className="text-amber-300">{count(l?.handoff)}</b> à reprendre
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="w-28 text-right">
+                    <p className="text-sm font-bold tabular-nums">{unmapped ? <span className="text-xs font-semibold text-amber-300">pas reliée</span> : r ? moneyC(r.net, r.currency, 0) : rev ? moneyC(0, mymC ? "EUR" : "USD", 0) : "—"}</p>
+                    {d != null && isFinite(d) ? (
+                      <p className={cn("text-[11px] font-semibold tabular-nums", d >= 0 ? "text-emerald-300" : "text-rose-300")}>
+                        {d >= 0 ? "+" : ""}
+                        {Math.round(d)} %
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted">{r?.sales ? `${r.sales} ventes` : " "}</p>
+                    )}
+                  </div>
+                  {!model ? (
+                    <Link href={inboxLink(c.id)} title="Ouvrir la messagerie" className="grid size-8 place-items-center rounded-lg text-muted opacity-0 group-hover:opacity-100 hover:bg-card-2 hover:text-fg">
+                      <ArrowUpRight className="size-4" />
+                    </Link>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </section>
 
-        {/* Dernières ventes : un fil */}
-        <section>
-          <h2 className="mb-3 text-2xl">Dernières ventes</h2>
-          <ol className="scroll-thin relative max-h-[520px] overflow-y-auto pl-4">
-            <span className="absolute top-2 bottom-2 left-[7px] w-px bg-line" />
+        {/* Dernières ventes */}
+        <section className="card rounded-2xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-bold">Dernières ventes</h2>
+            <span className="pulse-dot size-2 rounded-full bg-emerald-400" title="Mis à jour en continu" />
+          </div>
+          <ol className="scroll-thin flex max-h-[460px] flex-col gap-1 overflow-y-auto">
             {(rev?.recent ?? []).map((s) => {
               const Icon = SALE_ICON[s.type] ?? Gift;
-              const o = ORIGINS.find(([k]) => k === s.origin);
+              const o = ORIGINS.find((x) => x.k === s.origin);
               const body = (
-                <>
-                  <span className="absolute top-3.5 -left-[13px] grid size-[18px] place-items-center rounded-full border bg-card text-primary">
-                    <Icon className="size-2.5" />
+                <span className="flex items-center gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary-soft">
+                    <Icon className="size-4" />
                   </span>
-                  <span className="flex items-baseline justify-between gap-3">
-                    <span className="min-w-0 truncate text-sm font-semibold">
-                      {s.fan ?? "Fan"} <span className="font-normal text-muted">· {TYPES[s.type] ?? s.type}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">
+                      {s.fan ?? "Fan"} <span className="font-normal text-muted">· {TYPE_LABEL[s.type] ?? s.type}</span>
                     </span>
-                    <span className="shrink-0 font-display text-base font-semibold tabular-nums">{moneyC(s.net, s.currency)}</span>
+                    <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                      {byId.get(s.creatorId)?.name ?? ""} · {when(s.at)}
+                      {o && !model ? <span>· {s.by ? s.by : o.label}</span> : null}
+                      {s.provisional ? <Pill tone="warn">en attente</Pill> : null}
+                    </span>
                   </span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                    {byId.get(s.creatorId)?.name ?? ""} · {when(s.at)}
-                    {o && !model ? <span>· {s.by ? s.by : o[1]}</span> : null}
-                    {s.provisional ? (
-                      <span className="inline-flex items-center gap-1 text-amber-300">
-                        <Clock className="size-3" /> en attente
-                      </span>
-                    ) : null}
-                  </span>
-                </>
+                  <span className="shrink-0 text-sm font-bold tabular-nums">{moneyC(s.net, s.currency)}</span>
+                </span>
               );
               return (
-                <li key={s.id} className="relative">
+                <li key={s.id}>
                   {s.fanId && !model ? (
-                    <Link href={inbox(s.creatorId, `&fan=${encodeURIComponent(s.fanId)}`)} className="block rounded-2xl px-3 py-2.5 hover:bg-card">
+                    <Link href={inboxLink(s.creatorId, s.fanId)} className="block rounded-xl px-2 py-2 hover:bg-white/[0.03]">
                       {body}
                     </Link>
                   ) : (
-                    <div className="px-3 py-2.5">{body}</div>
+                    <div className="px-2 py-2">{body}</div>
                   )}
                 </li>
               );
@@ -343,3 +422,34 @@ export function Dashboard({ role }: { role: Role }) {
     </div>
   );
 }
+
+function Kpi({ icon: Icon, label, value, sub, accent }: { icon: typeof Wallet; label: string; value: React.ReactNode; sub?: string; accent?: boolean }) {
+  return (
+    <div className={cn("card rounded-2xl border bg-card p-4", accent && "border-primary/30")}>
+      <p className="flex items-center gap-2 text-xs font-semibold text-muted">
+        <span className={cn("grid size-7 place-items-center rounded-lg", accent ? "bg-primary text-white" : "bg-card-2 text-primary-soft")}>
+          <Icon className="size-3.5" />
+        </span>
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-extrabold tracking-tight tabular-nums">{value}</p>
+      {sub ? <p className="text-xs text-muted">{sub}</p> : null}
+    </div>
+  );
+}
+
+/** Légende d'un graphique (même pastilles que ChartLegendContent, hors du conteneur). */
+function Legend({ config }: { config: ChartConfig }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+      {Object.entries(config).map(([k, v]) => (
+        <span key={k} className="flex items-center gap-1.5 text-muted">
+          <span className="size-2.5 rounded-[3px]" style={{ background: v.color }} />
+          {v.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export { ChartLegendContent };

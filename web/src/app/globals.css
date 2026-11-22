@@ -485,20 +485,23 @@ html[data-theme="onyx"] {
  * L'accent (--color-primary) est posé sur <html> par lib/theme.ts ; le reste en découle.
  * ---------------------------------------------------------------------------------------------- */
 html:not([data-theme]) {
-  /* Aurore : nuit violette */
-  --color-bg: #0c0a1a;
-  --color-card: #15112b;
-  --color-card-2: #1d1838;
-  --color-line: #2a2350;
-  --color-input: #3a3166;
-  --color-muted: #a59cc9;
-  --color-panel: rgb(18 14 40 / 0.55);
-  --color-panel-strong: rgb(14 11 32 / 0.82);
-  --color-bubble-fan: #1f1a3d;
+  /* Noir : espace de travail sobre, noir et blanc */
+  --color-bg: #09090b;
+  --color-card: #111113;
+  --color-card-2: #18181b;
+  --color-line: #232327;
+  --color-input: #34343a;
+  --color-fg: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-panel: rgb(12 12 14 / 0.78);
+  --color-panel-strong: rgb(9 9 11 / 0.94);
+  --color-bubble-fan: #1c1c20;
 }
 html {
   /* Deuxième couleur, tirée de l'accent vers le violet : sert aux dégradés (boutons, bulles, barres). */
-  --color-accent-2: color-mix(in oklab, var(--color-primary) 30%, #8b5cf6);
+  --color-accent-2: color-mix(in oklab, var(--color-primary) 72%, #71717a);
+  /* Texte posé sur la couleur d'accent (noir sur blanc, blanc sur une couleur foncée) : réglé par lib/theme.ts. */
+  --color-on-primary: #09090b;
   --grad: linear-gradient(135deg, var(--color-primary), var(--color-accent-2));
   --color-bubble-me: color-mix(in oklab, var(--color-primary) 55%, var(--color-accent-2));
   --radius-card: 1.25rem;
@@ -511,11 +514,15 @@ html[data-theme="onyx"] { --color-muted: #a1a1b5; }
 .bg-bubble-me {
   background-image: var(--grad);
 }
-.bg-bubble-me { color: #fff; }
+.bg-primary.text-white,
+.bg-bubble-me { color: var(--color-on-primary); }
 .bg-bubble-me .text-muted,
-.bg-bubble-me [class*="text-muted"] { color: rgb(255 255 255 / 0.75); }
+.bg-bubble-me [class*="text-muted"] { color: color-mix(in oklab, var(--color-on-primary) 70%, transparent); }
+.bg-primary.text-white svg { color: inherit; }
+/* Boutons pleins un peu transparents (bg-primary/80, /85, /90) : même texte lisible que sur l'accent plein. */
+.text-white:is(.bg-primary\/70, .bg-primary\/75, .bg-primary\/80, .bg-primary\/85, .bg-primary\/90, .hover\:bg-primary:hover) { color: var(--color-on-primary); }
 /* Bouton principal : un léger halo de sa couleur */
-.bg-primary.text-white { box-shadow: 0 8px 22px -12px var(--color-primary); }
+.bg-primary.text-white { box-shadow: 0 6px 18px -12px var(--color-primary); }
 /* Panneaux en verre dépoli (menu, file, fiche) */
 .bg-panel,
 .bg-panel-strong {

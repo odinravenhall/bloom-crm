@@ -11,12 +11,13 @@ export type Decor = "none" | "aurora" | "petals" | "fireflies" | "waves";
 export type ThemePrefs = { base: Theme; accent: string; decor: Decor; motion: boolean };
 
 export const THEMES: [Theme, string][] = [
-  ["dark", "Aurore"],
+  ["dark", "Noir"],
   ["onyx", "Onyx"],
   ["light", "Clair"],
 ];
 export const ACCENTS: [string, string][] = [
-  ["#f472b6", "Aurore"],
+  ["#fafafa", "Blanc"],
+  ["#f472b6", "Rose"],
   ["#a78bfa", "Lavande"],
   ["#2dd4bf", "Menthe"],
   ["#38bdf8", "Ciel"],
@@ -32,7 +33,7 @@ export const DECORS: [Decor, string, string][] = [
   ["waves", "Vagues", "Des ondes lentes en bas de l’écran"],
   ["none", "Aucun", "Fond uni, le plus sobre"],
 ];
-export const THEME_DEFAULT: ThemePrefs = { base: "dark", accent: "#f472b6", decor: "aurora", motion: true };
+export const THEME_DEFAULT: ThemePrefs = { base: "dark", accent: "#fafafa", decor: "none", motion: true };
 const KEY = "bloom.theme";
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -52,18 +53,32 @@ export function readPrefs(raw: string | null): ThemePrefs {
 }
 
 /** Applique les préférences sur <html> (base, accent, fond, animations). Même logique que le script de démarrage. */
+/** Clarté d'une couleur (0 = noir, 1 = blanc) : sert à choisir un texte noir ou blanc dessus. */
+export function lum(hex: string) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+/** Sur fond clair, un accent blanc devient noir (sinon invisible). */
+const accentFor = (p: ThemePrefs) => (p.base === "light" && lum(p.accent) > 0.75 ? "#18181b" : p.accent);
+
 export function applyPrefs(p: ThemePrefs) {
   const h = document.documentElement;
+  const a = accentFor(p);
   if (p.base === "dark") delete h.dataset.theme;
   else h.dataset.theme = p.base;
   h.dataset.decor = p.decor;
   h.classList.toggle("motion-off", !p.motion);
-  h.style.setProperty("--color-primary", p.accent);
-  h.style.setProperty("--color-primary-soft", `color-mix(in oklab, ${p.accent} ${p.base === "light" ? "78%, #000" : "62%, #fff"})`);
+  h.style.setProperty("--color-primary", a);
+  h.style.setProperty("--color-primary-soft", `color-mix(in oklab, ${a} ${p.base === "light" ? "78%, #000" : "62%, #fff"})`);
+  h.style.setProperty("--color-on-primary", lum(a) > 0.45 ? "#09090b" : "#ffffff");
 }
 
 /** Posé tout en haut de la page : le thème s'applique avant le premier affichage (pas de flash). */
-export const themeBootScript = `try{var r=localStorage.getItem("${KEY}"),p={};if(r==="light"||r==="onyx")p={base:r};else if(r&&r[0]==="{")p=JSON.parse(r);var h=document.documentElement,b=p.base==="light"||p.base==="onyx"?p.base:"dark",a=/^#[0-9a-f]{6}$/i.test(p.accent||"")?p.accent:"${THEME_DEFAULT.accent}";if(b!=="dark")h.dataset.theme=b;h.dataset.decor=p.decor||"${THEME_DEFAULT.decor}";if(p.motion===false)h.classList.add("motion-off");h.style.setProperty("--color-primary",a);h.style.setProperty("--color-primary-soft","color-mix(in oklab, "+a+(b==="light"?" 78%, #000)":" 62%, #fff)"));}catch(e){}`;
+export const themeBootScript = `try{var r=localStorage.getItem("${KEY}"),p={};if(r==="light"||r==="onyx")p={base:r};else if(r&&r[0]==="{")p=JSON.parse(r);var h=document.documentElement,b=p.base==="light"||p.base==="onyx"?p.base:"dark",a=/^#[0-9a-f]{6}$/i.test(p.accent||"")?p.accent:"${THEME_DEFAULT.accent}";function L(x){var n=parseInt(x.slice(1),16),c=[(n>>16)&255,(n>>8)&255,n&255].map(function(v){v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}if(b==="light"&&L(a)>.75)a="#18181b";if(b!=="dark")h.dataset.theme=b;h.dataset.decor=p.decor||"${THEME_DEFAULT.decor}";if(p.motion===false)h.classList.add("motion-off");h.style.setProperty("--color-primary",a);h.style.setProperty("--color-primary-soft","color-mix(in oklab, "+a+(b==="light"?" 78%, #000)":" 62%, #fff)"));h.style.setProperty("--color-on-primary",L(a)>.45?"#09090b":"#ffffff");}catch(e){}`;
 
 export function useThemePrefs() {
   const [prefs, setPrefsState] = useState<ThemePrefs>(THEME_DEFAULT);
