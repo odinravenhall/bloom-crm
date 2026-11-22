@@ -163,6 +163,10 @@ export class SubstySession {
     const jwt = await this.token();
     return fetch(`${APP}${path}`, { headers: { authorization: `Bearer ${jwt}`, 'user-agent': UA }, signal: AbortSignal.timeout(30_000) });
   }
+  /** Configuration de l'IA d'une créatrice (réglages + personnalité choisie). Lecture seule. */
+  aiSettings(creatorId) { return this.call('settings.getSettings', { creatorId }); }
+  /** Personnalités disponibles (fournies par Substy + créées par l'agence). Lecture seule. */
+  voicePresets(creatorId) { return this.call('settings.voicePreset.getAll', { creatorId }); }
   /** Revenus d'une période (dates AAAA-MM-JJ ; creatorIds vide = toute l'agence). */
   revenue(creatorIds, startDate, endDate, earningsMode = 'net') { return this.call('revenue.overview', { creatorIds, startDate, endDate, earningsMode }); }
   /** Dernières ventes de l'agence (PPV, pourboires, posts), comme « Live latest purchases » de Substy. */

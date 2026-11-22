@@ -99,6 +99,7 @@ export function status() {
     guild: discordGuild(),
     live: gw.ready,
     oauth: oauthReady(),
+    layout: JSON.parse(getSetting('discord_layout_result') || 'null'),
     hasSecret: !!clientSecret(),
     redirect: REDIRECT_URI,
     invite: bot ? `https://discord.com/oauth2/authorize?client_id=${bot.id}&scope=bot%20applications.commands&permissions=19472` : null,
@@ -239,31 +240,169 @@ async function onInteraction(i) {
   }
 }
 
-/**
- * Crée sur le serveur Discord les rôles Bloom qui manquent (Team Leader, Modèle…).
- * Un nouveau Team Leader reçoit les mêmes droits de salons que le rôle Manager.
- */
-async function ensureRoles() {
+// ---------------------------------------------------------------- organisation du serveur Discord
+// Décrite ici (donc sur GitHub) et appliquée par le bot à chaque démarrage : rôles, catégories, salons, droits.
+// Rien n'est supprimé : le bot ajoute ce qui manque et (re)donne les bons droits aux rôles Bloom.
+const PERM = { VIEW: 1n << 10n, SEND: 1n << 11n, HISTORY: 1n << 16n, REACT: 1n << 6n, CMDS: 1n << 31n, CONNECT: 1n << 20n, SPEAK: 1n << 21n, THREADS: 1n << 38n };
+const bits = (...p) => String(p.reduce((a, b) => a | b, 0n));
+const MEMBER = [PERM.VIEW, PERM.SEND, PERM.HISTORY, PERM.REACT, PERM.CONNECT, PERM.SPEAK];
+const READ = [PERM.VIEW, PERM.HISTORY];
+// who : rôles qui voient la catégorie (« everyone » = tout le monde, même sans rôle). Admin voit tout (droit Administrateur).
+const LAYOUT = [
+  {
+    cat: '🌸 BLOOM',
+    who: 'everyone',
+    channels: [
+      { name: 'bienvenue', topic: 'Comment ça marche, et comment entrer dans Bloom.', readOnly: true },
+      { name: 'connexion', topic: 'Tape /connexion ici : le bot Bloom t’envoie ton lien (à toi seul, valable 5 min).', open: true },
+      { name: 'annonces', topic: 'Annonces de l’agence.', readOnly: true, writers: ['manager', 'teamleader'] },
+      { name: 'mises-a-jour-bloom', topic: 'Chaque mise à jour de Bloom : ce qui a été ajouté ou corrigé, quand et par qui.', readOnly: true },
+    ],
+  },
+  {
+    cat: '💬 ÉQUIPE',
+    who: ['chatteur', 'teamleader', 'manager'],
+    channels: [
+      { name: 'général', topic: 'Discussion de l’équipe.' },
+      { name: 'planning', topic: 'Shifts, remplacements, absences.' },
+      { name: 'questions', topic: 'Une question sur un fan, un script, un PPV ? C’est ici.' },
+      { name: 'Réunion', voice: true },
+    ],
+  },
+  {
+    cat: '🧭 TEAM LEADERS',
+    who: ['teamleader', 'manager'],
+    channels: [
+      { name: 'team-leaders', topic: 'Entre team leaders et managers : organisation des équipes.' },
+      { name: 'suivi-chatteurs', topic: 'Suivi des chatteurs : retards, conversations à reprendre, points à corriger.' },
+    ],
+  },
+  {
+    cat: '🌷 MODÈLES',
+    who: ['modele', 'manager'],
+    channels: [
+      { name: 'espace-modeles', topic: 'Pour les modèles : infos de l’agence, questions, organisation.' },
+      { name: 'contenus', topic: 'Demandes et envois de contenus (photos, vidéos, vocaux).' },
+    ],
+  },
+  {
+    cat: '🔒 ADMIN',
+    who: ['manager'],
+    channels: [
+      { name: 'admin', topic: 'Entre admins et managers.' },
+      { name: 'alertes-bloom', topic: 'Alertes automatiques de Bloom (connexion Substy coupée, site en panne…).' },
+    ],
+  },
+];
+const LAYOUT_VERSION = '2';
+
+function welcomeEmbed(ids, channelIds) {
+  const r = (k, label) => (ids[k] ? `<@&${ids[k]}>` : `**${label}**`);
+  return {
+    title: '🌸 Bienvenue sur Bloom',
+    color: 0xd4537e,
+    description: [
+      '**Bloom** est le CRM de chatting de l’agence Zèbre, pour nos créatrices OnlyFans et MYM.',
+      '',
+      '**Les rôles**',
+      `${r('chatteur', 'Chatteur')} : chatte sur les créatrices qu’on lui confie.`,
+      `${r('teamleader', 'Team Leader')} : suit et accompagne ses chatteurs.`,
+      `${r('manager', 'Manager')} : managers des modèles et du chatting, accès à tout.`,
+      `${r('modele', 'Modèle')} : voit son chiffre d’affaires, toutes plateformes.`,
+      '',
+      '**Pour entrer dans Bloom**',
+      '1. Un admin te donne ton rôle.',
+      `2. Clique sur « Se connecter avec Discord » sur bloom.ravencrm.xyz, ou tape **/connexion** dans ${channelIds.connexion ? `<#${channelIds.connexion}>` : '#connexion'}.`,
+      '3. Le lien de /connexion est **rien que pour toi**, valable 5 minutes. Ne le partage jamais.',
+      '',
+      'Si tu quittes le serveur ou si ton rôle est retiré, ton accès à Bloom s’arrête tout seul.',
+      `📣 Les nouvelles de l’agence : ${channelIds.annonces ? `<#${channelIds.annonces}>` : '#annonces'}. Les nouveautés du CRM : ${channelIds['mises-a-jour-bloom'] ? `<#${channelIds['mises-a-jour-bloom']}>` : '#mises-a-jour-bloom'}.`,
+    ].join('\n'),
+    footer: { text: 'bloom.ravencrm.xyz' },
+  };
+}
+
+/** Rôles + catégories + salons + droits + messages d'accueil. Idempotent : peut tourner à chaque démarrage. */
+async function ensureServer() {
   const g = discordGuild();
   if (!g) return;
+  const log = [];
   try {
-    const roles = await discord('GET', `/guilds/${g}/roles`);
+    // 1. Rôles
+    let roles = await discord('GET', `/guilds/${g}/roles`);
     const byKey = new Map(roles.map((r) => [roleKey(r.name), r]));
     for (const [name, color] of DISCORD_ROLES) {
       if (byKey.has(roleKey(name))) continue;
       const created = await discord('POST', `/guilds/${g}/roles`, { name, color, hoist: true, mentionable: true, permissions: '0' });
-      console.log('[bot] rôle Discord créé :', name);
-      const manager = byKey.get('manager');
-      if (roleKey(name) === 'teamleader' && manager) {
-        for (const ch of await discord('GET', `/guilds/${g}/channels`)) {
-          const ow = (ch.permission_overwrites || []).find((o) => o.id === manager.id);
-          if (ow) await discord('PUT', `/channels/${ch.id}/permissions/${created.id}`, { type: 0, allow: ow.allow, deny: ow.deny }).catch(() => {});
-        }
-      }
+      byKey.set(roleKey(name), created);
+      log.push(`rôle ${name} créé`);
     }
     roleCache.at = 0;
+    const ids = Object.fromEntries(['manager', 'teamleader', 'chatteur', 'modele', 'admin'].map((k) => [k, byKey.get(k)?.id]));
+
+    // 2. Catégories et salons
+    let channels = await discord('GET', `/guilds/${g}/channels`);
+    const channelIds = {};
+    let position = 0;
+    for (const block of LAYOUT) {
+      const viewers = block.who === 'everyone' ? [] : block.who.map((k) => ids[k]).filter(Boolean);
+      const overwrites = (extra = {}) => {
+        const list = [];
+        if (block.who === 'everyone') list.push({ id: g, type: 0, allow: bits(...READ, ...(extra.open ? [PERM.SEND, PERM.CMDS] : [])), deny: bits(...(extra.open ? [PERM.THREADS] : [PERM.SEND, PERM.THREADS])) });
+        else list.push({ id: g, type: 0, allow: '0', deny: bits(PERM.VIEW) });
+        for (const id of viewers) list.push({ id, type: 0, allow: bits(...MEMBER), deny: '0' });
+        for (const k of extra.writers || []) if (ids[k]) list.push({ id: ids[k], type: 0, allow: bits(...READ, PERM.SEND), deny: '0' });
+        return list;
+      };
+      let cat = channels.find((c) => c.type === 4 && c.name === block.cat);
+      if (!cat) {
+        cat = await discord('POST', `/guilds/${g}/channels`, { name: block.cat, type: 4, position: position, permission_overwrites: overwrites() });
+        channels.push(cat);
+        log.push(`catégorie ${block.cat} créée`);
+      } else for (const o of overwrites()) await discord('PUT', `/channels/${cat.id}/permissions/${o.id}`, { type: 0, allow: o.allow, deny: o.deny });
+      position++;
+      for (const ch of block.channels) {
+        const type = ch.voice ? 2 : 0;
+        const ow = overwrites({ open: ch.open, writers: ch.writers });
+        let c = channels.find((x) => x.type === type && x.name === ch.name);
+        if (!c) {
+          c = await discord('POST', `/guilds/${g}/channels`, { name: ch.name, type, parent_id: cat.id, topic: ch.topic, permission_overwrites: ow, ...(ch.open ? { rate_limit_per_user: 10 } : {}) });
+          channels.push(c);
+          log.push(`salon ${ch.name} créé`);
+        } else {
+          if (c.parent_id !== cat.id) await discord('PATCH', `/channels/${c.id}`, { parent_id: cat.id });
+          for (const o of ow) await discord('PUT', `/channels/${c.id}/permissions/${o.id}`, { type: 0, allow: o.allow, deny: o.deny });
+        }
+        channelIds[ch.name] = c.id;
+      }
+    }
+
+    // 3. Message d'accueil (créé ou mis à jour)
+    if (channelIds.bienvenue && getSetting('discord_layout') !== LAYOUT_VERSION) {
+      const msgs = await discord('GET', `/channels/${channelIds.bienvenue}/messages?limit=20`);
+      const mine = msgs.find((m) => m.author?.bot && m.embeds?.length);
+      if (mine) await discord('PATCH', `/channels/${channelIds.bienvenue}/messages/${mine.id}`, { embeds: [welcomeEmbed(ids, channelIds)] });
+      else {
+        const m = await discord('POST', `/channels/${channelIds.bienvenue}/messages`, { embeds: [welcomeEmbed(ids, channelIds)] });
+        await discord('PUT', `/channels/${channelIds.bienvenue}/pins/${m.id}`).catch(() => {});
+      }
+      log.push('message de bienvenue à jour');
+      for (const [name, text] of [
+        ['espace-modeles', '🌷 **Bienvenue dans l’espace modèles.** Ici : les infos de l’agence et vos questions. Votre chiffre d’affaires est sur Bloom (Accueil), après connexion avec Discord.'],
+        ['team-leaders', '🧭 **Espace team leaders.** Dans Bloom, la page **Équipe** montre qui est en ligne et sur quel fan, et permet de donner l’accès aux créatrices à vos chatteurs.'],
+      ]) {
+        const id = channelIds[name];
+        if (!id) continue;
+        const ms = await discord('GET', `/channels/${id}/messages?limit=10`);
+        if (!ms.some((m) => m.author?.bot)) await discord('POST', `/channels/${id}/messages`, { content: text });
+      }
+      setSetting('discord_layout', LAYOUT_VERSION);
+    }
+    setSetting('discord_layout_result', JSON.stringify({ at: Date.now(), ok: true, done: log }));
+    if (log.length) console.log('[bot] serveur Discord :', log.join(', '));
   } catch (e) {
-    console.warn('[bot] rôles Discord :', e.message);
+    console.warn('[bot] organisation du serveur Discord :', e.message);
+    setSetting('discord_layout_result', JSON.stringify({ at: Date.now(), ok: false, error: e.message, done: log }));
   }
 }
 
@@ -312,7 +451,11 @@ function gateway() {
     else if (p.op === 0 && p.t === 'READY') {
       gw.ready = true;
       console.log('[bot] Bloom connecté à Discord');
-      ensureRoles();
+      // Organisation du serveur : une fois par démarrage (pas à chaque reconnexion du bot).
+      if (!gw.serverDone) {
+        gw.serverDone = true;
+        ensureServer();
+      }
     } else if (p.op === 0 && p.t === 'INTERACTION_CREATE') onInteraction(p.d).catch(() => {});
   };
   ws.onclose = (e) => {

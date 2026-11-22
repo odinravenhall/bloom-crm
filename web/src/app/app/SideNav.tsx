@@ -61,7 +61,7 @@ const GROUPS: Group[] = [
   {
     title: "Intelligence artificielle",
     items: [
-      { href: "/app/ia", label: "Configuration IA", icon: Bot, roles: MANAGE, soon: true },
+      { href: "/app/ia", label: "Configuration IA", icon: Bot, roles: MANAGE },
       { href: "/app/ia-test", label: "Tester l’IA", icon: FlaskConical, roles: MANAGE, soon: true },
     ],
   },

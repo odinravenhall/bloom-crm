@@ -347,6 +347,24 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       send(res, 200, allowed === null ? list : list.filter((c) => allowed.has(String(c.id))));
     },
 
+    // ------------------------------------------------ configuration de l'IA (lecture seule pour l'instant)
+    // Admins et managers. Tout ce que Substy répartit sur 4 pages (AI Chatter, AI Persona, Creator Info), en une réponse.
+    'GET /api/ai-config': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
+      const cid = String(q(req).get('creatorId') || '');
+      const [settings, presets, creators] = await Promise.all([substy.aiSettings(cid), substy.voicePresets(cid).catch(() => []), substy.creators()]);
+      const c = (creators || []).find((x) => (x.id || x.creatorId) === cid) || {};
+      const PROFILE = ['name', 'label', 'pseudo', 'age', 'gender', 'birthday', 'living', 'profession', 'timezone', 'primaryLanguage', 'otherLanguages', 'appearance', 'hairColor', 'eyeColor', 'ethnicity', 'weight', 'shoeSize', 'braCupSize', 'description', 'customAttributes', 'platform', 'platformAccountStartedAt'];
+      const profile = Object.fromEntries(PROFILE.map((k) => [k, c[k] ?? null]));
+      // Ce que Substy exige pour allumer l'IA.
+      const missing = [['timezone', 'Fuseau horaire'], ['primaryLanguage', 'Langue maternelle']].filter(([k]) => !profile[k]).map(([, l]) => l);
+      const preset = (p) => p && { id: p.id, name: p.name, description: p.description, builtin: p.presetType === 'BUILTIN', prompt: p.prompt, emojis: { casual: p.casualEmojis || [], sexting: p.sextingEmojis || [], negotiation: p.negociationEmojis || [] } };
+      const { voicePreset, ...rest } = settings || {};
+      send(res, 200, { settings: rest, preset: preset(voicePreset), presets: (Array.isArray(presets) ? presets : presets?.items || []).map(preset), profile, missing });
+    },
+
     // ------------------------------------------------ équipe
     // Présence : la messagerie signale la conversation ouverte (toutes les 20 s) ; réponse = qui d'autre est sur la créatrice.
     'POST /api/presence': async (req, res) => {
