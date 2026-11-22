@@ -10,6 +10,7 @@ import { api, toast } from "@/lib/api";
 import { cn } from "@/lib/fmt";
 import { useT } from "@/lib/i18n";
 import { Avatar } from "@/components/ui";
+import { Performance } from "./Performance";
 
 // Analytics → Creator reports (OnlyFans) : copie de la page d'Infloww. Couleurs : variables --of-* (sombre / clair),
 // orange d'Infloww pour les accents de cette page.
@@ -125,6 +126,7 @@ export function CreatorReports() {
   const [sel, setSel] = useState<string[]>([]);
   const [net, setNet] = useState(true);
   const [gran, setGran] = useState<Gran>("day");
+  const [perfGran, setPerfGran] = useState<Gran>("day");
   const [chGran, setChGran] = useState<Gran>("day");
   const [chans, setChans] = useState<Channel[]>(CH.map((c) => c.key));
   const [data, setData] = useState<Report | null>(null);
@@ -176,6 +178,7 @@ export function CreatorReports() {
     setSel([]);
     setNet(true);
     setGran("day");
+    setPerfGran("day");
     setChGran("day");
     setChans(CH.map((c) => c.key));
   };
@@ -222,6 +225,9 @@ export function CreatorReports() {
       {/* Filtres */}
       <div className="sticky top-0 z-20 -mx-1 mt-3 flex flex-wrap items-center gap-3 px-1 py-2" style={{ background: "var(--of-page)" }}>
         <DateRange range={range} setRange={setRange} lang={loc} t={t} />
+        {tab === "performance" ? <ShownBy value={perfGran} set={setPerfGran} days={days} t={t} /> : null}
+        {tab === "overview" ? (
+        <>
         <Dropdown icon={Tag} label={t("Creator tag")} width={220}>
           {() => <p className="px-3 py-3 text-[13px]" style={{ color: "var(--of-muted)" }}>{t("No data available")}</p>}
         </Dropdown>
@@ -245,6 +251,8 @@ export function CreatorReports() {
             </div>
           )}
         </Dropdown>
+        </>
+        ) : null}
         <label className="flex items-center gap-2.5 text-[15px]">
           {t("Show net earnings")}
           <button role="switch" aria-checked={net} onClick={() => setNet(!net)} className="relative h-[26px] w-12 rounded-full transition-colors" style={{ background: net ? ORANGE : "var(--of-line)" }}>
@@ -417,7 +425,9 @@ export function CreatorReports() {
         </>
       ) : null}
 
-      {tab === "overview" || tab === "performance" ? (
+      {tab === "performance" ? <Performance range={range} net={net} gran={perfGran} accounts={data?.accounts ?? []} t={t} lang={loc} /> : null}
+
+      {tab === "overview" ? (
         <>
           <div className="mt-4 grid gap-4 md:grid-cols-4">
             {(
@@ -482,6 +492,32 @@ export function CreatorReports() {
 
       {showMetrics ? <MetricsModal t={t} value={metrics} onClose={() => setShowMetrics(false)} onApply={(m) => (setMetrics(m), localStorage.setItem(MKEY, JSON.stringify(m)), setShowMetrics(false))} /> : null}
       {showExport ? <ExportModal t={t} range={range} net={net} qs={(p) => `${qs(gran)}&${p}`} onClose={() => setShowExport(false)} /> : null}
+    </div>
+  );
+}
+
+/** « Shown by day » d'Infloww (onglet Creator performance) : heure ≤ 2 jours, semaine 14 à 365 jours, mois > 62 jours. */
+function ShownBy({ value, set, days, t }: { value: Gran; set: (g: Gran) => void; days: number; t: (s: string) => string }) {
+  const [open, setOpen] = useState(false);
+  const ok = (g: Gran) => (g === "hour" ? days <= 2 : g === "week" ? days >= 14 && days <= 365 : g === "month" ? days > 62 : true);
+  useEffect(() => {
+    if (!ok(value)) set("day");
+  });
+  const label = (g: Gran) => t(`Shown by ${g}`);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} onBlur={() => setTimeout(() => setOpen(false), 150)} className="flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[14px]" style={{ background: "var(--of-card)" }}>
+        {label(value)} <ChevronDown className="size-3.5" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-10 z-30 w-44 rounded-md border p-1 shadow-xl" style={{ background: "var(--of-card)", borderColor: "var(--of-line)" }}>
+          {(["hour", "day", "week", "month"] as Gran[]).map((g) => (
+            <button key={g} disabled={!ok(g)} onMouseDown={() => (set(g), setOpen(false))} className="block w-full rounded px-2.5 py-1.5 text-left text-[14px] disabled:opacity-40" style={value === g ? { background: "var(--of-line)" } : undefined}>
+              {label(g)}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

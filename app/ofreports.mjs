@@ -107,7 +107,7 @@ function report(u, creators, p, newSubs = null) {
       d = next;
     }
   }
-  for (const b of buckets) Object.assign(b, zero(), { total: 0 });
+  for (const b of buckets) Object.assign(b, zero(), { total: 0, refunds: 0 });
   const slot = (at) => {
     let i = buckets.length - 1;
     while (i > 0 && buckets[i].at > at) i--;
@@ -124,7 +124,7 @@ function report(u, creators, p, newSubs = null) {
       const c = per.get(r.account);
       const v = (net ? r.net : r.gross) / 100;
       if (REFUND.test(r.status || '')) {
-        if (r.at >= start) (refunded += Math.abs(v)), (c.refunds += Math.abs(v));
+        if (r.at >= start) (refunded += Math.abs(v)), (c.refunds += Math.abs(v)), (slot(r.at).refunds += Math.abs(v));
         continue;
       }
       const ch = channelOf(r);
@@ -183,7 +183,7 @@ function report(u, creators, p, newSubs = null) {
     net,
     accounts: all_.map(({ id, name, avatar }) => ({ id, name, avatar })),
     summary: Object.fromEntries([['total', { v: round(total), change: pct(total, prevTotal) }], ...CHANNELS.map((k) => [k, { v: round(cur[k]), change: pct(cur[k], prev[k]) }])]),
-    trends: buckets.map((b, i) => ({ label: b.label, ...Object.fromEntries(CHANNELS.map((k) => [k, round(b[k])])), total: round(b.total), change: i ? pct(b.total, buckets[i - 1].total) : null })),
+    trends: buckets.map((b, i) => ({ label: b.label, ...Object.fromEntries(CHANNELS.map((k) => [k, round(b[k])])), total: round(b.total), refunds: round(b.refunds), change: i ? pct(b.total, buckets[i - 1].total) : null })),
     kpi: { creators: accs.length, messages: round(cur.messages), total: round(total), refunded: round(refunded) },
     creators: [...per.values()].map((c) => {
       const m = c.creatorId ? msg.get(c.creatorId) : null;
@@ -241,6 +241,27 @@ function report(u, creators, p, newSubs = null) {
   };
 }
 
+/** Onglet « Creator performance » : une créatrice → gains par période et par canal, répartition, heatmap des PPV
+ *  achetés (jour × heure, heure de Paris) et remboursements (chargebacks). */
+function performance(u, creators, p) {
+  const r = report(u, creators, p);
+  const acc = (p.get('accounts') || '').split(',').filter(Boolean)[0];
+  const ok = r.accounts.some((a) => a.id === acc);
+  const dayList = [];
+  for (let d = r.from; d <= r.to; d = addDay(d, 1)) dayList.push({ day: d, at: parisMidnight(d), hours: Array(24).fill(0) });
+  if (ok && dayList.length) {
+    const end = parisMidnight(addDay(r.to, 1));
+    for (const x of all(`SELECT at, status FROM rv_sales WHERE account = ? AND type = 'ppv' AND at >= ? AND at < ?`, acc, dayList[0].at, end)) {
+      if (REFUND.test(x.status || '')) continue;
+      let i = dayList.length - 1;
+      while (i > 0 && dayList[i].at > x.at) i--;
+      const h = Math.min(23, Math.floor((x.at - dayList[i].at) / 3600_000));
+      dayList[i].hours[h]++;
+    }
+  }
+  return { from: r.from, to: r.to, days: r.days, gran: r.gran, net: r.net, accounts: r.accounts, account: ok ? acc : null, summary: r.summary, trends: r.trends, heatmap: dayList.map(({ day, hours }) => ({ day, hours })) };
+}
+
 /** Lignes du CSV d'export (total, par jour, ou les deux). */
 function csv(u, creators, p) {
   const fmt = p.get('format') || 'total';
@@ -286,6 +307,11 @@ export function ofReportRoutes({ userFrom, send, creators, substy }) {
       const r = report(u, creators, p, await subs(u, p));
       delete r._byDay;
       send(res, 200, r);
+    },
+    'GET /api/of-reports/performance': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      send(res, 200, performance(u, creators, new URL(req.url, 'http://x').searchParams));
     },
     'GET /api/of-reports/creators.csv': async (req, res) => {
       const u = auth(req, res);

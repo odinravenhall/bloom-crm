@@ -645,3 +645,8 @@ html[data-theme="light"] {
 .of-item { color: var(--of-side-text); }
 .of-item:hover { color: var(--of-text); }
 .of-item.on { background: var(--of-side-on); color: var(--of-text); font-weight: 600; }
+
+/* Curseur double (min / max) de la heatmap des Creator reports, comme Infloww. */
+.of-range { appearance: none; -webkit-appearance: none; background: transparent; pointer-events: none; height: 100%; margin: 0; }
+.of-range::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 8px; height: 22px; border-radius: 3px; background: #fff; border: 1px solid #2f6bff; cursor: pointer; }
+.of-range::-moz-range-thumb { pointer-events: auto; width: 8px; height: 22px; border-radius: 3px; background: #fff; border: 1px solid #2f6bff; cursor: pointer; }
