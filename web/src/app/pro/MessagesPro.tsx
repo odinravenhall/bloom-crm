@@ -117,11 +117,19 @@ export function MessagesPro() {
     save((s) => ({ ...s, tabs: s.tabs.includes(id) ? s.tabs : [...s.tabs, id], active: id }));
     setAdding(false);
   };
-  const close = (id: string) =>
+  const close = (id: string) => {
+    const left = st.tabs.filter((x) => x !== id);
     save((s) => {
       const tabs = s.tabs.filter((x) => x !== id);
       return { ...s, tabs, active: s.active === id ? (tabs[tabs.length - 1] ?? null) : s.active };
     });
+    // Dernière créatrice fermée : on revient à Bloom (page d'avant, sinon le Dashboard OnlyFans), menu à gauche.
+    if (!left.length) {
+      const back = document.referrer && new URL(document.referrer).origin === location.origin && !new URL(document.referrer).pathname.startsWith("/pro");
+      if (back && history.length > 1) history.back();
+      else location.href = "/app/of";
+    }
+  };
   const active = st.active && st.tabs.includes(st.active) ? st.active : (st.tabs[0] ?? null);
 
   if (!boot) return <div className="grid h-dvh place-items-center text-sm" style={{ background: "var(--pro-page)", color: "var(--of-muted)" }}>{err || t("Loading…")}</div>;
