@@ -331,6 +331,19 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       .then((list) => (list || []).slice(0, 40).map((x) => ({ id: String(x.id), type: x.type, at: x.createdAt, price: x.price, fan: x.userName || null, fanId: x.userId ? String(x.userId) : null, creatorId: x.creatorId, creator: x.creatorName })))
       .catch(() => []);
 
+  /** Toute la configuration IA d'une créatrice, en une réponse (réglages, personnalité, fiche, ce qui manque, dernières modifications). */
+  async function aiConfig(cid) {
+    const [settings, presets, creators] = await Promise.all([substy.aiSettings(cid), substy.voicePresets(cid).catch(() => []), substy.creators()]);
+    const c = (creators || []).find((x) => (x.id || x.creatorId) === cid) || {};
+    const PROFILE = ['name', 'label', 'pseudo', 'age', 'gender', 'birthday', 'living', 'profession', 'timezone', 'primaryLanguage', 'otherLanguages', 'appearance', 'hairColor', 'eyeColor', 'ethnicity', 'weight', 'shoeSize', 'braCupSize', 'description', 'customAttributes', 'platform', 'platformAccountStartedAt'];
+    const profile = Object.fromEntries(PROFILE.map((k) => [k, c[k] ?? null]));
+    const missing = [['timezone', 'Fuseau horaire'], ['primaryLanguage', 'Langue maternelle']].filter(([k]) => !profile[k]).map(([, l]) => l);
+    const preset = (x) => x && { id: x.id, name: x.name, description: x.description, builtin: x.presetType === 'BUILTIN', prompt: x.prompt, emojis: { casual: x.casualEmojis || [], sexting: x.sextingEmojis || [], negotiation: x.negociationEmojis || [] } };
+    const { voicePreset, ...rest } = settings || {};
+    const changes = all('SELECT a.what, a.detail, a.at, u.name FROM ai_changes a LEFT JOIN users u ON u.id = a.user_id WHERE a.creator_id = ? ORDER BY a.at DESC LIMIT 10', cid);
+    return { settings: rest, preset: preset(voicePreset), presets: (Array.isArray(presets) ? presets : presets?.items || []).map(preset), profile, missing, changes };
+  }
+
   return {
     // Ventes en direct (rafraîchies souvent, sans recalculer tout le dashboard).
     'GET /api/sales': async (req, res) => {
@@ -353,16 +366,84 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const u = auth(req, res);
       if (!u) return;
       if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
-      const cid = String(q(req).get('creatorId') || '');
-      const [settings, presets, creators] = await Promise.all([substy.aiSettings(cid), substy.voicePresets(cid).catch(() => []), substy.creators()]);
-      const c = (creators || []).find((x) => (x.id || x.creatorId) === cid) || {};
-      const PROFILE = ['name', 'label', 'pseudo', 'age', 'gender', 'birthday', 'living', 'profession', 'timezone', 'primaryLanguage', 'otherLanguages', 'appearance', 'hairColor', 'eyeColor', 'ethnicity', 'weight', 'shoeSize', 'braCupSize', 'description', 'customAttributes', 'platform', 'platformAccountStartedAt'];
-      const profile = Object.fromEntries(PROFILE.map((k) => [k, c[k] ?? null]));
-      // Ce que Substy exige pour allumer l'IA.
-      const missing = [['timezone', 'Fuseau horaire'], ['primaryLanguage', 'Langue maternelle']].filter(([k]) => !profile[k]).map(([, l]) => l);
-      const preset = (p) => p && { id: p.id, name: p.name, description: p.description, builtin: p.presetType === 'BUILTIN', prompt: p.prompt, emojis: { casual: p.casualEmojis || [], sexting: p.sextingEmojis || [], negotiation: p.negociationEmojis || [] } };
-      const { voicePreset, ...rest } = settings || {};
-      send(res, 200, { settings: rest, preset: preset(voicePreset), presets: (Array.isArray(presets) ? presets : presets?.items || []).map(preset), profile, missing });
+      send(res, 200, await aiConfig(String(q(req).get('creatorId') || '')));
+    },
+
+    // Modifier les réglages de l'IA (seulement les champs dont le format est connu). Relit l'état actuel juste avant.
+    'POST /api/ai-config/settings': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      const ch = b.changes || {};
+      const cur = await substy.aiSettings(cid);
+      if (!cur?.creatorId) return send(res, 404, { error: 'Créatrice inconnue' });
+      const next = { ...cur };
+      for (const k of ['enable', 'standardEmojis', 'sextingEmojis', 'enableFanSpendLimit']) if (k in ch) next[k] = !!ch[k];
+      if ('scriptRotationIntervalHours' in ch) {
+        const h = Math.round(Number(ch.scriptRotationIntervalHours));
+        if (!(h >= 8 && h <= 24)) return send(res, 400, { error: 'Changement de scripts : entre 8 et 24 heures.' });
+        next.scriptRotationIntervalHours = h;
+      }
+      if ('maxFanSpend' in ch) {
+        const v = ch.maxFanSpend === null || ch.maxFanSpend === '' ? null : Number(ch.maxFanSpend);
+        if (v !== null && !(v >= 0)) return send(res, 400, { error: 'Montant invalide' });
+        next.maxFanSpend = v;
+      }
+      if (next.enableFanSpendLimit && next.maxFanSpend == null) return send(res, 400, { error: 'Indique le montant de dépense qui fait passer le fan à l’équipe.' });
+      if ('allowedSubscriptionTypes' in ch) {
+        const t = (Array.isArray(ch.allowedSubscriptionTypes) ? ch.allowedSubscriptionTypes : []).filter((x) => x === 'FREE' || x === 'PAID');
+        if (!t.length) return send(res, 400, { error: 'Choisis au moins un type de fans.' });
+        next.allowedSubscriptionTypes = t;
+      }
+      if (next.enable && !cur.enable) {
+        const cfg = await aiConfig(cid);
+        if (cfg.missing.length) return send(res, 400, { error: `Substy ne peut pas allumer l’IA : il manque ${cfg.missing.join(' et ').toLowerCase()} dans la fiche.` });
+      }
+      await substy.updateSettings(cid, next);
+      const changed = Object.keys(ch).filter((k) => JSON.stringify(cur[k]) !== JSON.stringify(next[k]));
+      if (changed.length) run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'settings', JSON.stringify(Object.fromEntries(changed.map((k) => [k, [cur[k], next[k]]]))), Date.now());
+      send(res, 200, await aiConfig(cid));
+    },
+
+    // Choisir la personnalité de l'IA.
+    'POST /api/ai-config/preset': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      const cfg = await aiConfig(cid);
+      if (!cfg.presets.some((x) => x.id === b.voicePresetId)) return send(res, 400, { error: 'Personnalité inconnue' });
+      await substy.setVoicePreset(cid, String(b.voicePresetId));
+      run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'preset', JSON.stringify([cfg.preset?.id ?? null, b.voicePresetId]), Date.now());
+      send(res, 200, await aiConfig(cid));
+    },
+
+    // Modifier la fiche de la créatrice (on renvoie la fiche complète, comme le site de Substy).
+    'POST /api/ai-config/profile': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      const c = ((await substy.creators()) || []).find((x) => (x.id || x.creatorId) === cid);
+      if (!c) return send(res, 404, { error: 'Créatrice inconnue' });
+      // Les « infos en plus » de Substy ne sont pas encore gérées par Bloom : on ne risque pas de les effacer.
+      if (Array.isArray(c.customAttributes) && c.customAttributes.length) return send(res, 409, { error: 'Cette fiche a des « infos en plus » que Bloom ne sait pas encore modifier : modifie-la sur Substy.' });
+      const pr = b.profile || {};
+      const TEXT = ['name', 'label', 'pseudo', 'gender', 'living', 'profession', 'timezone', 'primaryLanguage', 'appearance', 'hairColor', 'eyeColor', 'ethnicity', 'braCupSize', 'description', 'birthday'];
+      const NUM = ['age', 'weight', 'shoeSize'];
+      const next = { ...c, otherLanguages: Array.isArray(c.otherLanguages) ? c.otherLanguages : [], physicalCustomAttributes: [], interestsCustomAttributes: [] };
+      for (const k of TEXT) if (k in pr) next[k] = pr[k] === '' || pr[k] == null ? null : String(pr[k]).slice(0, 2000);
+      for (const k of NUM) if (k in pr) next[k] = pr[k] === '' || pr[k] == null ? null : Number(pr[k]);
+      if ('otherLanguages' in pr) next.otherLanguages = (Array.isArray(pr.otherLanguages) ? pr.otherLanguages : []).map(String).slice(0, 10);
+      if (!String(next.name || '').trim()) return send(res, 400, { error: 'Le nom est obligatoire.' });
+      if (NUM.some((k) => next[k] !== null && next[k] !== undefined && !Number.isFinite(next[k]))) return send(res, 400, { error: 'Âge, poids et pointure : des nombres.' });
+      await substy.updateCreator({ ...next, id: cid });
+      run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'profile', JSON.stringify(Object.keys(pr)), Date.now());
+      send(res, 200, await aiConfig(cid));
     },
 
     // ------------------------------------------------ équipe

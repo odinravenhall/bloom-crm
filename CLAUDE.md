@@ -93,6 +93,15 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 Le bot crée tout seul les rôles qui manquent sur le serveur (Team Leader reçoit les droits de salons du Manager).
 Paramètres de chacun (thème, langue) : `/app/parametres`.
 
+## Configuration IA — page `/app/ia` (admins, managers)
+
+- Lecture : `settings.getSettings`, `settings.voicePreset.getAll`, fiche = item de `creators.getCreators`.
+- Écriture (formats relevés sur de vrais enregistrements, 22/11/2026) : `settings.updateSettings` (champs fixes, voir
+  `substy.mjs`), `settings.updateVoicePresets {creatorId, voicePresetId}`, `creators.updateCreator` (fiche complète).
+  Bloom relit toujours l'état actuel avant d'écrire, n'envoie que les champs connus, refuse d'allumer l'IA si la fiche
+  n'a pas de fuseau horaire / langue, et refuse de toucher une fiche qui a des « infos en plus » (customAttributes).
+- Chaque modification est notée dans `ai_changes` (qui, quoi, quand) et affichée en bas de la page.
+
 ## Équipe — `app/team.mjs`, page `/app/equipe`
 
 - Accès par créatrice : admin = tout ; manager / chatteur = seulement les créatrices données dans Équipe

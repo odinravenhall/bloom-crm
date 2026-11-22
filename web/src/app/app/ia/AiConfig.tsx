@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Bot, ChevronDown, ExternalLink, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
-import { api } from "@/lib/api";
-import { cn } from "@/lib/fmt";
+import { AlertTriangle, Bot, ChevronDown, ExternalLink, History, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { api, toast } from "@/lib/api";
+import { ago, cn } from "@/lib/fmt";
 import { CreatorTabs, useCreators } from "@/lib/creators";
-import { Pill } from "@/components/ui";
+import { Pill, btnCls, inputCls } from "@/components/ui";
 
 type Preset = { id: string; name: string; description: string | null; builtin: boolean; prompt: string; emojis: { casual: string[]; sexting: string[]; negotiation: string[] } };
-type Cfg = { settings: Record<string, unknown>; preset: Preset | null; presets: Preset[]; profile: Record<string, unknown>; missing: string[] };
+type Change = { what: string; detail: string | null; at: number; name: string | null };
+type Cfg = { settings: Record<string, unknown>; preset: Preset | null; presets: Preset[]; profile: Record<string, unknown>; missing: string[]; changes: Change[] };
 
 const v = (x: unknown) => (x === null || x === undefined || x === "" || (Array.isArray(x) && !x.length) ? null : x);
 const show = (x: unknown) => {
@@ -17,32 +18,81 @@ const show = (x: unknown) => {
   if (typeof x === "string" && /^\d{4}-\d{2}-\d{2}T/.test(x)) return new Date(x).toLocaleDateString("fr-FR");
   return String(x);
 };
-const SUBS: Record<string, string> = { FREE: "abonnés gratuits", PAID: "abonnés payants", TRIAL: "essais", RENEWING: "abonnés qui renouvellent" };
-const OP: Record<string, string> = { LESS_THAN_OR_EQUAL: "jusqu’à", GREATER_THAN_OR_EQUAL: "à partir de", LESS_THAN: "moins de", GREATER_THAN: "plus de" };
-const UNIT: Record<string, string> = { DAYS: "jours", WEEKS: "semaines", MONTHS: "mois", DAY: "jours", MONTH: "mois" };
-
-// Fiche de la créatrice : les champs de Substy rangés en blocs clairs.
-const PROFILE: [string, [string, string][]][] = [
-  ["Identité", [["name", "Nom"], ["label", "Libellé"], ["pseudo", "Pseudo"], ["age", "Âge"], ["gender", "Genre"], ["birthday", "Anniversaire"]]],
-  ["Vie et langues", [["living", "Ville"], ["profession", "Métier"], ["timezone", "Fuseau horaire"], ["primaryLanguage", "Langue maternelle"], ["otherLanguages", "Autres langues"]]],
-  ["Physique", [["appearance", "Apparence"], ["hairColor", "Cheveux"], ["eyeColor", "Yeux"], ["ethnicity", "Origines"], ["weight", "Poids"], ["shoeSize", "Pointure"], ["braCupSize", "Bonnet"]]],
-  ["Goûts et infos libres", [["description", "Description"], ["customAttributes", "Infos en plus"]]],
+const SUBS: [string, string][] = [
+  ["FREE", "abonnés gratuits"],
+  ["PAID", "abonnés payants"],
 ];
+const OP: Record<string, string> = { LESS_THAN_OR_EQUAL: "jusqu’à", GREATER_THAN_OR_EQUAL: "à partir de", LESS_THAN: "moins de", GREATER_THAN: "plus de" };
+const LANGS: [string, string][] = [
+  ["fr", "Français"],
+  ["en", "Anglais"],
+  ["es", "Espagnol"],
+  ["it", "Italien"],
+  ["de", "Allemand"],
+  ["pt", "Portugais"],
+];
+const ZONES = ["Europe/Paris", "Europe/Brussels", "Europe/Zurich", "Europe/London", "Europe/Madrid", "Europe/Rome", "Europe/Berlin", "Europe/Lisbon", "America/Montreal", "America/New_York", "America/Los_Angeles", "Africa/Casablanca", "Indian/Reunion", "America/Guadeloupe"];
+const GENDERS: [string, string][] = [
+  ["FEMALE", "Femme"],
+  ["MALE", "Homme"],
+  ["OTHER", "Autre"],
+];
+// Fiche de la créatrice : les champs de Substy rangés en blocs clairs. type : t = texte, n = nombre, d = date, l = langue, z = fuseau, g = genre, a = texte long.
+const PROFILE: [string, [string, string, string][]][] = [
+  ["Identité", [["name", "Nom", "t"], ["label", "Libellé", "t"], ["pseudo", "Pseudo", "t"], ["age", "Âge", "n"], ["gender", "Genre", "g"], ["birthday", "Anniversaire", "d"]]],
+  ["Vie et langues", [["living", "Ville", "t"], ["profession", "Métier", "t"], ["timezone", "Fuseau horaire", "z"], ["primaryLanguage", "Langue maternelle", "l"]]],
+  ["Physique", [["appearance", "Apparence", "t"], ["hairColor", "Cheveux", "t"], ["eyeColor", "Yeux", "t"], ["ethnicity", "Origines", "t"], ["weight", "Poids (kg)", "n"], ["shoeSize", "Pointure", "n"], ["braCupSize", "Bonnet", "t"]]],
+  ["Goûts et infos libres", [["description", "Description", "a"]]],
+];
+const label = (k: string, val: unknown) => {
+  if (val == null || val === "") return null;
+  if (k === "primaryLanguage") return LANGS.find(([c]) => c === val)?.[1] ?? String(val);
+  if (k === "gender") return GENDERS.find(([c]) => c === val)?.[1] ?? String(val);
+  return show(val);
+};
 
-/** Configuration de l'IA d'une créatrice : tout ce que Substy répartit sur 4 pages, au même endroit et en français. */
+/** Configuration de l'IA d'une créatrice : tout ce que Substy répartit sur 4 pages, au même endroit, en français, modifiable. */
 export function AiConfig() {
   const { creatorId, creator } = useCreators();
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [confirmOn, setConfirmOn] = useState(false);
+  const [editProfile, setEditProfile] = useState(false);
+  const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [rot, setRot] = useState("");
+  const [spend, setSpend] = useState("");
+
   useEffect(() => {
     if (!creatorId) return;
     setCfg(null);
     setErr("");
+    setEditProfile(false);
+    setConfirmOn(false);
     api<Cfg>("GET", `/api/ai-config?creatorId=${encodeURIComponent(creatorId)}`)
       .then(setCfg)
       .catch((e) => setErr((e as Error).message));
   }, [creatorId]);
+  useEffect(() => {
+    setRot(cfg?.settings.scriptRotationIntervalHours != null ? String(cfg.settings.scriptRotationIntervalHours) : "");
+    setSpend(cfg?.settings.maxFanSpend != null ? String(cfg.settings.maxFanSpend) : "");
+  }, [cfg]);
+
+  const save = async (path: string, payload: Record<string, unknown>, ok: string) => {
+    setBusy(true);
+    try {
+      setCfg(await api<Cfg>("POST", `/api/ai-config/${path}`, { creatorId, ...payload }));
+      toast(ok);
+      return true;
+    } catch (e) {
+      toast((e as Error).message, "err");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const setting = (changes: Record<string, unknown>, ok = "Enregistré sur Substy") => save("settings", { changes }, ok);
 
   const s = cfg?.settings ?? {};
   const on = !!s.enable;
@@ -63,28 +113,33 @@ export function AiConfig() {
       </section>
     );
   };
-  const line = (label: string, value: React.ReactNode, hint?: string) => (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-line/60 py-3 last:border-0">
-      <div>
-        <p className="font-semibold">{label}</p>
+  const line = (lbl: string, value: React.ReactNode, hint?: string) => (
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-line/60 py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="font-semibold">{lbl}</p>
         {hint ? <p className="text-xs text-muted">{hint}</p> : null}
       </div>
       <div className="text-right text-sm">{value}</div>
     </div>
   );
-  const yes = (b: unknown, y = "Oui", n = "Non") => (b ? <Pill tone="good">{y}</Pill> : <Pill>{n}</Pill>);
-
-  const stops: string[] = [];
-  if (s.enableFanSpendLimit && s.maxFanSpend != null) stops.push(`le fan a dépensé ${OP[String(s.fanSpendOperator)] ?? ""} ${s.maxFanSpend} $`.replace(/\s+/g, " "));
-  if (s.enableSubscriptionLimit && s.maxSubscriptionDurationValue != null)
-    stops.push(`abonné depuis ${OP[String(s.subscriptionDurationOperator)] ?? ""} ${s.maxSubscriptionDurationValue} ${UNIT[String(s.maxSubscriptionDurationUnit)] ?? String(s.maxSubscriptionDurationUnit || "").toLowerCase()}`.replace(/\s+/g, " "));
+  const toggle = (key: string, value: boolean) => (
+    <button
+      disabled={busy}
+      onClick={() => setting({ [key]: !value })}
+      role="switch"
+      aria-checked={value}
+      className={cn("relative h-6 w-11 rounded-full transition-colors disabled:opacity-50", value ? "bg-sage" : "bg-line")}
+    >
+      <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow transition-all", value ? "left-[22px]" : "left-0.5")} />
+    </button>
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 md:px-8 md:py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl md:text-5xl">Configuration IA</h1>
-          <p className="mt-1 text-sm text-muted">{creator ? `L’IA de ${creator.name}, telle qu’elle est réglée sur Substy.` : "Choisis une créatrice."}</p>
+          <p className="mt-1 text-sm text-muted">{creator ? `L’IA de ${creator.name}. Chaque changement est enregistré directement sur Substy.` : "Choisis une créatrice."}</p>
         </div>
         <CreatorTabs />
       </div>
@@ -108,13 +163,39 @@ export function AiConfig() {
                 {on ? (s.aiScheduleMode === "FULL_TIME" ? " Active jour et nuit." : " Active selon les shifts de l’équipe.") : ""}
               </p>
             </div>
-            <a href={substy} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border bg-card px-4 py-2 text-sm font-semibold hover:border-primary/60">
-              Modifier sur Substy <ExternalLink className="size-3.5" />
-            </a>
+            {on ? (
+              <button disabled={busy} onClick={() => setting({ enable: false }, "IA coupée : les chatteurs reprennent la main")} className={btnCls.secondary}>
+                <Pause className="size-4" /> Couper l’IA
+              </button>
+            ) : confirmOn ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">L’IA va écrire aux fans. Sûr ?</span>
+                <button disabled={busy} onClick={async () => (await setting({ enable: true }, "IA allumée")) && setConfirmOn(false)} className={btnCls.primary}>
+                  Oui, allumer
+                </button>
+                <button onClick={() => setConfirmOn(false)} className={btnCls.ghost}>
+                  Annuler
+                </button>
+              </span>
+            ) : (
+              <button disabled={busy || cfg.missing.length > 0} onClick={() => setConfirmOn(true)} className={btnCls.primary} title={cfg.missing.length ? "Complète d’abord la fiche" : ""}>
+                <Power className="size-4" /> Allumer l’IA
+              </button>
+            )}
           </div>
           {cfg.missing.length ? (
-            <p className="mt-3 flex items-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <p className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
               <AlertTriangle className="size-4 shrink-0" /> Substy ne peut pas allumer l’IA tant que la fiche n’est pas complète : il manque <b>{cfg.missing.join(" et ").toLowerCase()}</b>.
+              <button
+                onClick={() => {
+                  setDraft({ ...cfg.profile });
+                  setEditProfile(true);
+                  document.getElementById("fiche")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="font-semibold underline"
+              >
+                Compléter la fiche
+              </button>
             </p>
           ) : null}
 
@@ -125,7 +206,7 @@ export function AiConfig() {
             <div className="flex flex-col gap-3">
               {cfg.preset ? (
                 <div className="rounded-3xl border bg-card p-5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-display text-2xl font-semibold">{cfg.preset.name}</p>
                     <Pill tone="accent">utilisée</Pill>
                     {cfg.preset.builtin ? <Pill>fournie par Substy</Pill> : <Pill tone="good">créée par l’agence</Pill>}
@@ -153,21 +234,22 @@ export function AiConfig() {
               ) : (
                 <p className="text-sm text-muted">Aucune personnalité choisie.</p>
               )}
-              {cfg.presets.filter((p) => p.id !== cfg.preset?.id).length ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {cfg.presets
-                    .filter((p) => p.id !== cfg.preset?.id)
-                    .map((p) => (
-                      <div key={p.id} className="rounded-2xl border bg-card p-4">
-                        <p className="flex items-center gap-2 font-semibold">
-                          {p.name} {p.builtin ? null : <Pill tone="good">agence</Pill>}
-                        </p>
-                        <p className="mt-0.5 line-clamp-2 text-xs text-muted">{p.description}</p>
-                        <p className="mt-2 text-sm">{p.emojis.casual.slice(0, 8).join(" ")}</p>
-                      </div>
-                    ))}
-                </div>
-              ) : null}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {cfg.presets
+                  .filter((p) => p.id !== cfg.preset?.id)
+                  .map((p) => (
+                    <div key={p.id} className="flex flex-col rounded-2xl border bg-card p-4">
+                      <p className="flex items-center gap-2 font-semibold">
+                        {p.name} {p.builtin ? null : <Pill tone="good">agence</Pill>}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted">{p.description}</p>
+                      <p className="mt-2 text-sm">{p.emojis.casual.slice(0, 8).join(" ")}</p>
+                      <button disabled={busy} onClick={() => save("preset", { voicePresetId: p.id }, `Personnalité « ${p.name} » choisie`)} className={cn(btnCls.ghost, "mt-2 self-start")}>
+                        Utiliser cette personnalité
+                      </button>
+                    </div>
+                  ))}
+              </div>
             </div>,
           )}
 
@@ -177,9 +259,22 @@ export function AiConfig() {
             "Le moment où elle passe au payant, les scripts, les emojis.",
             <div className="rounded-3xl border bg-card px-5">
               {line("Passage au payant", s.transitionTimingMode === "AUTO" ? "Automatique" : String(s.transitionTimingMode ?? "—"), "Quand l’IA commence à amener le fan vers du contenu payant.")}
-              {line("Changement de scripts", s.scriptRotationIntervalHours ? `toutes les ${s.scriptRotationIntervalHours} h` : "—", "L’IA varie ses scripts pour ne pas répéter les mêmes phrases.")}
-              {line("Emojis en discussion", yes(s.standardEmojis))}
-              {line("Emojis en sexting", yes(s.sextingEmojis))}
+              {line(
+                "Changement de scripts",
+                <span className="flex items-center gap-2">
+                  toutes les
+                  <input type="number" min={8} max={24} value={rot} onChange={(e) => setRot(e.target.value)} className={cn(inputCls, "h-9 w-20 px-3 text-center")} />
+                  heures
+                  {rot !== String(s.scriptRotationIntervalHours ?? "") ? (
+                    <button disabled={busy} onClick={() => setting({ scriptRotationIntervalHours: Number(rot) })} className={btnCls.ghost}>
+                      Enregistrer
+                    </button>
+                  ) : null}
+                </span>,
+                "L’IA varie ses scripts pour ne pas répéter les mêmes phrases (8 à 24 h).",
+              )}
+              {line("Emojis en discussion", toggle("standardEmojis", !!s.standardEmojis))}
+              {line("Emojis en sexting", toggle("sextingEmojis", !!s.sextingEmojis))}
               {line("Pendant les shifts de l’équipe", s.teamShiftAiMode === "KEEP_ANSWERING" ? "L’IA continue de répondre" : String(s.teamShiftAiMode ?? "—"))}
             </div>,
           )}
@@ -190,53 +285,179 @@ export function AiConfig() {
             "Les règles qui la font passer la main à l’équipe.",
             <div className="rounded-3xl border bg-card px-5">
               {line(
-                "Le fan passe à l’équipe quand",
-                stops.length ? stops.join(s.stopConditionsOperator === "OR" ? " ou " : " et ") : <span className="text-muted">aucune règle</span>,
-                stops.length > 1 ? (s.stopConditionsOperator === "OR" ? "Une seule condition suffit." : "Toutes les conditions doivent être vraies.") : undefined,
+                "Passer le fan à l’équipe selon ce qu’il a dépensé",
+                <span className="flex flex-wrap items-center justify-end gap-2">
+                  {toggle("enableFanSpendLimit", !!s.enableFanSpendLimit)}
+                  {s.enableFanSpendLimit ? (
+                    <>
+                      <span className="text-muted">{OP[String(s.fanSpendOperator)] ?? ""}</span>
+                      <input type="number" min={0} value={spend} onChange={(e) => setSpend(e.target.value)} className={cn(inputCls, "h-9 w-24 px-3 text-center")} />
+                      <span>$</span>
+                      {spend !== String(s.maxFanSpend ?? "") ? (
+                        <button disabled={busy} onClick={() => setting({ maxFanSpend: spend === "" ? null : Number(spend) })} className={btnCls.ghost}>
+                          Enregistrer
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
+                </span>,
               )}
-              {line("Fans concernés", Array.isArray(s.allowedSubscriptionTypes) ? (s.allowedSubscriptionTypes as string[]).map((t) => SUBS[t] ?? t.toLowerCase()).join(", ") : "—")}
+              {s.enableSubscriptionLimit ? line("Selon la durée d’abonnement", `${OP[String(s.subscriptionDurationOperator)] ?? ""} ${s.maxSubscriptionDurationValue ?? "—"} ${String(s.maxSubscriptionDurationUnit ?? "").toLowerCase()}`, "À modifier sur Substy pour l’instant.") : null}
+              {line(
+                "Fans avec qui l’IA chatte",
+                <span className="flex flex-wrap justify-end gap-2">
+                  {SUBS.map(([k, l]) => {
+                    const list = Array.isArray(s.allowedSubscriptionTypes) ? (s.allowedSubscriptionTypes as string[]) : [];
+                    const has = list.includes(k);
+                    return (
+                      <button
+                        key={k}
+                        disabled={busy}
+                        onClick={() => setting({ allowedSubscriptionTypes: has ? list.filter((x) => x !== k) : [...list, k] })}
+                        className={cn("rounded-full border px-3 py-1 text-xs font-semibold", has ? "border-primary bg-petal text-primary-soft" : "text-muted hover:text-fg")}
+                      >
+                        {l}
+                      </button>
+                    );
+                  })}
+                </span>,
+              )}
               {line("Listes de fans incluses", (s.includedFanLists as unknown[])?.length ? `${(s.includedFanLists as unknown[]).length} liste(s)` : "toutes")}
               {line("Listes de fans exclues", (s.excludedFanLists as unknown[])?.length ? `${(s.excludedFanLists as unknown[]).length} liste(s)` : "aucune")}
-              {line("Chatte aussi avec les créatrices vérifiées", yes(s.allowVerifiedCreators))}
-              {line("Dit aux fans que c’est une IA", yes(s.replyAsAi), "Option de Substy : l’IA précise que ses messages sont générés.")}
+              {line("Chatte aussi avec les créatrices vérifiées", s.allowVerifiedCreators ? <Pill tone="good">Oui</Pill> : <Pill>Non</Pill>, "À modifier sur Substy pour l’instant.")}
+              {line("Dit aux fans que c’est une IA", s.replyAsAi ? <Pill tone="good">Oui</Pill> : <Pill>Non</Pill>, "À modifier sur Substy pour l’instant.")}
             </div>,
           )}
 
+          <div id="fiche" />
           {section(
             UserRound,
             "Fiche de la créatrice",
             "Ce que l’IA sait d’elle. Plus la fiche est complète, plus l’IA est crédible.",
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PROFILE.map(([title, fields]) => {
-                const filled = fields.filter(([k]) => v(cfg.profile[k]) !== null).length;
-                return (
-                  <div key={title} className="rounded-3xl border bg-card p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">{title}</p>
-                      <span className="text-xs text-muted">
-                        {filled}/{fields.length}
-                      </span>
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-end gap-2">
+                {editProfile ? (
+                  <>
+                    <button onClick={() => setEditProfile(false)} className={btnCls.secondary}>
+                      Annuler
+                    </button>
+                    <button disabled={busy} onClick={async () => (await save("profile", { profile: draft }, "Fiche enregistrée sur Substy")) && setEditProfile(false)} className={btnCls.primary}>
+                      Enregistrer la fiche
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setDraft({ ...cfg.profile });
+                      setEditProfile(true);
+                    }}
+                    className={btnCls.secondary}
+                  >
+                    Modifier la fiche
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {PROFILE.map(([title, fields]) => {
+                  const filled = fields.filter(([k]) => v(cfg.profile[k]) !== null).length;
+                  return (
+                    <div key={title} className={cn("rounded-3xl border bg-card p-4", title.startsWith("Goûts") && "sm:col-span-2")}>
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold">{title}</p>
+                        <span className="text-xs text-muted">
+                          {filled}/{fields.length}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card-2">
+                        <div className="h-full rounded-full bg-sage" style={{ width: `${(filled / fields.length) * 100}%` }} />
+                      </div>
+                      <dl className="mt-3 flex flex-col gap-2 text-sm">
+                        {fields.map(([k, l, t]) => (
+                          <div key={k} className={cn("flex gap-3", t === "a" && editProfile ? "flex-col" : "items-center justify-between")}>
+                            <dt className="shrink-0 text-muted">{l}</dt>
+                            {editProfile ? (
+                              <Field type={t} value={draft[k]} onChange={(x) => setDraft((d) => ({ ...d, [k]: x }))} />
+                            ) : (
+                              <dd className={cn("text-right", v(cfg.profile[k]) === null && "text-muted/60")}>{label(k, cfg.profile[k]) ?? "—"}</dd>
+                            )}
+                          </div>
+                        ))}
+                      </dl>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card-2">
-                      <div className="h-full rounded-full bg-sage" style={{ width: `${(filled / fields.length) * 100}%` }} />
-                    </div>
-                    <dl className="mt-3 flex flex-col gap-1 text-sm">
-                      {fields.map(([k, l]) => (
-                        <div key={k} className="flex justify-between gap-3">
-                          <dt className="text-muted">{l}</dt>
-                          <dd className={cn("text-right", v(cfg.profile[k]) === null && "text-muted/60")}>{show(cfg.profile[k]) ?? "—"}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>,
           )}
 
-          <p className="mt-6 text-xs text-muted">Pour l’instant, Bloom affiche la configuration ; la modifier depuis Bloom arrive bientôt (en attendant : « Modifier sur Substy »).</p>
+          {cfg.changes.length ? (
+            <section className="py-8">
+              <h2 className="flex items-center gap-2 text-2xl">
+                <History className="size-5 text-primary" /> Dernières modifications depuis Bloom
+              </h2>
+              <ul className="mt-3 flex flex-col gap-1 text-sm">
+                {cfg.changes.map((c, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-muted">{ago(c.at)}</span>
+                    <b>{c.name ?? "?"}</b>
+                    <span>{c.what === "settings" ? "a modifié les réglages" : c.what === "preset" ? "a changé la personnalité" : "a modifié la fiche"}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <p className="mt-2 flex items-center gap-1 text-xs text-muted">
+            Quelques réglages rares (durée d’abonnement, listes, créatrices vérifiées, message de l’IA) se changent encore sur
+            <a href={substy} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-primary-soft">
+              Substy <ExternalLink className="size-3" />
+            </a>
+            .
+          </p>
         </>
       ) : null}
     </div>
   );
+}
+
+/** Un champ de la fiche, selon son type. */
+function Field({ type, value, onChange }: { type: string; value: unknown; onChange: (v: unknown) => void }) {
+  const val = value == null ? "" : String(value);
+  const cls = cn(inputCls, "h-9 max-w-[240px] px-3");
+  if (type === "l")
+    return (
+      <select value={val} onChange={(e) => onChange(e.target.value || null)} className={cls}>
+        <option value="">—</option>
+        {LANGS.map(([c, l]) => (
+          <option key={c} value={c}>
+            {l}
+          </option>
+        ))}
+      </select>
+    );
+  if (type === "z")
+    return (
+      <select value={val} onChange={(e) => onChange(e.target.value || null)} className={cls}>
+        <option value="">—</option>
+        {[...new Set([val, ...ZONES])].filter(Boolean).map((z) => (
+          <option key={z} value={z}>
+            {z.replace("_", " ")}
+          </option>
+        ))}
+      </select>
+    );
+  if (type === "g")
+    return (
+      <select value={val} onChange={(e) => onChange(e.target.value || null)} className={cls}>
+        <option value="">—</option>
+        {GENDERS.map(([c, l]) => (
+          <option key={c} value={c}>
+            {l}
+          </option>
+        ))}
+      </select>
+    );
+  if (type === "a") return <textarea value={val} onChange={(e) => onChange(e.target.value)} rows={4} className="w-full rounded-2xl border border-input bg-card px-4 py-2 text-sm outline-none focus:border-primary" />;
+  if (type === "d") return <input type="date" value={val.slice(0, 10)} onChange={(e) => onChange(e.target.value || null)} className={cls} />;
+  return <input type={type === "n" ? "number" : "text"} value={val} onChange={(e) => onChange(e.target.value)} className={cls} />;
 }

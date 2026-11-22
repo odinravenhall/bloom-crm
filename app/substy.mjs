@@ -167,6 +167,19 @@ export class SubstySession {
   aiSettings(creatorId) { return this.call('settings.getSettings', { creatorId }); }
   /** Personnalités disponibles (fournies par Substy + créées par l'agence). Lecture seule. */
   voicePresets(creatorId) { return this.call('settings.voicePreset.getAll', { creatorId }); }
+  // --- Écriture de la configuration IA (formats relevés sur de vrais enregistrements du site, 22/11/2026) ---
+  /** Réglages du chatteur IA : on envoie exactement les champs que le site de Substy envoie. */
+  updateSettings(creatorId, s) {
+    const KEYS = ['enable', 'mode', 'transitionTimingMode', 'transitionMessage', 'standardEmojis', 'sextingEmojis', 'enableFanSpendLimit', 'maxFanSpend', 'fanSpendOperator', 'enableSubscriptionLimit', 'maxSubscriptionDurationValue', 'maxSubscriptionDurationUnit', 'subscriptionDurationOperator', 'allowedSubscriptionTypes', 'aiMode', 'aiScheduleMode', 'scriptRotationIntervalHours', 'includedFanLists', 'excludedFanLists'];
+    return this.call('settings.updateSettings', { ...Object.fromEntries(KEYS.map((k) => [k, s[k] ?? null])), creatorId });
+  }
+  /** Personnalité de l'IA. */
+  setVoicePreset(creatorId, voicePresetId) { return this.call('settings.updateVoicePresets', { creatorId, voicePresetId }); }
+  /** Fiche de la créatrice : la fiche complète, comme le site. */
+  updateCreator(c) {
+    const KEYS = ['name', 'age', 'gender', 'label', 'timezone', 'primaryLanguage', 'otherLanguages', 'description', 'birthday', 'weight', 'shoeSize', 'braCupSize', 'ethnicity', 'profession', 'appearance', 'hairColor', 'eyeColor', 'living', 'pseudo', 'isNearby', 'physicalCustomAttributes', 'interestsCustomAttributes'];
+    return this.call('creators.updateCreator', { ...Object.fromEntries(KEYS.map((k) => [k, c[k] ?? null])), id: c.id });
+  }
   /** Revenus d'une période (dates AAAA-MM-JJ ; creatorIds vide = toute l'agence). */
   revenue(creatorIds, startDate, endDate, earningsMode = 'net') { return this.call('revenue.overview', { creatorIds, startDate, endDate, earningsMode }); }
   /** Dernières ventes de l'agence (PPV, pourboires, posts), comme « Live latest purchases » de Substy. */

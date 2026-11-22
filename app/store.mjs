@@ -38,6 +38,8 @@ db.exec(`
   -- Liens de connexion du bot Discord (seulement l'empreinte SHA-256 du lien)
   -- Toutes les conversations de chaque créatrice (copie de la liste Substy, pour la messagerie)
   CREATE TABLE IF NOT EXISTS inbox_cache (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (creator_id, fan_id));
+  -- Journal des modifications de la configuration IA faites depuis Bloom (qui, quoi, quand)
+  CREATE TABLE IF NOT EXISTS ai_changes (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, what TEXT NOT NULL, detail TEXT, at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS login_links (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
 `);
 // Colonnes ajoutées après coup (ignorées si déjà là : la base en ligne n'est jamais recréée).
