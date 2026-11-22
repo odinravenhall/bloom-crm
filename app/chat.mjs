@@ -538,6 +538,39 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
         })),
       });
     },
+    // Envoi groupé : réservé aux admins, managers et team leaders (un envoi touche des milliers de fans).
+    'POST /api/mass': async (req, res) => {
+      const b = await body(req);
+      const u = authC(req, res, b.creatorId);
+      if (!u) return;
+      if (u.role === 'chatter') return send(res, 403, { error: 'Envoi groupé réservé aux team leaders, managers et admins.' });
+      const cid = String(b.creatorId);
+      const text = String(b.text || '').slice(0, 5000);
+      const ids = (a, n) => (Array.isArray(a) ? [...new Set(a.map(String))].slice(0, n) : []);
+      const mediaIds = ids(b.mediaIds, 50);
+      const inc = ids(b.includedListIds, 50);
+      const exc = ids(b.excludedListIds, 50).filter((x) => !inc.includes(x));
+      const price = Number(b.price) > 0 ? Math.round(Number(b.price) * 100) / 100 : 0;
+      if (!text.trim() && !mediaIds.length) return send(res, 400, { error: 'Message vide' });
+      if (price && !mediaIds.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
+      if (price > 200) return send(res, 400, { error: 'Prix trop élevé (200 $ max)' });
+      if (!inc.length) return send(res, 400, { error: 'Choisis au moins une liste de fans' });
+      let scheduledAt;
+      if (b.scheduledAt) {
+        const t = Date.parse(b.scheduledAt);
+        if (!Number.isFinite(t) || t < Date.now() + 60_000) return send(res, 400, { error: 'La date programmée doit être dans le futur' });
+        scheduledAt = new Date(t).toISOString();
+      }
+      const unsend = Number(b.autoUnsendAfterSeconds) > 0 ? Math.round(Number(b.autoUnsendAfterSeconds)) : undefined;
+      if (text.trim()) {
+        const v = await substy.validate(text).catch(() => null);
+        if (v && (v.valid === false || v.isValid === false || (Array.isArray(v.bannedWords) && v.bannedWords.length) || (Array.isArray(v.matches) && v.matches.length)))
+          return send(res, 400, { error: 'Mot interdit dans le message', details: v });
+      }
+      const r = await substy.createMass(cid, { text, price, mediaIds, includedListIds: inc, excludedListIds: exc, includeOnlineFans: !!b.onlineOnly, scheduledAt, autoUnsendAfterSeconds: unsend });
+      run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'mass', JSON.stringify({ text: text.slice(0, 200), price, medias: mediaIds.length, inc, exc, scheduledAt: scheduledAt || null }), Date.now());
+      send(res, 200, { ok: true, result: r ?? null });
+    },
     'GET /api/fan-lists': async (req, res) => {
       const p = q(req);
       if (!authC(req, res, p.get('creatorId'))) return;

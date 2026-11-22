@@ -172,11 +172,18 @@ export class SubstySession {
   scriptSteps(creatorId, scriptId) { return this.call('scripts.templates.getTemplates', { creatorId, scriptId }); }
   /** Scripts d'un fan, avec pour chaque étape : déjà envoyée ? achetée ? */
   fanScripts(creatorId, fanId) { return this.call('creators.fans.getFanScripts', { creatorId, fanId }); }
-  // --- Envois groupés (lecture seule pour l'instant ; l'envoi attend un vrai relevé du format).
+  // --- Envois groupés (format relevé sur le site de Substy le 22/11/2026, requête bloquée avant envoi).
   /** Historique des messages groupés : `{items, total, page, pageSize, totalPages}`. */
   massMessages(creatorId, page = 1, pageSize = 20) { return this.call('creators.massMessage.list', { creatorId, page, pageSize }); }
   /** Listes de fans de la créatrice (Fans, Recent, paliers de dépense…) avec leur nombre de fans. */
   fanLists(creatorId) { return this.call('fans.lists.list', { creatorId, limit: 100, isChat: false }); }
+  /** Nouveau message groupé. `scheduledAt` (ISO) et `autoUnsendAfterSeconds` seulement s'ils sont donnés, comme le site. */
+  createMass(creatorId, { text, price = 0, mediaIds = [], includedListIds = [], excludedListIds = [], userIds = [], includeOnlineFans = false, scheduledAt, autoUnsendAfterSeconds }) {
+    const input = { creatorId, text, lockedText: false, price, mediaIds, previewIds: [], includedListIds, excludedListIds, userIds, includeOnlineFans, tags: [] };
+    if (scheduledAt) input.scheduledAt = scheduledAt;
+    if (autoUnsendAfterSeconds) input.autoUnsendAfterSeconds = autoUnsendAfterSeconds;
+    return this.call('creators.massMessage.create', input);
+  }
 
   // --- Écriture de la configuration IA (formats relevés sur de vrais enregistrements du site, 22/11/2026) ---
   /** Réglages du chatteur IA : on envoie exactement les champs que le site de Substy envoie. */

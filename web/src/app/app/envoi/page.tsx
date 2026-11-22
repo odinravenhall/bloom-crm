@@ -6,6 +6,6 @@ export const metadata: Metadata = { title: "Envoi groupé" };
 export const dynamic = "force-dynamic";
 
 export default async function EnvoiPage() {
-  await requireMe(CHAT_ROLES);
-  return <Mass />;
+  const me = await requireMe(CHAT_ROLES);
+  return <Mass canSend={me.role !== "chatter"} />;
 }
