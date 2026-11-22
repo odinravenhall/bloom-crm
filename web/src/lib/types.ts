@@ -131,3 +131,8 @@ export type Script = { id: string; name: string; description: string; position: 
 export type FollowUp = { text: string; wait: number | null; ifRead: boolean; ifReply: boolean; ifPaid: boolean };
 export type ScriptStep = { id: string; position: number; name: string; text: string; aiCaption: boolean; locked: boolean; price: number; medias: (Media & { context: string | null })[]; followUps: FollowUp[]; sent: boolean; purchase: string | null };
 export type FanScript = Omit<Script, "steps"> & { steps: ScriptStep[]; next: string | null; sent: number; bought: number };
+
+/** Page Performances : le chiffre net (centimes d'euro) par chatteur et par créatrice. */
+export type PerfSeller = { key: string; name: string; kind: "bloom" | "platform" | "ai" | "other"; eur: number; prev: number; sales: number; ppv: number; tips: number; other: number; buyers: number; best: number; creators: Record<string, number>; msgs: number | null; ppvSent: number | null };
+export type PerfCreator = { creatorId: string; eur: number; prev: number; subs: number; sellers: Record<string, number> };
+export type Perf = { from: string; to: string; total: number; prev: number; subs: number; sellers: PerfSeller[]; creators: PerfCreator[] };

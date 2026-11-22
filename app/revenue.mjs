@@ -616,3 +616,80 @@ export function revenue({ from, to, creators }) {
   out.recent = recent.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 40);
   return out;
 }
+
+// ---------------------------------------------------------------- performances (page Performances)
+/**
+ * Qui a fait le chiffre sur la période : chaque vente confirmée (hors abonnements) va à celui qui l'a faite —
+ * chatteur Bloom (PPV envoyé depuis Bloom), IA Substy, chatteur attribué par Infloww / MyPulse, sinon « sans chatteur ».
+ * Montants nets en centimes d'euro. Avec la période d'avant (même durée) pour comparer.
+ */
+export function performance({ from, to, creators }) {
+  const start = parisMidnight(from);
+  const end = parisMidnight(addDay(to, 1));
+  const pStart = start - (end - start);
+  const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => creators.some((c) => c.id === m.creator_id));
+  const acc = new Map(maps.map((m) => [m.account, m.creator_id]));
+  const out = { from, to, total: 0, prev: 0, subs: 0, sellers: [], creators: [] };
+  if (!acc.size) return out;
+  const accounts = [...acc.keys()];
+  const ph = accounts.map(() => '?').join(',');
+  const rows = all(`SELECT account, fan_id, fan_name, at, type, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
+  const sellerName = new Map(all('SELECT id, name FROM rv_sellers').map((s) => [s.id, s.name]));
+  const sellers = new Map();
+  const perCreator = new Map();
+  const who = (r) =>
+    r.origin === 'ai' ? ['ai', 'IA Substy', 'ai']
+    : r.origin === 'bloom' && r.origin_by ? [`bloom:${r.origin_by}`, r.origin_by, 'bloom']
+    : r.seller ? [`seller:${r.seller}`, sellerName.get(r.seller) || 'Chatteur inconnu', 'platform']
+    : ['other', 'Sans chatteur', 'other'];
+  for (const r of rows) {
+    if (REFUND.test(r.status || '')) continue;
+    const eur = toEur(r.net, r.currency, parisDay(r.at));
+    const cid = acc.get(r.account);
+    const cur = r.at >= start;
+    if (!perCreator.has(cid)) perCreator.set(cid, { creatorId: cid, eur: 0, prev: 0, subs: 0, sellers: {} });
+    const c = perCreator.get(cid);
+    if (cur) out.total += eur;
+    else out.prev += eur;
+    cur ? (c.eur += eur) : (c.prev += eur);
+    if (r.type === 'sub') {
+      if (cur) (out.subs += eur), (c.subs += eur);
+      continue;
+    }
+    const [key, name, kind] = who(r);
+    if (!sellers.has(key)) sellers.set(key, { key, name, kind, eur: 0, prev: 0, sales: 0, ppv: 0, tips: 0, other: 0, buyers: new Set(), creators: {}, best: 0 });
+    const s = sellers.get(key);
+    if (!cur) {
+      s.prev += eur;
+      continue;
+    }
+    s.eur += eur;
+    s.sales++;
+    if (r.type === 'ppv') s.ppv += eur;
+    else if (r.type === 'tip') s.tips += eur;
+    else s.other += eur;
+    s.best = Math.max(s.best, eur);
+    if (r.fan_id || r.fan_name) s.buyers.add(`${r.account}:${r.fan_id || r.fan_name}`);
+    s.creators[cid] = (s.creators[cid] || 0) + eur;
+    c.sellers[key] = (c.sellers[key] || 0) + eur;
+  }
+  // Activité dans Bloom sur la période : messages et PPV envoyés par personne.
+  const sent = all(
+    `SELECT u.name AS name, COUNT(*) AS msgs, SUM(s.price > 0) AS ppv FROM sent_log s JOIN users u ON u.id = s.user_id
+     WHERE s.at >= ? AND s.at < ? AND s.creator_id IN (${creators.map(() => '?').join(',') || "''"}) GROUP BY u.id`,
+    start,
+    end,
+    ...creators.map((c) => c.id),
+  );
+  for (const a of sent) {
+    const key = `bloom:${a.name}`;
+    if (!sellers.has(key)) sellers.set(key, { key, name: a.name, kind: 'bloom', eur: 0, prev: 0, sales: 0, ppv: 0, tips: 0, other: 0, buyers: new Set(), creators: {}, best: 0 });
+    Object.assign(sellers.get(key), { msgs: a.msgs, ppvSent: a.ppv || 0 });
+  }
+  out.sellers = [...sellers.values()]
+    .map(({ buyers, ...s }) => ({ ...s, buyers: buyers.size, msgs: s.msgs ?? null, ppvSent: s.ppvSent ?? null }))
+    .filter((s) => s.eur || s.prev || s.msgs)
+    .sort((a, b) => b.eur - a.eur || b.prev - a.prev);
+  out.creators = [...perCreator.values()].sort((a, b) => b.eur - a.eur);
+  return out;
+}

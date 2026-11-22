@@ -9,7 +9,6 @@ const SOON: Record<string, [string, string]> = {
   chatteurs: ["Chatteurs", "Les chatteurs de l’équipe, leurs créatrices et leurs chiffres."],
   planning: ["Planning", "Les shifts de chaque chatteur par créatrice, avec une alerte avant le début."],
   pointage: ["Pointage", "Pointage obligatoire avant d’entrer dans la messagerie, pauses et heures faites."],
-  stats: ["Performances", "Le chiffre par créatrice, par chatteur et par période : PPV, pourboires, abonnements."],
   paies: ["Paies", "Le calcul des paies à partir des ventes et des heures de chacun."],
 };
 

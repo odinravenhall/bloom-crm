@@ -6,7 +6,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
 import { broadcast, chatRoutes, warmInbox } from './chat.mjs';
-import { matchLive, parisDay, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
+import { matchLive, parisDay, performance, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
@@ -144,6 +144,19 @@ async function linkSubsty(client) {
   return { who, creators: list.map(creatorView) };
 }
 
+// Période demandée (?from=&to=, AAAA-MM-JJ, heure de Paris) : aujourd'hui par défaut, 400 jours au plus.
+function period(req) {
+  const p = new URL(req.url, 'http://x').searchParams;
+  const today = parisDay(Date.now());
+  const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+  let from = ok(p.get('from')) ? p.get('from') : today;
+  let to = ok(p.get('to')) ? p.get('to') : today;
+  if (from > to) [from, to] = [to, from];
+  if (to > today) to = today;
+  if (Date.parse(to) - Date.parse(from) > 400 * 864e5) from = parisDay(Date.parse(to) - 400 * 864e5);
+  return { from, to };
+}
+
 const routes = {
   'GET /health': async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' });
@@ -246,15 +259,14 @@ const routes = {
     if (!me) return send(res, 401, { error: 'Connecte-toi' });
     // Managers, team leaders et modèles (une modèle ne voit que son propre chiffre).
     if (!isBoss(me) && me.role !== 'model') return send(res, 403, { error: 'Réservé aux managers, team leaders et modèles' });
-    const p = new URL(req.url, 'http://x').searchParams;
-    const today = parisDay(Date.now());
-    const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
-    let from = ok(p.get('from')) ? p.get('from') : today;
-    let to = ok(p.get('to')) ? p.get('to') : today;
-    if (from > to) [from, to] = [to, from];
-    if (to > today) to = today;
-    if (Date.parse(to) - Date.parse(from) > 400 * 864e5) from = parisDay(Date.parse(to) - 400 * 864e5);
-    send(res, 200, revenue({ from, to, creators: state.creators.filter((c) => canSee(me, c.id)) }));
+    send(res, 200, revenue({ ...period(req), creators: state.creators.filter((c) => canSee(me, c.id)) }));
+  },
+  // Performances : le chiffre par chatteur (Bloom, Infloww / MyPulse, IA) et par créatrice. Admins, managers, team leaders.
+  'GET /api/performance': async (req, res) => {
+    const me = userFrom(req);
+    if (!me) return send(res, 401, { error: 'Connecte-toi' });
+    if (!isBoss(me)) return send(res, 403, { error: 'Réservé aux managers et team leaders' });
+    send(res, 200, performance({ ...period(req), creators: state.creators.filter((c) => canSee(me, c.id)) }));
   },
   // Branchements Infloww / MyPulse (admins) : état, clés, créatrices reliées.
   'GET /api/integrations': async (req, res) => {
