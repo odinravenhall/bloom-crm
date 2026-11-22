@@ -26,7 +26,7 @@ function allowed(gran, days) {
 }
 
 /** Comptes OnlyFans (Infloww) visibles par la personne, avec nom et photo. */
-function accountsFor(u, creators) {
+export function accountsFor(u, creators) {
   const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL');
   const byAcc = new Map(maps.map((m) => [m.account, m.creator_id]));
   const cr = new Map(creators().map((c) => [c.id, c]));

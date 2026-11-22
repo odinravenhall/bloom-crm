@@ -53,8 +53,38 @@ try {
 try {
   db.exec('ALTER TABLE rv_accounts ADD COLUMN avatar TEXT'); // photo du compte (Infloww)
 } catch {}
-// Une seule fois : relire tout de suite le catalogue Infloww pour avoir les photos.
-if (!getSetting('rv:avatars-v1')) (setSetting('rv:avatars-v1', '1'), setSetting('rv:due:ifw-catalog', '0'));
+for (const sql of [
+  'ALTER TABLE rv_accounts ADD COLUMN pid TEXT', // identifiant OnlyFans (clé des rapports Infloww)
+  'ALTER TABLE rv_sellers ADD COLUMN status TEXT', // Activated / Deactivated / Deleted (Infloww)
+]) {
+  try {
+    db.exec(sql);
+  } catch {}
+}
+// Rapports journaliers d'Infloww (même format que le tableau de bord Zèbre) : par employé × créatrice, et par créatrice.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ifw_emp_sales_daily (
+    day TEXT NOT NULL, employee_id TEXT NOT NULL, platform_pid TEXT NOT NULL,
+    sales INTEGER NOT NULL DEFAULT 0, ppv INTEGER NOT NULL DEFAULT 0, tips INTEGER NOT NULL DEFAULT 0, dm INTEGER NOT NULL DEFAULT 0,
+    prio_mass INTEGER NOT NULL DEFAULT 0, mass INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, employee_id, platform_pid)
+  );
+  CREATE TABLE IF NOT EXISTS ifw_emp_chat_daily (
+    day TEXT NOT NULL, employee_id TEXT NOT NULL, platform_pid TEXT NOT NULL,
+    msgs INTEGER NOT NULL DEFAULT 0, ppvs INTEGER NOT NULL DEFAULT 0, ppv_unlocked INTEGER NOT NULL DEFAULT 0, fans_chatted INTEGER NOT NULL DEFAULT 0,
+    chars INTEGER NOT NULL DEFAULT 0, rt_sched INTEGER NOT NULL DEFAULT 0, rt_clock INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, employee_id, platform_pid)
+  );
+  CREATE TABLE IF NOT EXISTS ifw_creator_daily (
+    day TEXT NOT NULL, platform_pid TEXT NOT NULL,
+    new_subs INTEGER, renewals INTEGER, active_fans INTEGER, expired_fans INTEGER, renew_on INTEGER, avg_sub_len INTEGER,
+    visitors INTEGER, visitors_guest INTEGER, visitors_logged INTEGER,
+    msgs_sent INTEGER, ppvs_sent INTEGER, fans_chatted INTEGER, reply_time INTEGER,
+    PRIMARY KEY (day, platform_pid)
+  );
+`);
+// Une seule fois : relire tout de suite le catalogue Infloww.
+if (!getSetting('rv:pid-v1')) (setSetting('rv:pid-v1', '1'), setSetting('rv:due:ifw-catalog', '0')); // relire les créatrices (identifiant OnlyFans) et les employés (statut)
 /** Photo d'une créatrice dans la réponse d'Infloww (nom du champ non documenté : on prend la 1re URL d'image). */
 const pictureOf = (c) => {
   for (const [k, v] of Object.entries(c || {})) if (/avatar|head|pic|photo|image/i.test(k) && typeof v === 'string' && /^https?:\/\//.test(v)) return v;
@@ -196,15 +226,15 @@ const upSale = () =>
 async function ifwCatalog() {
   const now = Date.now();
   const list = await ifwAll('/v1/creators');
-  const up = db.prepare(`INSERT INTO rv_accounts (id, src, platform, name, nick, username, avatar, connected, updated_at) VALUES (?, 'ifw', 'onlyfans', ?, ?, ?, ?, 1, ?)
-    ON CONFLICT (id) DO UPDATE SET name = excluded.name, nick = excluded.nick, username = excluded.username, avatar = COALESCE(excluded.avatar, rv_accounts.avatar), connected = 1, updated_at = excluded.updated_at`);
+  const up = db.prepare(`INSERT INTO rv_accounts (id, src, platform, name, nick, username, avatar, pid, connected, updated_at) VALUES (?, 'ifw', 'onlyfans', ?, ?, ?, ?, ?, 1, ?)
+    ON CONFLICT (id) DO UPDATE SET name = excluded.name, nick = excluded.nick, username = excluded.username, avatar = COALESCE(excluded.avatar, rv_accounts.avatar), pid = COALESCE(excluded.pid, rv_accounts.pid), connected = 1, updated_at = excluded.updated_at`);
   tx(() => {
     run("UPDATE rv_accounts SET connected = 0 WHERE src = 'ifw'");
-    for (const c of list) up.run(`ifw:${c.id}`, c.name ?? '?', c.nickName ?? null, c.userName ?? null, pictureOf(c), now);
+    for (const c of list) up.run(`ifw:${c.id}`, c.name ?? '?', c.nickName ?? null, c.userName ?? null, pictureOf(c), c.platformPid != null ? String(c.platformPid) : null, now);
   });
   const emps = await ifwAll('/v1/employees');
-  const ue = db.prepare('INSERT INTO rv_sellers (id, name, updated_at) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at');
-  tx(() => emps.forEach((e) => ue.run(`ifw:${e.employeeId}`, String(e.employeeName ?? '?').trim(), now)));
+  const ue = db.prepare('INSERT INTO rv_sellers (id, name, status, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, status = excluded.status, updated_at = excluded.updated_at');
+  tx(() => emps.forEach((e) => ue.run(`ifw:${e.employeeId}`, String(e.employeeName ?? '?').trim(), e.status ?? null, now)));
   autoMap();
   const pics = list.filter((c) => pictureOf(c)).length;
   return `${list.length} créatrices (${pics} photos ; champs : ${Object.keys(list[0] || {}).join(', ')}), ${emps.length} employés`;
@@ -250,6 +280,91 @@ async function ifwBackfill() {
     const n = await ifwSalesWindow(a, start, done);
     setSetting(key, String(start));
     return `${a} ${parisDay(start)} → ${parisDay(done)} : ${n}`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- rapports journaliers d'Infloww
+const nn = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? 0 : Math.round(Number(v)));
+const nOrNull = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Math.round(Number(v)));
+const chunks = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+const ymdUtc = (t) => new Date(t).toISOString().slice(0, 10);
+
+/** Ventes et chatting par employé × créatrice × jour (Employee reports). */
+async function ifwEmpReports(from, to) {
+  const ids = all("SELECT id FROM rv_sellers WHERE id LIKE 'ifw:%' AND COALESCE(status, '') != 'Deleted'").map((r) => r.id.slice(4));
+  const us = db.prepare(`INSERT INTO ifw_emp_sales_daily (day, employee_id, platform_pid, sales, ppv, tips, dm, prio_mass, mass) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT DO UPDATE SET sales = excluded.sales, ppv = excluded.ppv, tips = excluded.tips, dm = excluded.dm, prio_mass = excluded.prio_mass, mass = excluded.mass`);
+  const uc = db.prepare(`INSERT INTO ifw_emp_chat_daily (day, employee_id, platform_pid, msgs, ppvs, ppv_unlocked, fans_chatted, chars, rt_sched, rt_clock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT DO UPDATE SET msgs = excluded.msgs, ppvs = excluded.ppvs, ppv_unlocked = excluded.ppv_unlocked, fans_chatted = excluded.fans_chatted,
+      chars = excluded.chars, rt_sched = excluded.rt_sched, rt_clock = excluded.rt_clock`);
+  let rows = 0;
+  for (const group of chunks(ids, 10)) {
+    const p = { employeeIds: group, startTime: from, endTime: to };
+    const s = await ifwAll('/v1/employee-report/employee-sales-summary', p, 50);
+    const c = await ifwAll('/v1/employee-report/employee-chat-summary', p, 50);
+    tx(() => {
+      for (const r of s) us.run(r.date, String(r.employeeId), String(r.platformPid), nn(r.salesAmount), nn(r.ppvSalesAmount), nn(r.tipsSalesAmount), nn(r.directMessageSalesAmount), nn(r.priorityMassMessageSalesAmount), nn(r.massMessageSalesAmount));
+      for (const r of c) uc.run(r.date, String(r.employeeId), String(r.platformPid), nn(r.directMessagesSent), nn(r.directPpvsSent), nn(r.ppvsUnlocked), nn(r.fansChatted), nn(r.characterCount), nn(r.responseTimeBasedOnScheduledHours), nn(r.responseTimeBasedOnClockedHours));
+    });
+    rows += s.length + c.length;
+  }
+  return rows;
+}
+
+const CREATOR_REPORTS = [
+  ['/v1/creator-report/fans/subscriber-count', (r) => ({ new_subs: nOrNull(r.newSubscribers), renewals: nOrNull(r.subscriberRenewals) })],
+  ['/v1/creator-report/fans/count', (r) => ({ active_fans: nOrNull(r.activeFans), expired_fans: nOrNull(r.expiredFans) })],
+  ['/v1/creator-report/fans/renew-on', (r) => ({ renew_on: nOrNull(r.fansWithRenewOn) })],
+  ['/v1/creator-report/fans/avg-subscription-length', (r) => ({ avg_sub_len: nOrNull(r.avgSubscriptionLength) })],
+  ['/v1/creator-report/reach/profile-visitor-count', (r) => ({ visitors: nOrNull(r.profileVisitors), visitors_guest: nOrNull(r.guestProfileVisitors), visitors_logged: nOrNull(r.loggedInUsersProfileVisitors) })],
+];
+function upCreatorDay(day, pid, fields) {
+  const ks = Object.keys(fields);
+  if (!ks.length) return;
+  db.prepare(`INSERT INTO ifw_creator_daily (day, platform_pid, ${ks.join(', ')}) VALUES (?, ?, ${ks.map(() => '?').join(', ')})
+    ON CONFLICT (day, platform_pid) DO UPDATE SET ${ks.map((k) => `${k} = excluded.${k}`).join(', ')}`).run(day, pid, ...ks.map((k) => fields[k]));
+}
+/** Abonnés, fans, visiteurs, messages… par créatrice × jour (Creator reports). */
+async function ifwCreatorReports(from, to) {
+  const ids = all("SELECT id FROM rv_accounts WHERE src = 'ifw' AND connected = 1").map((r) => r.id.slice(4));
+  let rows = 0;
+  for (const group of chunks(ids, 10)) {
+    for (const [path, map] of CREATOR_REPORTS) {
+      let list;
+      try {
+        list = await ifwAll(path, { creatorIds: group, startTime: from, endTime: to }, 20);
+      } catch (e) {
+        if (e.status === 403 || e.status === 400) continue;
+        throw e;
+      }
+      tx(() => list.forEach((r) => r.date && upCreatorDay(r.date, String(r.platformPid), map(r))));
+      rows += list.length;
+    }
+    // chat-summary : total de la plage demandée (pas de date) → un appel par jour.
+    for (let d = from; d <= to; d = ymdUtc(Date.parse(`${d}T12:00:00Z`) + DAY)) {
+      try {
+        const list = await ifwAll('/v1/creator-report/chat-summary', { creatorIds: group, startTime: d, endTime: d }, 5);
+        tx(() => list.forEach((r) => upCreatorDay(d, String(r.platformPid), { msgs_sent: nOrNull(r.messagesSent), ppvs_sent: nOrNull(r.ppvsSent), fans_chatted: nOrNull(r.fansChatted), reply_time: nOrNull(r.replyTime) })));
+        rows += list.length;
+      } catch (e) {
+        if (e.status !== 403 && e.status !== 400) throw e;
+      }
+    }
+  }
+  return rows;
+}
+const recentReports = async (fn) => `${await fn(ymdUtc(Date.now() - 4 * DAY), ymdUtc(Date.now()))} lignes`;
+/** Historique des rapports (1 an), 30 jours par passage : d'abord les employés, puis les créatrices. */
+async function ifwReportsBackfill() {
+  const floor = Date.now() - 365 * DAY;
+  for (const [key, fn] of [['rv:bf:emp-reports', ifwEmpReports], ['rv:bf:creator-reports', ifwCreatorReports]]) {
+    const done = Number(getSetting(key) ?? Date.now() - 4 * DAY);
+    if (done <= floor) continue;
+    const start = Math.max(done - 29 * DAY, floor);
+    const n = await fn(ymdUtc(start), ymdUtc(done));
+    setSetting(key, String(start - DAY));
+    return `${key.slice(6)} ${ymdUtc(start)} → ${ymdUtc(done)} : ${n} lignes`;
   }
   return null;
 }
@@ -434,6 +549,8 @@ const JOBS = [
   { name: 'ifw-catalog', every: 30 * 60_000, ok: ifwReady, run: ifwCatalog },
   { name: 'ifw-sales', every: 2 * 60_000, ok: ifwReady, run: () => ifwRecent(2) },
   { name: 'ifw-settle', every: 3 * 3600_000, ok: ifwReady, run: () => ifwRecent(14) },
+  { name: 'ifw-emp-reports', every: 60 * 60_000, ok: ifwReady, run: () => recentReports(ifwEmpReports) },
+  { name: 'ifw-creator-reports', every: 60 * 60_000, ok: ifwReady, run: () => recentReports(ifwCreatorReports) },
   { name: 'mp-catalog', every: 30 * 60_000, ok: mpReady, run: mpCatalog },
   { name: 'mp-sales', every: 3 * 60_000, ok: mpReady, run: async () => `${await mpSalesWindow(Date.now() - 3 * DAY, Date.now())} ventes lues (3 j)` },
 ];
@@ -461,6 +578,7 @@ async function tick() {
     // Historique : un morceau par passage, quand tout le reste est à jour.
     for (const [name, ok, fn] of [
       ['ifw-backfill', ifwReady, ifwBackfill],
+      ['ifw-reports-backfill', ifwReady, ifwReportsBackfill],
       ['mp-backfill', mpReady, mpBackfill],
     ]) {
       if (!ok()) continue;
