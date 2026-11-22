@@ -579,6 +579,11 @@ const D: Record<string, [es: string, fr: string]> = {
   "Substy AI": ["IA de Substy", "IA Substy"],
   "The AI replies to this fan": ["La IA responde a este fan", "L’IA répond à ce fan"],
   "You reply by hand": ["Respondes tú", "Tu réponds à la main"],
+  "Emoji keyboard": ["Teclado de emojis", "Clavier d’emojis"],
+  "Manage favorite emojis": ["Gestionar emojis favoritos", "Gérer les emojis favoris"],
+  "40 favorite emojis maximum": ["40 emojis favoritos como máximo", "40 emojis favoris au maximum"],
+  "Favorite emojis saved for the whole team": ["Emojis favoritos guardados para todo el equipo", "Emojis favoris enregistrés pour toute l’équipe"],
+  Remove: ["Quitar", "Retirer"],
   // settings
   "Your Account": ["Tu cuenta", "Ton compte"],
   "Your account": ["Tu cuenta", "Ton compte"],

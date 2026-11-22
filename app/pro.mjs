@@ -5,7 +5,7 @@
 //   - conversations d'une liste OnlyFans (filtre des listes épinglées) ;
 //   - traduction d'un texte (service gratuit sans clé).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { canSee } from './team.mjs';
+import { canSee, seesAll } from './team.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pro_pins (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, message_id TEXT NOT NULL, text TEXT, sent_at TEXT, from_fan INTEGER NOT NULL DEFAULT 0,
@@ -164,6 +164,26 @@ export function proRoutes({ substy, userFrom, send, body }) {
       }
       fans.delete('');
       send(res, 200, { fans: [...fans] });
+    },
+
+    // ---------------------------------------------------------------- emojis favoris (rangée du composeur, pour toute l'équipe)
+    'GET /api/pro/emojis': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      let list = null;
+      try {
+        list = JSON.parse(getSetting('pro_emojis') || 'null');
+      } catch {}
+      send(res, 200, { emojis: Array.isArray(list) ? list : null, canEdit: seesAll(u) });
+    },
+    'PUT /api/pro/emojis': async (req, res) => {
+      const u = auth(req, res);
+      if (!u) return;
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux managers et admins' });
+      const b = await body(req);
+      const list = [...new Set((Array.isArray(b.emojis) ? b.emojis : []).map((e) => String(e).slice(0, 16)).filter(Boolean))].slice(0, 40);
+      setSetting('pro_emojis', JSON.stringify(list));
+      send(res, 200, { emojis: list });
     },
 
     // ---------------------------------------------------------------- traduction

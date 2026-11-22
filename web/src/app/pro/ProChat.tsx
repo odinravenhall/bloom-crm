@@ -488,7 +488,15 @@ function Composer({ conv, model, me, firstName, replyTo, clearReply, onSent, t }
   const [price, setPrice] = useState(0); // en cents, prix du pack entier
   const [scriptId, setScriptId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
-  const [pop, setPop] = useState<null | "emoji" | "scripts" | "vault" | "timed" | "schedule" | "price" | "tag">(null);
+  const [pop, setPop] = useState<null | "emoji" | "scripts" | "vault" | "timed" | "schedule" | "price" | "tag" | "emojiKb">(null);
+  // Emojis favoris de l'agence (réglés par les managers / admins pour toute l'équipe).
+  const [fav, setFav] = useState<string[]>(QUICK);
+  const [canEditEmojis, setCanEditEmojis] = useState(false);
+  useEffect(() => {
+    api<{ emojis: string[] | null; canEdit: boolean }>("GET", "/api/pro/emojis")
+      .then((r) => (r.emojis?.length && setFav(r.emojis), setCanEditEmojis(r.canEdit)))
+      .catch(() => {});
+  }, []);
   const [lib, setLib] = useState<Lib | null>(null);
   const [trOn, setTrOn] = useState(true);
   const [lang, setLang] = useState("fr");
@@ -585,10 +593,12 @@ function Composer({ conv, model, me, firstName, replyTo, clearReply, onSent, t }
           <button onClick={() => setPop(pop === "emoji" ? null : "emoji")} title={t("Emojis")}>
             <Smile className="size-5" style={{ color: "var(--of-muted)" }} />
           </button>
-          <button onClick={() => setPop(pop === "emoji" ? null : "emoji")} title={t("More emojis")}>
-            <Settings className="size-5" style={{ color: "var(--of-muted)" }} />
-          </button>
-          {QUICK.map((e) => (
+          {canEditEmojis ? (
+            <button onClick={() => setPop("emojiKb")} title={t("Emoji keyboard")}>
+              <Settings className="size-5" style={{ color: "var(--of-muted)" }} />
+            </button>
+          ) : null}
+          {fav.map((e) => (
             <button key={e} onClick={() => insert(e)} className="transition-transform hover:scale-125">
               {e}
             </button>
@@ -722,6 +732,7 @@ function Composer({ conv, model, me, firstName, replyTo, clearReply, onSent, t }
       {pop === "timed" ? <TimedModal conv={conv} text={text} medias={medias} price={price} onDone={() => (clear(), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}
       {pop === "schedule" ? <ScheduleModal conv={conv} text={text} medias={medias} price={price} onDone={() => (clear(), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}
       {pop === "tag" ? <TagModal model={model} onClose={() => setPop(null)} t={t} /> : null}
+      {pop === "emojiKb" ? <EmojiKeyboard value={fav} onSaved={(l) => (setFav(l), setPop(null))} onClose={() => setPop(null)} t={t} /> : null}
       <span className="hidden">{me.name}</span>
     </div>
   );
@@ -732,6 +743,81 @@ function IconBtn({ children, title, onClick }: { children: React.ReactNode; titl
     <button onClick={onClick} title={title} className="grid size-6 place-items-center hover:opacity-80">
       {children}
     </button>
+  );
+}
+
+/** « Emoji keyboard » (managers / admins) : les 40 emojis favoris de la rangée du composeur, pour toute l'équipe. */
+function EmojiKeyboard({ value, onSaved, onClose, t }: { value: string[]; onSaved: (l: string[]) => void; onClose: () => void; t: (s: string) => string }) {
+  const [list, setList] = useState(value);
+  const [cat, setCat] = useState(CATEGORIES[0].key);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const c = CATEGORIES.find((x) => x.key === cat) ?? CATEGORIES[0];
+  const all = q ? CATEGORIES.flatMap((x) => x.list.split(" ")).filter((e) => e.includes(q)) : c.list.split(" ");
+  const add = (e: string) => {
+    if (list.includes(e)) return;
+    if (list.length >= 40) return toast(t("40 favorite emojis maximum"), "err");
+    setList([...list, e]);
+  };
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ emojis: string[] }>("PUT", "/api/pro/emojis", { emojis: list });
+      toast(t("Favorite emojis saved for the whole team"));
+      onSaved(r.emojis);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-[660px] flex-col rounded-xl" style={{ background: "var(--pro-pop)", color: "var(--of-text)" }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 className="border-b px-5 py-4 text-[16px] font-semibold" style={{ borderColor: "var(--pro-line)" }}>{t("Emoji keyboard")}</h3>
+        <div className="of-scroll min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="rounded-lg p-3" style={{ background: "var(--pro-panel)" }}>
+            <p className="text-[14px] font-semibold">{t("Manage favorite emojis")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {list.map((e) => (
+                <span key={e} className="relative grid size-10 place-items-center rounded-md border text-[24px]" style={{ borderColor: "var(--pro-line)", background: "var(--pro-page)" }}>
+                  {e}
+                  <button onClick={() => setList(list.filter((x) => x !== e))} title={t("Remove")} className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full text-white" style={{ background: "#555" }}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-right text-[13px]" style={{ color: "var(--of-muted)" }}>{list.length}/40</p>
+          </div>
+          <div className="mt-4 rounded-lg p-3" style={{ background: "var(--pro-panel)" }}>
+            <label className="flex h-10 items-center gap-2 rounded-md border px-3" style={{ borderColor: "var(--pro-line)" }}>
+              <Search className="size-4" style={{ color: "var(--of-muted)" }} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search")} className="min-w-0 flex-1 bg-transparent text-[14px] outline-none" />
+            </label>
+            <div className="mt-3 flex justify-between px-2 text-[20px]">
+              {CATEGORIES.map((x) => (
+                <button key={x.key} onClick={() => (setCat(x.key), setQ(""))} title={t(x.label)} style={{ opacity: cat === x.key && !q ? 1 : 0.55 }}>
+                  {x.icon}
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-[14px] font-semibold">{q ? t("Search") : t(c.label)}</p>
+            <div className="of-scroll mt-2 grid max-h-[300px] grid-cols-[repeat(auto-fill,minmax(40px,1fr))] gap-1 overflow-y-auto text-[28px]">
+              {all.map((e, i) => (
+                <button key={`${e}-${i}`} onClick={() => add(e)} className="rounded hover:bg-white/10" style={list.includes(e) ? { opacity: 0.35 } : undefined}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t px-5 py-3" style={{ borderColor: "var(--pro-line)" }}>
+          <button onClick={onClose} className="h-9 rounded-md border px-4 text-[14px]" style={{ borderColor: "var(--pro-line)" }}>{t("Cancel")}</button>
+          <button onClick={save} disabled={busy} className="h-9 rounded-md px-5 text-[14px] text-white disabled:opacity-50" style={{ background: BLUE }}>{t("Save")}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
