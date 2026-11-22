@@ -222,7 +222,7 @@ export function SideNav({ me }: { me: Me }) {
         </button>
       </div>
       {mobile && pf === "of" ? (
-        <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col overflow-y-auto bg-bg px-4 py-4 md:hidden">
+        <div className="fixed inset-x-0 top-[57px] bottom-0 z-40 flex flex-col overflow-y-auto px-4 py-4 md:hidden" style={{ background: "var(--of-side)" }}>
           <OfSideNav me={me} narrow={false} onToggle={() => setMobile(false)} />
         </div>
       ) : mobile ? (
@@ -238,7 +238,7 @@ export function SideNav({ me }: { me: Me }) {
 
       {/* ordinateur : menu à gauche (sur OnlyFans : copie de la barre d'Infloww) */}
       {pf === "of" ? (
-        <aside className={cn("hidden h-dvh shrink-0 flex-col border-r border-white/[0.06] bg-black py-4 md:flex", narrow ? "w-[72px] px-3" : "w-[252px] px-3")}>
+        <aside className={cn("hidden h-dvh shrink-0 flex-col border-r py-4 md:flex", narrow ? "w-[72px] px-3" : "w-[252px] px-3")} style={{ background: "var(--of-side)", borderColor: "var(--of-side-line)" }}>
           <OfSideNav me={me} narrow={narrow} onToggle={toggleNav} />
         </aside>
       ) : null}

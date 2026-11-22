@@ -600,3 +600,48 @@ html.motion-off .online-ring { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .decor * { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------- Partie OnlyFans (copie d'Infloww) : sombre / clair */
+:root {
+  --of-page: #0b0b0c;
+  --of-card: #1c1c1e;
+  --of-line: #2a2a2d;
+  --of-text: #f4f4f5;
+  --of-muted: #8e8e93;
+  --of-blue: #2f6bff;
+  --of-blue-soft: rgba(47, 107, 255, 0.16);
+  --of-side: #000000;
+  --of-side-on: rgba(255, 255, 255, 0.08);
+  --of-side-text: #a1a1a6;
+  --of-side-line: rgba(255, 255, 255, 0.09);
+  --of-pop: #0c0c0d;
+  --of-set-side: #262626;
+  --of-set-on: #333334;
+  --of-set-page: #161616;
+  --of-field: #1c1c1e;
+  --of-area: #3a3a3c;
+  --of-site: #161618; /* fond du site OnlyFans (sombre) */
+}
+html[data-theme="light"] {
+  --of-page: #f2f2f6;
+  --of-card: #ffffff;
+  --of-line: #e5e5ea;
+  --of-text: #111114;
+  --of-muted: #8a8a8f;
+  --of-blue: #2f6bff;
+  --of-blue-soft: #e8efff;
+  --of-side: #ffffff;
+  --of-side-on: #ececf0;
+  --of-side-text: #5c5c62;
+  --of-side-line: #e5e5ea;
+  --of-pop: #ffffff;
+  --of-set-side: #f4f4f6;
+  --of-set-on: #e9effe;
+  --of-set-page: #ffffff;
+  --of-field: #ffffff;
+  --of-area: #dce7fd;
+  --of-site: #ffffff;
+}
+.of-item { color: var(--of-side-text); }
+.of-item:hover { color: var(--of-text); }
+.of-item.on { background: var(--of-side-on); color: var(--of-text); font-weight: 600; }

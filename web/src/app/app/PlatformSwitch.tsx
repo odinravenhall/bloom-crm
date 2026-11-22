@@ -7,6 +7,7 @@ import { cn } from "@/lib/fmt";
 import { platformOf, useCreators } from "@/lib/creators";
 import { PlatformLogo } from "@/components/PlatformLogo";
 import { PF_LABEL, setPf, type Pf } from "@/lib/platform";
+import { useT } from "@/lib/i18n";
 
 const Icon = ({ p, className = "size-5" }: { p: Pf | "reveal"; className?: string }) =>
   p === "reveal" ? (
@@ -21,6 +22,7 @@ const Icon = ({ p, className = "size-5" }: { p: Pf | "reveal"; className?: strin
  */
 export function PlatformSwitch({ compact }: { compact: boolean }) {
   const { allCreators, pf } = useCreators();
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -66,16 +68,17 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
     window.location.reload();
   };
   const OPTIONS: { p: Pf; sub: string }[] = [
-    { p: "of", sub: `${count("of")} modèle${count("of") > 1 ? "s" : ""}` },
-    { p: "mym", sub: `${count("mym")} modèle${count("mym") > 1 ? "s" : ""}` },
+    { p: "of", sub: t(count("of") > 1 ? "{n} creators" : "{n} creator", { n: count("of") }) },
+    { p: "mym", sub: t(count("mym") > 1 ? "{n} creators" : "{n} creator", { n: count("mym") }) },
   ];
 
   return (
     <div ref={box} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        title={compact ? PF_LABEL[pf] : "Changer de plateforme"}
-        className={cn("flex w-full items-center gap-2.5 rounded-xl border bg-card text-left text-sm font-semibold hover:border-primary/50", compact ? "justify-center p-2" : "px-3 py-2.5", open && "border-primary/60")}
+        title={compact ? PF_LABEL[pf] : t("Change platform")}
+        style={{ background: "var(--of-card)", color: "var(--of-text)", borderColor: "var(--of-line)" }}
+        className={cn("flex w-full items-center gap-2.5 rounded-xl border text-left text-sm font-semibold hover:opacity-90", compact ? "justify-center p-2" : "px-3 py-2.5")}
       >
         <Icon p={pf} />
         {compact ? null : (
@@ -87,9 +90,9 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
       </button>
       {open && pos
         ? createPortal(
-        <div ref={panel} style={{ top: pos.top, left: pos.left, width: pos.width }} className="fixed z-[100] overflow-hidden rounded-xl border bg-card p-1 shadow-2xl">
+        <div ref={panel} style={{ top: pos.top, left: pos.left, width: pos.width, background: "var(--of-pop)", color: "var(--of-text)", borderColor: "var(--of-line)" }} className="fixed z-[100] overflow-hidden rounded-xl border p-1 shadow-2xl">
           {OPTIONS.map((o) => (
-            <button key={o.p} onClick={() => choose(o.p)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-card-2", pf === o.p && "bg-card-2")}>
+            <button key={o.p} onClick={() => choose(o.p)} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:opacity-80" style={pf === o.p ? { background: "var(--of-side-on)" } : undefined}>
               <Icon p={o.p} className="size-6" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">{PF_LABEL[o.p]}</span>
@@ -99,10 +102,10 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
             </button>
           ))}
           <div className="mx-1 my-1 border-t" />
-          <div className="flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-2 opacity-55" title="Bientôt">
+          <div className="flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-2 opacity-55" title={t("Soon")}>
             <Icon p="reveal" className="size-6" />
             <span className="min-w-0 flex-1 text-sm font-semibold">Reveal</span>
-            <span className="rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase">Bientôt</span>
+            <span className="rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase">{t("Soon")}</span>
           </div>
         </div>,
             document.body,

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
+import { useT } from "@/lib/i18n";
 import { OF_PAGES } from "@/lib/ofmanager";
 import { BloomMark } from "@/components/ui";
 import type { Me, Role } from "@/lib/types";
@@ -97,6 +98,7 @@ const same = (path: string, href: string) => {
  */
 export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; onToggle: () => void }) {
   const path = usePathname() || "";
+  const { t } = useT();
   const [open, setOpen] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
   useEffect(() => setOpen(null), [path]);
@@ -117,18 +119,18 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
   const first = me.name.split(/\s+/)[0];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" style={{ color: "var(--of-text)" }}>
       {/* Bloom + prénom (vers l'Accueil : toute l'agence) */}
       <div className={cn("flex items-center", narrow ? "flex-col gap-3" : "gap-2.5 px-1")}>
-        <button onClick={onToggle} title={narrow ? "Agrandir le menu" : "Réduire le menu"} className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-fg hover:bg-white/[0.1]">
+        <button onClick={onToggle} title={t(narrow ? "Expand menu" : "Collapse menu")} className="grid size-9 shrink-0 place-items-center rounded-lg" style={{ background: "var(--of-side-on)" }}>
           <Menu className="size-[18px]" />
         </button>
-        <Link href="/app" title="Accueil · toute l’agence" className={cn("flex min-w-0 items-center gap-2", narrow && "justify-center")}>
+        <Link href="/app" title={t("Home · whole agency")} className={cn("flex min-w-0 items-center gap-2", narrow && "justify-center")}>
           <BloomMark className="size-7" />
           {narrow ? null : (
             <span className="min-w-0 leading-tight">
               <span className="block text-[15px] font-semibold">Bloom</span>
-              <span className="block truncate text-[11px] text-muted">{first}</span>
+              <span className="block truncate text-[11px]" style={{ color: "var(--of-muted)" }}>{first}</span>
             </span>
           )}
         </Link>
@@ -141,29 +143,29 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
       <nav className="no-scrollbar mt-5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {entries.map((e, i) =>
           e === "divider" ? (
-            <span key={`d${i}`} className="mx-1 my-3 h-px bg-white/[0.09]" />
+            <span key={`d${i}`} className="mx-1 my-3 h-px" style={{ background: "var(--of-side-line)" }} />
           ) : (
-            <Row key={e.key} e={e} path={path} narrow={narrow} open={open === e.key} setOpen={(v) => setOpen(v ? e.key : null)} unread={unread} />
+            <Row key={e.key} e={e} path={path} narrow={narrow} open={open === e.key} setOpen={(v) => setOpen(v ? e.key : null)} unread={unread} t={t} />
           ),
         )}
       </nav>
 
-      <div className="mt-3 border-t border-white/[0.09] pt-3">
+      <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--of-side-line)" }}>
         <Link
           href="/app/settings"
-          title={narrow ? "Settings" : undefined}
-          className={cn("flex items-center gap-3 rounded-lg px-2.5 py-2 text-[15px]", narrow && "justify-center px-0", same(path, "/app/settings") ? "bg-white/[0.08] font-semibold text-fg" : "text-muted hover:text-fg")}
+          title={narrow ? t("Settings") : undefined}
+          className={cn("of-item flex items-center gap-3 rounded-lg px-2.5 py-2 text-[15px]", narrow && "justify-center px-0", same(path, "/app/settings") && "on")}
         >
           <SlidersHorizontal className="size-[18px] shrink-0" />
-          {narrow ? null : "Settings"}
+          {narrow ? null : t("Settings")}
         </Link>
-        {narrow ? null : <p className="px-2.5 pt-3 text-[12px] text-muted">Bloom CRM</p>}
+        {narrow ? null : <p className="px-2.5 pt-3 text-[12px]" style={{ color: "var(--of-muted)" }}>Bloom CRM</p>}
       </div>
     </div>
   );
 }
 
-function Row({ e, path, narrow, open, setOpen, unread }: { e: Entry; path: string; narrow: boolean; open: boolean; setOpen: (v: boolean) => void; unread: number }) {
+function Row({ e, path, narrow, open, setOpen, unread, t }: { e: Entry; path: string; narrow: boolean; open: boolean; setOpen: (v: boolean) => void; unread: number; t: (s: string) => string }) {
   const btn = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -187,27 +189,27 @@ function Row({ e, path, narrow, open, setOpen, unread }: { e: Entry; path: strin
     return () => document.removeEventListener("mousedown", out);
   }, [open, narrow, setOpen]);
 
-  const cls = cn("flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[15px] transition-colors", narrow && "justify-center px-0", on ? "bg-white/[0.08] font-semibold text-fg" : "text-muted hover:text-fg");
-  const icon = <e.icon className={cn("size-[18px] shrink-0", on && "text-fg")} />;
+  const cls = cn("of-item flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[15px] transition-colors", narrow && "justify-center px-0", on && "on");
+  const icon = <e.icon className="size-[18px] shrink-0" />;
 
   if (!e.children) {
     return (
       <div className="relative flex items-center">
-        <Link href={e.href!} title={narrow ? e.label : undefined} className={cls}>
+        <Link href={e.href!} title={narrow ? t(e.label) : undefined} className={cls}>
           <span className="relative">
             {icon}
             {narrow && e.badge && unread ? <span className="absolute -top-1.5 -right-2 size-2 rounded-full bg-pink-500" /> : null}
           </span>
           {narrow ? null : (
             <>
-              <span className="truncate">{e.label}</span>
+              <span className="truncate">{t(e.label)}</span>
               {e.badge && unread ? <span className="rounded-full bg-pink-500 px-1.5 text-[10px] leading-4 font-bold text-white tabular-nums">{unread > 99 ? "99+" : unread}</span> : null}
               <span className="flex-1" />
             </>
           )}
         </Link>
         {!narrow && e.external ? (
-          <a href={e.href} target="_blank" rel="noopener" title="Ouvrir dans un nouvel onglet" className="absolute right-1.5 grid size-7 place-items-center rounded-md bg-white/[0.08] text-muted hover:text-fg">
+          <a href={e.href} target="_blank" rel="noopener" title={t("Open in a new tab")} className="of-item absolute right-1.5 grid size-7 place-items-center rounded-md" style={{ background: "var(--of-side-on)" }}>
             <SquareArrowOutUpRight className="size-3.5" />
           </a>
         ) : null}
@@ -224,10 +226,10 @@ function Row({ e, path, narrow, open, setOpen, unread }: { e: Entry; path: strin
             key={c.label}
             href={c.href}
             onClick={() => setOpen(false)}
-            className={cn("flex items-center gap-3 rounded-lg py-1.5 text-[14px]", narrow ? "px-3" : "pr-2.5 pl-8", cur ? "bg-white/[0.08] font-semibold text-fg" : "text-muted hover:text-fg")}
+            className={cn("of-item flex items-center gap-3 rounded-lg py-1.5 text-[14px]", narrow ? "px-3" : "pr-2.5 pl-8", cur && "on")}
           >
             <c.icon className="size-4 shrink-0" />
-            {c.label}
+            {t(c.label)}
           </Link>
         );
       })}
@@ -236,11 +238,11 @@ function Row({ e, path, narrow, open, setOpen, unread }: { e: Entry; path: strin
 
   return (
     <div>
-      <button ref={btn} onClick={() => setOpen(!open)} title={narrow ? e.label : undefined} className={cls}>
+      <button ref={btn} onClick={() => setOpen(!open)} title={narrow ? t(e.label) : undefined} className={cls}>
         {icon}
         {narrow ? null : (
           <>
-            <span className="flex-1 truncate">{e.label}</span>
+            <span className="flex-1 truncate">{t(e.label)}</span>
             <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
           </>
         )}
@@ -248,8 +250,8 @@ function Row({ e, path, narrow, open, setOpen, unread }: { e: Entry; path: strin
       {open && !narrow ? list : null}
       {open && narrow
         ? createPortal(
-            <div ref={panel} style={pos ? { top: pos.top, left: pos.left } : { visibility: "hidden" }} className="fixed z-[100] w-60 overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0d] p-1.5 shadow-2xl">
-              <p className="px-3 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase">{e.label}</p>
+            <div ref={panel} style={pos ? { top: pos.top, left: pos.left, background: "var(--of-pop)", borderColor: "var(--of-line)" } : { visibility: "hidden" }} className="fixed z-[100] w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl">
+              <p className="px-3 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide uppercase" style={{ color: "var(--of-muted)" }}>{t(e.label)}</p>
               {list}
             </div>,
             document.body,

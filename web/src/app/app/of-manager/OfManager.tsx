@@ -7,10 +7,24 @@ import { cn } from "@/lib/fmt";
 import { useCreators } from "@/lib/creators";
 import { ofPage } from "@/lib/ofmanager";
 import { Avatar } from "@/components/ui";
+import { useT } from "@/lib/i18n";
 
 type Site = { site: string; access: string };
-// Fond du site OnlyFans en mode sombre (pour couvrir la marge sans couture).
-const OF_BG = "#161618";
+// Fond du site OnlyFans (sombre ou clair, suit le thème de Bloom).
+const OF_BG = "var(--of-site)";
+
+/** Thème clair de Bloom ? (le site OnlyFans s'affiche alors en clair, comme dans Infloww) */
+function useLight() {
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    const read = () => setLight(document.documentElement.dataset.theme === "light");
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => mo.disconnect();
+  }, []);
+  return light;
+}
 const KEY = "bloom.ofb.authorized"; // sessions déjà autorisées dans ce navigateur
 const authorized = (site: string) => {
   try {
@@ -34,6 +48,8 @@ const remember = (site: string) => {
 export function OfManager({ page }: { page: string }) {
   const { creators, creatorId, creator, setCreator } = useCreators();
   const p = ofPage(page);
+  const { t } = useT();
+  const light = useLight();
   const [sites, setSites] = useState<Record<string, Site>>({});
   const [ok, setOk] = useState<Record<string, boolean>>({});
   const [err, setErr] = useState("");
@@ -125,14 +141,14 @@ export function OfManager({ page }: { page: string }) {
       <aside className="hidden w-[210px] shrink-0 flex-col border-r bg-panel-strong md:flex">
         <div className="flex gap-2 p-3">
           <div className="relative min-w-0 flex-1">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-9 w-full rounded-lg border bg-card-2/60 pr-8 pl-3 text-sm outline-none focus:border-primary" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search")} className="h-9 w-full rounded-lg border bg-card-2/60 pr-8 pl-3 text-sm outline-none focus:border-primary" />
             <Search className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted" />
           </div>
-          <button onClick={() => open(true)} title="Rouvrir la session" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-card-2/60 text-muted hover:text-fg">
+          <button onClick={() => open(true)} title={t("Reopen the session")} className="grid size-9 shrink-0 place-items-center rounded-lg border bg-card-2/60 text-muted hover:text-fg">
             <RefreshCw className="size-4" />
           </button>
         </div>
-        <p className="px-4 pb-1.5 text-xs font-semibold text-primary-soft">All creators</p>
+        <p className="px-4 pb-1.5 text-xs font-semibold" style={{ color: "var(--of-blue)" }}>{t("All creators")}</p>
         <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pb-2">
           {list.map((c) => {
             const on = c.id === creatorId;
@@ -148,7 +164,7 @@ export function OfManager({ page }: { page: string }) {
               </button>
             );
           })}
-          {!list.length ? <p className="px-4 py-3 text-xs text-muted">Aucune modèle</p> : null}
+          {!list.length ? <p className="px-4 py-3 text-xs text-muted">{t("No creator")}</p> : null}
         </div>
       </aside>
 
@@ -156,18 +172,18 @@ export function OfManager({ page }: { page: string }) {
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
           <p.icon className="size-4 text-muted" />
-          <h1 className="text-[15px] font-semibold">{p.title}</h1>
+          <h1 className="text-[15px] font-semibold">{t(p.title)}</h1>
           {creator ? <span className="truncate text-xs text-muted">· {creator.name}</span> : null}
           <div className="ml-auto flex items-center gap-1">
             {s ? (
-              <button onClick={authorize} title="Si la page ne s’affiche pas : autoriser à nouveau ce navigateur" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
+              <button onClick={authorize} title={t("Authorize this browser again")} className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
                 <KeyRound className="size-4" />
               </button>
             ) : null}
-            <button onClick={() => box.current?.requestFullscreen?.()} title="Plein écran" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
+            <button onClick={() => box.current?.requestFullscreen?.()} title={t("Fullscreen")} className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
               <Expand className="size-4" />
             </button>
-            <button onClick={() => setN((x) => x + 1)} title="Recharger la page" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
+            <button onClick={() => setN((x) => x + 1)} title={t("Reload the page")} className="grid size-8 place-items-center rounded-lg text-muted hover:bg-card-2 hover:text-fg">
               <RefreshCw className="size-4" />
             </button>
           </div>
@@ -176,7 +192,7 @@ export function OfManager({ page }: { page: string }) {
           {!s && !err ? (
             <p className="absolute inset-0 grid place-items-center text-sm text-muted">
               <span className="flex items-center gap-2">
-                <Loader2 className="size-4 animate-spin" /> Ouverture du compte…
+                <Loader2 className="size-4 animate-spin" /> {t("Opening the account…")}
               </span>
             </p>
           ) : null}
@@ -185,10 +201,10 @@ export function OfManager({ page }: { page: string }) {
             <div className="absolute inset-0 grid place-items-center p-6">
               <div className="max-w-md rounded-2xl border bg-card p-6 text-center">
                 <KeyRound className="mx-auto size-6" />
-                <p className="mt-3 font-semibold">Ouvrir le compte de {creator?.name ?? "la modèle"}</p>
-                <p className="mt-1 text-sm text-muted">Une petite fenêtre Substy s’ouvre quelques secondes pour autoriser ce navigateur (il faut être connecté à Substy). À refaire au plus toutes les 4 heures.</p>
+                <p className="mt-3 font-semibold">{t("Open {name}’s account", { name: creator?.name ?? "" })}</p>
+                <p className="mt-1 text-sm text-muted">{t("A small Substy window opens for a few seconds to authorize this browser (you must be logged in to Substy). Needed at most every 4 hours.")}</p>
                 <button onClick={authorize} className="mt-4 inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-white">
-                  Ouvrir le compte
+                  {t("Open the account")}
                 </button>
               </div>
             </div>
@@ -196,9 +212,9 @@ export function OfManager({ page }: { page: string }) {
           {s && creatorId && ok[creatorId] ? (
             <>
               <iframe
-                key={`${s.site}${path}-${n}`}
-                src={`${s.site}${path}?theme=dark`}
-                title={`${p.title} · ${creator?.name ?? ""}`}
+                key={`${s.site}${path}-${n}-${light}`}
+                src={`${s.site}${path}?theme=${light ? "light" : "dark"}`}
+                title={`${t(p.title)} · ${creator?.name ?? ""}`}
                 style={frameStyle}
                 className="absolute top-0 border-0"
                 allow="clipboard-read; clipboard-write; fullscreen"

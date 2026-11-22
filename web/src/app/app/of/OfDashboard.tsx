@@ -6,6 +6,7 @@ import { BadgePlus, ChevronDown, FileText, Info, Lightbulb, MessageCircleMore, R
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
 import { readUserPrefs } from "../settings/Settings";
+import { useT } from "@/lib/i18n";
 
 type Period = "yesterday" | "today" | "week" | "month";
 type Mode = "net" | "gross";
@@ -23,15 +24,15 @@ type Data = {
   unmapped: string[];
 };
 
-// Couleurs du dashboard d'Infloww.
+// Couleurs du dashboard d'Infloww (sombre ou clair : variables --of-* de globals.css).
 const C = {
-  page: "#0b0b0c",
-  card: "#1c1c1e",
-  line: "#2a2a2d",
-  text: "#f4f4f5",
-  muted: "#8e8e93",
-  blue: "#2f6bff",
-  blueSoft: "rgba(47,107,255,.16)",
+  page: "var(--of-page)",
+  card: "var(--of-card)",
+  line: "var(--of-line)",
+  text: "var(--of-text)",
+  muted: "var(--of-muted)",
+  blue: "var(--of-blue)",
+  blueSoft: "var(--of-blue-soft)",
 };
 const PERIODS: [Period, string][] = [
   ["yesterday", "Yesterday"],
@@ -48,7 +49,7 @@ const BLOCKS: { key: keyof Data["blocks"]; label: string; icon: LucideIcon; colo
   { key: "streams", label: "Streams", icon: Rows3, color: "#3b82f6" },
 ];
 const usd = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const short = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const short = (d: string, lang: string) => new Date(`${d}T12:00:00`).toLocaleDateString(lang === "en" ? "en-US" : lang, { month: "short", day: "numeric" });
 
 /** Dashboard OnlyFans : copie du dashboard d'Infloww (gains de l'agence sur OnlyFans, ventes de l'équipe). */
 export function OfDashboard() {
@@ -56,6 +57,7 @@ export function OfDashboard() {
   const [mode, setMode] = useState<Mode>("net");
   const [data, setData] = useState<Data | null>(null);
   const [modeOpen, setModeOpen] = useState(false);
+  const { t, lang } = useT();
 
   useEffect(() => {
     let live = true;
@@ -72,7 +74,7 @@ export function OfDashboard() {
   }, [period, mode]);
 
   // Comme Infloww : les jours (ou heures) à venir sont à 0 sur la courbe.
-  const chart = (data?.employeeSales ?? []).map((p) => ({ ...p, name: data?.hourly ? p.label : short(p.label) }));
+  const chart = (data?.employeeSales ?? []).map((p) => ({ ...p, name: data?.hourly ? p.label : short(p.label, lang) }));
   const max = Math.max(1, ...chart.map((p) => p.v));
   const step = max > 4000 ? Math.ceil(max / 4 / 1000) * 1000 : max > 400 ? 1000 : max > 40 ? 100 : 10;
   const top = Math.max(step, Math.ceil(max / step) * step);
@@ -83,7 +85,7 @@ export function OfDashboard() {
       <section className="rounded-2xl p-6" style={{ background: C.card }}>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-2 text-[15px] font-semibold">
-            Creator earnings overview <Info className="size-3.5" style={{ color: C.muted }} />
+            {t("Creator earnings overview")} <Info className="size-3.5" style={{ color: C.muted }} />
           </h1>
           <span className="flex items-center gap-1.5 text-[13px]" style={{ color: C.muted }}>
             UTC+01:00 <Info className="size-3.5" />
@@ -91,14 +93,14 @@ export function OfDashboard() {
           <div className="ml-auto flex flex-wrap items-center gap-3">
             <div className="relative">
               <button onClick={() => setModeOpen((o) => !o)} className="flex h-9 w-36 items-center justify-between rounded-lg border px-3 text-[13px]" style={{ borderColor: C.line, background: C.page }}>
-                {mode === "net" ? "Net earnings" : "Gross earnings"}
+                {t(mode === "net" ? "Net earnings" : "Gross earnings")}
                 <ChevronDown className="size-4" style={{ color: C.muted }} />
               </button>
               {modeOpen ? (
                 <div className="absolute top-full right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border py-1" style={{ borderColor: C.line, background: C.card }}>
                   {(["net", "gross"] as Mode[]).map((m) => (
                     <button key={m} onClick={() => (setMode(m), setModeOpen(false))} className="block w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/5" style={{ color: m === mode ? C.blue : C.text }}>
-                      {m === "net" ? "Net earnings" : "Gross earnings"}
+                      {t(m === "net" ? "Net earnings" : "Gross earnings")}
                     </button>
                   ))}
                 </div>
@@ -107,7 +109,7 @@ export function OfDashboard() {
             <div className="flex h-9 items-center rounded-lg border p-0.5" style={{ borderColor: C.line, background: C.page }}>
               {PERIODS.map(([k, l]) => (
                 <button key={k} onClick={() => setPeriod(k)} className="h-full rounded-md px-4 text-[12px] font-medium" style={period === k ? { background: C.blueSoft, color: C.blue } : { color: C.text }}>
-                  {l}
+                  {t(l)}
                 </button>
               ))}
             </div>
@@ -125,7 +127,7 @@ export function OfDashboard() {
               </svg>
             </span>
             <p className="mt-4 text-[11px] font-semibold" style={{ color: C.blue }}>
-              Total earnings
+              {t("Total earnings")}
             </p>
             <p className="font-semibold tracking-tight tabular-nums" style={{ color: C.blue }}>
               <span className="text-2xl">$</span>
@@ -133,7 +135,7 @@ export function OfDashboard() {
             </p>
             {data?.provisional ? (
               <p className="text-[11px]" style={{ color: C.muted }}>
-                dont {usd(data.provisional)} provisoire (ventes Substy pas encore confirmées)
+                {t("incl. {v} provisional (Substy sales not confirmed yet)", { v: usd(data.provisional) })}
               </p>
             ) : null}
           </div>
@@ -144,7 +146,7 @@ export function OfDashboard() {
                   <div>
                     <p className="text-[19px] font-semibold tabular-nums">{data ? usd(data.blocks[b.key]) : "—"}</p>
                     <p className="text-[12px]" style={{ color: C.muted }}>
-                      {b.label}
+                      {t(b.label)}
                     </p>
                   </div>
                   <span className="grid size-11 shrink-0 place-items-center rounded-full" style={{ background: `${b.color}22`, color: b.color }}>
@@ -157,7 +159,7 @@ export function OfDashboard() {
         </div>
         {data?.unmapped.length ? (
           <p className="mt-5 text-[12px]" style={{ color: C.muted }}>
-            Pas encore reliées à Infloww (non comptées) : {data.unmapped.join(", ")}.
+            {t("Not linked to Infloww yet (not counted): {v}.", { v: data.unmapped.join(", ") })}
           </p>
         ) : null}
       </section>
@@ -165,20 +167,20 @@ export function OfDashboard() {
       <div className="mt-4 grid gap-4 lg:grid-cols-[240px_1fr]">
         {/* My shifts */}
         <section className="flex min-h-[420px] flex-col rounded-2xl p-6 lg:row-span-2" style={{ background: C.card }}>
-          <Title>My shifts</Title>
-          <NoData />
+          <Title>{t("My shifts")}</Title>
+          <NoData label={t("No data")} />
         </section>
 
         {/* Employee sales */}
         <section className="rounded-2xl p-6" style={{ background: C.card }}>
-          <Title>Employee sales</Title>
+          <Title>{t("Employee sales")}</Title>
           <div className="mt-4 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chart} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="of-emp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3a3a3c" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="#3a3a3c" stopOpacity={0.15} />
+                    <stop offset="0%" style={{ stopColor: "var(--of-area)", stopOpacity: 0.9 }} />
+                    <stop offset="100%" style={{ stopColor: "var(--of-area)", stopOpacity: 0.15 }} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke={C.line} strokeDasharray="4 4" />
@@ -188,9 +190,9 @@ export function OfDashboard() {
                   cursor={{ stroke: C.line }}
                   contentStyle={{ background: C.page, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 12 }}
                   labelStyle={{ color: C.muted }}
-                  formatter={(v) => [usd(Number(v)), "Employee sales"]}
+                  formatter={(v) => [usd(Number(v)), t("Employee sales")]}
                 />
-                <Area type="monotone" dataKey="v" stroke={C.blue} strokeWidth={3} fill="url(#of-emp)" dot={{ r: 4, fill: "#fff", stroke: C.blue, strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
+                <Area type="monotone" dataKey="v" stroke={C.blue} strokeWidth={3} fill="url(#of-emp)" dot={{ r: 4, fill: "var(--of-card)", stroke: C.blue, strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -198,8 +200,8 @@ export function OfDashboard() {
 
         {/* Scheduled hours */}
         <section className="flex min-h-[240px] flex-col rounded-2xl p-6" style={{ background: C.card }}>
-          <Title>Scheduled hours</Title>
-          <NoData />
+          <Title>{t("Scheduled hours")}</Title>
+          <NoData label={t("No data")} />
         </section>
       </div>
     </div>
@@ -214,17 +216,17 @@ function Title({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NoData() {
+function NoData({ label }: { label: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8">
       <svg viewBox="0 0 64 72" className={cn("h-16 w-14")} aria-hidden>
-        <path d="M8 6h34l14 14v44a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Z" fill="#3a3a3c" stroke="#8e8e93" strokeWidth="2.5" />
-        <path d="M42 6v14h14" fill="none" stroke="#8e8e93" strokeWidth="2.5" />
-        <path d="M14 20h18M14 27h22" stroke="#8e8e93" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M8 6h34l14 14v44a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Z" style={{ fill: "var(--of-card)", stroke: "var(--of-text)" }} strokeWidth="2.5" />
+        <path d="M42 6v14h14" fill="none" style={{ stroke: "var(--of-text)" }} strokeWidth="2.5" />
+        <path d="M14 20h18M14 27h22" style={{ stroke: "var(--of-muted)" }} strokeWidth="2.5" strokeLinecap="round" />
         <path d="M18 42h8M38 42h8M25 52h14" stroke="#2f6bff" strokeWidth="3" strokeLinecap="round" />
       </svg>
       <p className="text-[13px]" style={{ color: C.muted }}>
-        No data
+        {label}
       </p>
     </div>
   );
