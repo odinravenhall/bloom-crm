@@ -1,10 +1,11 @@
 // Notifications en direct de la messagerie (en bas à droite), pour l'équipe qui chatte sur la créatrice :
 //   - ai_ppv     : l'IA vient d'envoyer un média payant (PPV), quel que soit le script ;
-//   - ppv_unpaid : 3 min après, le fan n'a toujours pas payé ce PPV ;
+//   - ppv_unpaid : 3 min après, le fan n'a toujours pas payé ce PPV (sauf si la relance auto s'en occupe : relance.mjs) ;
 //   - sale       : un fan vient de payer (PPV, post, pourboire…).
 // Elles passent par le flux temps réel « /api/live » (type « bloom_alert »), donc chacun ne reçoit que ses créatrices.
 import { all, one } from './store.mjs';
 import { broadcast, inboxChat, inboxChats } from './chat.mjs';
+import { onAiPpv } from './relance.mjs';
 
 const UNPAID_AFTER = 3 * 60_000;
 let SUB = null;
@@ -22,6 +23,8 @@ export function onMessageAlert(cid, fanId, m) {
   if (seen.size > 5000) seen.delete(seen.values().next().value);
   const base = { ref, fanId: String(fanId), fan: nameOf(cid, fanId), amount: Math.round(m.price * 100) };
   send(cid, { kind: 'ai_ppv', ...base });
+  // Relance auto activée pour la créatrice : c'est elle qui s'occupe du PPV pas payé (et prévient l'équipe ensuite).
+  if (onAiPpv(cid, String(fanId), m)) return;
   setTimeout(() => checkPaid(cid, String(fanId), ref, Date.parse(m.at) || Date.now()).then((paid) => paid === false && send(cid, { kind: 'ppv_unpaid', ...base, fan: nameOf(cid, fanId) })), UNPAID_AFTER);
 }
 

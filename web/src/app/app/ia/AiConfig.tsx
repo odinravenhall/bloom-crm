@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Bot, ListChecks, Shuffle, ChevronDown, ExternalLink, History, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { AlertTriangle, BellRing, Bot, ListChecks, Shuffle, ChevronDown, ExternalLink, History, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { ago, cn } from "@/lib/fmt";
 import { CreatorTabs, useCreators } from "@/lib/creators";
 import { Pill, btnCls, inputCls } from "@/components/ui";
 import { AutoLists, ModeSetup, useSetup } from "./ChatSetup";
+import { RelanceSetup } from "./RelanceSetup";
 
 type Preset = { id: string; name: string; description: string | null; builtin: boolean; prompt: string; emojis: { casual: string[]; sexting: string[]; negotiation: string[] } };
 type Change = { what: string; detail: string | null; at: number; name: string | null };
@@ -159,6 +160,7 @@ export function AiConfig() {
                 <ModeSetup setup={setup} setSetup={setSetup} aiOn={on} setAi={(v) => setting({ enable: v }, v ? "IA allumée" : "IA coupée")} />,
               )
             : null}
+          {section(BellRing, "Relance auto des PPV", "Quand l’IA envoie un PPV que le fan n’achète pas, Bloom coupe l’IA et le relance avec vos messages, avant de passer la main aux chatteurs.", <RelanceSetup />)}
           {setup ? (
             <div id="listes">
               {section(ListChecks, "Listes automatiques", "Les fans entrent tout seuls dans une liste dès qu’ils remplissent sa règle. Chaque créatrice a ses listes.", <AutoLists setup={setup} setSetup={setSetup} canEdit />)}

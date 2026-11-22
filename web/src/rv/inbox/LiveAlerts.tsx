@@ -1,23 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BadgeDollarSign, Bot, Clock, X } from "lucide-react";
+import { BadgeDollarSign, BellRing, Bot, Clock, MessageCircle, PartyPopper, X } from "lucide-react";
 import { onLive } from "@/rv/lib/liveClient";
 import { cn, curOf, money } from "@/rv/lib/fmt";
 import { Avatar } from "@/rv/components/ui";
 import type { Model } from "./types";
 
-type Alert = { id: string; at: string; kind: "ai_ppv" | "ppv_unpaid" | "sale"; modelId: string; fanId: string | null; fan: string; amount: number; currency?: string };
-
 const LOOK = {
   ai_ppv: { icon: Bot, tone: "bg-card-2 text-fg", ttl: 25_000, title: "L’IA a envoyé un PPV" },
   ppv_unpaid: { icon: Clock, tone: "bg-amber-400/20 text-amber-300", ttl: 90_000, title: "PPV pas payé depuis 3 min" },
   sale: { icon: BadgeDollarSign, tone: "bg-emerald-400/20 text-emerald-300", ttl: 90_000, title: "Le fan a payé" },
+  relance_start: { icon: BellRing, tone: "bg-card-2 text-fg", ttl: 20_000, title: "PPV pas acheté : relance auto lancée" },
+  relance_paid: { icon: PartyPopper, tone: "bg-emerald-400/20 text-emerald-300", ttl: 90_000, title: "Acheté grâce à la relance auto" },
+  relance_reply: { icon: MessageCircle, tone: "bg-sky-400/20 text-sky-300", ttl: 120_000, title: "Le fan a répondu à la relance : à toi" },
+  relance_done: { icon: Clock, tone: "bg-amber-400/20 text-amber-300", ttl: 120_000, title: "Relance finie, PPV pas acheté : à toi" },
 } as const;
+
+type Alert = { id: string; at: string; kind: keyof typeof LOOK; modelId: string; fanId: string | null; fan: string; amount: number; currency?: string; step?: number; steps?: number };
 
 /**
  * Notifications en direct, en bas à droite de la messagerie : PPV envoyé par l'IA (quel que soit le script),
- * PPV toujours pas payé 3 min après, fan qui paye. Seulement pour la modèle affichée (toutes dans « Tous »).
+ * PPV toujours pas payé 3 min après, fan qui paye, et la relance auto (lancée, achat, réponse du fan, finie sans achat). Seulement pour la modèle affichée (toutes dans « Tous »).
  * Clic : ouvre la conversation (le chatteur l'épingle pour la reprendre : l'IA est alors coupée).
  */
 export function LiveAlerts({ model, models, onOpen }: { model: string; models: Model[]; onOpen: (convId: string) => void }) {
@@ -61,6 +65,7 @@ export function LiveAlerts({ model, models, onOpen }: { model: string; models: M
               <span className="block text-xs font-semibold text-muted">{L.title}</span>
               <span className="block truncate text-sm font-semibold">
                 {a.fan} · {amount}
+                {a.kind.startsWith("relance_") && a.step ? <span className="font-normal text-muted"> · message {a.step}{a.steps ? `/${a.steps}` : ""}</span> : null}
               </span>
               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
                 {m ? <Avatar src={m.avatar} name={m.displayName} size="size-4" /> : null}
