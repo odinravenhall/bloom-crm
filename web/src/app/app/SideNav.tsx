@@ -29,7 +29,7 @@ import {
 import { cn } from "@/lib/fmt";
 import { PlatformSwitch } from "./PlatformSwitch";
 import { useCreators } from "@/lib/creators";
-import { OF_PAGES } from "@/lib/ofmanager";
+import { OfManagerNav } from "./OfManagerNav";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
@@ -50,12 +50,6 @@ const GROUPS: Group[] = [
     items: [
       { href: "/app/messagerie", label: "Messagerie", icon: Inbox, roles: CHAT },
     ],
-  },
-  // OF Manager (comme Infloww) : le vrai site OnlyFans de la modèle, page par page. OnlyFans seulement, admins et managers.
-  {
-    title: "OF Manager",
-    pf: "of",
-    items: OF_PAGES.map((p) => ({ href: `/app/of-manager/${p.key}`, label: p.label, icon: p.icon, roles: MANAGE })),
   },
   {
     title: "Chatting",
@@ -188,6 +182,8 @@ export function SideNav({ me }: { me: Me }) {
             ) : null}
             {g.title && compact ? <span className="mx-auto my-1 h-px w-5 bg-line" /> : null}
             {open ? g.items.map((i) => item(i, compact)) : null}
+            {/* OF Manager (comme Infloww) : une entrée qui ouvre ses pages. OnlyFans, admins et managers. */}
+            {!g.title && pf === "of" && (me.role === "admin" || me.role === "manager") ? <OfManagerNav compact={compact} /> : null}
           </div>
         );
       })}

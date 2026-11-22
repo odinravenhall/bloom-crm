@@ -9,6 +9,8 @@ import { ofPage } from "@/lib/ofmanager";
 import { Avatar } from "@/components/ui";
 
 type Site = { site: string; access: string };
+// Fond du site OnlyFans en mode sombre (pour couvrir la marge sans couture).
+const OF_BG = "#161618";
 const KEY = "bloom.ofb.authorized"; // sessions déjà autorisées dans ce navigateur
 const authorized = (site: string) => {
   try {
@@ -86,6 +88,26 @@ export function OfManager({ page }: { page: string }) {
   };
 
   const path = p.path.replace("{user}", creator?.username || "");
+
+  // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) : on ne montre que le contenu de la page.
+  // Grand écran (cadre ≥ 1280 px) : OnlyFans centre 1280 px = menu 280 + contenu 1000. On élargit le cadre de 280 px et
+  // on le décale d'autant ; la marge gauche qui reste (où dépasse le menu) est couverte, le contenu est centré.
+  // Plus petit : OnlyFans réduit son menu en icônes (≈ 80 px) ; le cadre est décalé pour le faire sortir à gauche.
+  const area = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(1200);
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    setW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const frame =
+    w >= 1000
+      ? { style: { left: -280, width: w + 280 }, cover: Math.max(0, (w - 1000) / 2) }
+      : // Moyen écran : OnlyFans centre ≈ 706 px (menu en icônes 80 + contenu) ; on décale pour que le menu sorte à gauche.
+        { style: { left: -Math.max(88, w - 706 + 176), width: w + Math.max(88, w - 706 + 176) }, cover: 0 };
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
     return creators.filter((c) => !t || `${c.name} ${c.username || ""}`.toLowerCase().includes(t));
@@ -144,7 +166,7 @@ export function OfManager({ page }: { page: string }) {
             </button>
           </div>
         </div>
-        <div className="relative min-h-0 flex-1 bg-black">
+        <div ref={area} className="relative min-h-0 flex-1 overflow-hidden" style={{ background: OF_BG }}>
           {!s && !err ? (
             <p className="absolute inset-0 grid place-items-center text-sm text-muted">
               <span className="flex items-center gap-2">
@@ -166,7 +188,17 @@ export function OfManager({ page }: { page: string }) {
             </div>
           ) : null}
           {s && creatorId && ok[creatorId] ? (
-            <iframe key={`${s.site}${path}-${n}`} src={`${s.site}${path}?theme=dark`} title={`${p.title} · ${creator?.name ?? ""}`} className="h-full w-full border-0" allow="clipboard-read; clipboard-write; fullscreen" />
+            <>
+              <iframe
+                key={`${s.site}${path}-${n}`}
+                src={`${s.site}${path}?theme=dark`}
+                title={`${p.title} · ${creator?.name ?? ""}`}
+                style={frame.style}
+                className="absolute top-0 h-full border-0"
+                allow="clipboard-read; clipboard-write; fullscreen"
+              />
+              {frame.cover ? <div className="absolute inset-y-0 left-0" style={{ width: frame.cover, background: OF_BG }} /> : null}
+            </>
           ) : null}
         </div>
       </section>
