@@ -38,7 +38,7 @@ const NAV: (Entry | "divider")[] = [
       { label: "Creator reports", icon: SquareUser, href: "/app/analytics/creators" },
       { label: "Employee reports", icon: ContactRound, href: "/app/analytics/employees" },
       { label: "Fan reports", icon: UserRound, href: "/app/analytics/fans" },
-      { label: "Message dashboard", icon: Activity, href: "/app/messages" },
+      { label: "Message dashboard", icon: Activity, href: "/app/analytics/messages" },
     ],
   },
   { key: "mp", label: "Messages Pro", icon: MessageCirclePlus, href: "/app/messagerie", roles: CHAT, badge: true, external: true },
