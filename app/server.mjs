@@ -9,6 +9,7 @@ import { broadcast, chatRoutes, setCreatorPics, warmInbox } from './chat.mjs';
 import { libraryRoutes } from './library.mjs';
 import { inboxRoutes } from './inbox.mjs';
 import { rvRoutes } from './rvapi.mjs';
+import { listRoutes } from './lists.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -370,6 +371,7 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
+Object.assign(routes, listRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, inboxRoutes({ userFrom, send, body, creators: () => state.creators }));
 // Messagerie façon Raven CRM : toutes les adresses « /api/rv/… ».
 const rv = rvRoutes({ substy, userFrom, send, body, creators: () => state.creators });

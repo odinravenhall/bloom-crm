@@ -6,6 +6,7 @@ import { all, db, one, run } from './store.mjs';
 import { inboxChats } from './chat.mjs';
 import { canChat, canSee, isBoss } from './team.mjs';
 import { parisDay, revenue } from './revenue.mjs';
+import { chatterFilter } from './lists.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS fan_meta (
@@ -124,7 +125,9 @@ export function computeQueue(u, list, o = {}) {
     const inScope = scope.includes(cid);
     const cfg = boxes.get(cid);
     const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
-    const chats = [...inb.chats];
+    // Mode de chatting de la créatrice : en hybride / full IA, un chatteur ne voit que les fans sans IA.
+    const flt = chatterFilter(u, cid);
+    const chats = flt ? [...inb.chats].filter(flt) : [...inb.chats];
     const isReply = (c) => {
       const at = c.last ? Date.parse(c.last.at) || 0 : 0;
       return waiting(c, metas.get(`${cid}:${c.fanId}`)) && (!win || at >= now - win);

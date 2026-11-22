@@ -79,6 +79,8 @@ export function chatView(c) {
     ai: !!f.aiEnabled,
     handoff: !!f.needsHandoff,
     spent: money(f.spend?.net),
+    // Ce que le fan a payé (brut) : sert aux listes automatiques (« a dépensé au moins 1 $ »).
+    paid: money(f.spend?.gross),
     subscribed: f.subscription?.status || null,
     canSend: c.canSendMessage !== false,
     since: f.subscription?.subscribedAt || null,
@@ -217,6 +219,14 @@ async function refreshTop(cid) {
     const r = await SUB.chats(cid, { limit: 30 });
     for (const it of r?.items || []) put(b, chatView(it));
   } catch {}
+}
+/** Relit le haut de la liste d'une créatrice (nouvelle vente, nouveau fan…). */
+export const refreshInboxTop = (cid) => refreshTop(cid);
+/** Change une conversation gardée en mémoire (ex. IA coupée par Bloom), sans attendre Substy. */
+export function patchInboxChat(cid, fanId, patch) {
+  const b = inboxOf(cid);
+  const c = b.map.get(String(fanId));
+  if (c) put(b, { ...strip(c), ...patch });
 }
 /** Au démarrage : on commence tout de suite à récupérer les conversations de chaque créatrice. */
 export function warmInbox(ids) {

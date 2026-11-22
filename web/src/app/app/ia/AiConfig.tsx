@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Bot, ChevronDown, ExternalLink, History, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { AlertTriangle, Bot, ListChecks, Shuffle, ChevronDown, ExternalLink, History, Pause, Power, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { ago, cn } from "@/lib/fmt";
 import { CreatorTabs, useCreators } from "@/lib/creators";
 import { Pill, btnCls, inputCls } from "@/components/ui";
+import { AutoLists, ModeSetup, useSetup } from "./ChatSetup";
 
 type Preset = { id: string; name: string; description: string | null; builtin: boolean; prompt: string; emojis: { casual: string[]; sexting: string[]; negotiation: string[] } };
 type Change = { what: string; detail: string | null; at: number; name: string | null };
@@ -63,6 +64,7 @@ export function AiConfig() {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [rot, setRot] = useState("");
   const [spend, setSpend] = useState("");
+  const [setup, setSetup] = useSetup(creatorId);
 
   useEffect(() => {
     if (!creatorId) return;
@@ -149,6 +151,20 @@ export function AiConfig() {
 
       {cfg ? (
         <>
+          {setup
+            ? section(
+                Shuffle,
+                "Type de chatting",
+                "Qui parle aux fans de cette créatrice : l’IA, les chatteurs, ou les deux.",
+                <ModeSetup setup={setup} setSetup={setSetup} aiOn={on} setAi={(v) => setting({ enable: v }, v ? "IA allumée" : "IA coupée")} />,
+              )
+            : null}
+          {setup ? (
+            <div id="listes">
+              {section(ListChecks, "Listes automatiques", "Les fans entrent tout seuls dans une liste dès qu’ils remplissent sa règle. Chaque créatrice a ses listes.", <AutoLists setup={setup} setSetup={setSetup} canEdit />)}
+            </div>
+          ) : null}
+
           {/* État de l'IA */}
           <div className={cn("mt-6 flex flex-wrap items-center gap-5 rounded-[2rem] border p-6", on ? "bg-sage-soft" : "bg-card")}>
             <span className={cn("grid size-14 place-items-center rounded-full", on ? "bg-sage text-white" : "bg-card-2 text-muted")}>{on ? <Power className="size-6" /> : <Pause className="size-6" />}</span>

@@ -22,6 +22,7 @@ import {
   Settings,
   UsersRound,
   X,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/fmt";
@@ -56,6 +57,7 @@ const GROUPS: Group[] = [
     title: "Intelligence artificielle",
     items: [
       { href: "/app/ia", label: "Configuration IA", icon: Bot, roles: MANAGE },
+      { href: "/app/ia#listes", label: "Listes automatiques", icon: ListChecks, roles: MANAGE },
       { href: "/app/ia-test", label: "Tester l’IA", icon: FlaskConical, roles: MANAGE, soon: true },
     ],
   },
