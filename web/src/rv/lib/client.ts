@@ -9,7 +9,8 @@ export class ClientError extends Error {
 /** fetch JSON vers nos routes /api ; redirige vers la connexion si la session a expiré. */
 export async function api<T = unknown>(method: string, url: string, body?: unknown): Promise<T> {
   // Dans Bloom, les écrans de Raven parlent aux adresses « /api/rv/… » (même format que Raven, données de Substy).
-  if (url.startsWith("/api/") && !url.startsWith("/api/rv/")) url = "/api/rv/" + url.slice(5);
+  // Sauf les adresses propres à Messages Pro (« /api/pro/… »).
+  if (url.startsWith("/api/") && !url.startsWith("/api/rv/") && !url.startsWith("/api/pro/")) url = "/api/rv/" + url.slice(5);
   const r = await fetch(url, {
     method,
     headers: body !== undefined ? { "Content-Type": "application/json" } : {},

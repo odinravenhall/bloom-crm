@@ -23,6 +23,16 @@ type Pin = { id: string; text: string; at: string | null; fromFan: boolean; by: 
 const BLUE = "#2f6bff";
 const LANGS: [string, string][] = [["fr", "French"], ["en", "English"], ["es", "Spanish"], ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"], ["nl", "Dutch"]];
 const initials = (s: string) => (s.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2) || "?").replace(/^./, (c) => c.toUpperCase());
+// Séparateur de jour dans le fil : « Aujourd'hui », « Hier », sinon la date.
+const dayKey = (iso: string) => new Date(iso).toDateString();
+function dayLabel(iso: string, t: (s: string) => string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const y = new Date(Date.now() - 864e5);
+  if (d.toDateString() === today.toDateString()) return t("Today");
+  if (d.toDateString() === y.toDateString()) return t("Yesterday");
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}) });
+}
 const timeTxt = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
 
 export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { conv: Conv; me: { id: number; name: string; admin: boolean }; model: Model; onBack: () => void; onNewTab?: () => void; onNotes: () => void; t: (s: string) => string }) {
@@ -285,9 +295,16 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
               <button onClick={load} className="mt-2 block w-full" style={{ color: BLUE }}>{t("Retry")}</button>
             </div>
           ) : null}
-          {shown.map((m) => (
+          {shown.map((m, i) => (
+            <div key={m.message.id}>
+            {i === 0 || dayKey(shown[i - 1].message.createdAt) !== dayKey(m.message.createdAt) ? (
+              <div className="my-4 flex items-center gap-3 text-[12px]" style={{ color: "var(--of-muted)" }}>
+                <span className="h-px flex-1" style={{ background: "var(--pro-line)" }} />
+                {dayLabel(m.message.createdAt, t)}
+                <span className="h-px flex-1" style={{ background: "var(--pro-line)" }} />
+              </div>
+            ) : null}
             <Bubble
-              key={m.message.id}
               m={m}
               fanName={name}
               by={sentBy[m.message.id] || (m as LiveMsg & { by?: { name?: string; kind?: string } }).by?.name || null}
@@ -298,6 +315,7 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
               onTranslate={() => translateMsg(m)}
               t={t}
             />
+            </div>
           ))}
         </div>
       )}
