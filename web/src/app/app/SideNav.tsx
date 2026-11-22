@@ -23,6 +23,7 @@ import {
   UsersRound,
   X,
   ListChecks,
+  Globe,
   MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
@@ -48,6 +49,7 @@ const GROUPS: Group[] = [
     title: null,
     items: [
       { href: "/app/messagerie", label: "Messagerie", icon: Inbox, roles: CHAT },
+      { href: "/app/of-manager", label: "OF Manager (essai)", icon: Globe, roles: MANAGE },
     ],
   },
   {

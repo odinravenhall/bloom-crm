@@ -14,6 +14,7 @@ import { startAlerts } from './alerts.mjs';
 import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
 import { fanListRoutes } from './fanlists.mjs';
+import { ofBrowserRoutes } from './ofbrowser.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -382,6 +383,8 @@ const routes = {
 
 Object.assign(routes, chatRoutes({ substy, userFrom, send, body, streams: () => state.streams }));
 Object.assign(routes, libraryRoutes({ userFrom, send, body }));
+const ofb = ofBrowserRoutes({ substy, userFrom, send });
+Object.assign(routes, ofb.routes);
 Object.assign(routes, fanListRoutes({ userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, sentRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, relanceRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
@@ -396,6 +399,8 @@ createServer(async (req, res) => {
   try {
     if (h) return await h(req, res);
     if (path.startsWith('/api/rv/')) return await rv(req, res, path);
+    // Site OnlyFans / MYM intégré (Substy), relayé sous Bloom : « OF Manager ».
+    if (path.startsWith('/ofb/')) return await ofb.proxy(req, res, path);
     send(res, 404, { error: 'Introuvable' });
   } catch (e) {
     const status = e instanceof SubstyError ? (e.status === 401 ? 400 : 502) : e.status || 500;
