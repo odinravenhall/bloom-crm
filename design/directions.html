@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bloom — 3 directions de design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #0a0a0c; color: #eee; font-family: Inter, system-ui, sans-serif; padding: 28px 20px 60px; }
+  .top { max-width: 1240px; margin: 0 auto 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .top h1 { font-size: 22px; font-weight: 700; }
+  .top p { color: #999; font-size: 14px; flex: 1; min-width: 260px; }
+  .toggle { border: 1px solid #333; background: #16161a; color: #ddd; padding: 8px 14px; border-radius: 999px; font: 600 13px Inter; cursor: pointer; }
+  .dir { max-width: 1240px; margin: 0 auto 46px; }
+  .dir h2 { font-size: 18px; font-weight: 700; display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+  .dir h2 span { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #222; color: #bbb; }
+  .dir .why { color: #9a9aa3; font-size: 13.5px; margin-bottom: 12px; max-width: 900px; line-height: 1.55; }
+
+  /* ---------- écran commun ---------- */
+  .app { height: 560px; display: grid; grid-template-columns: 56px 64px 300px 1fr 250px; border-radius: 18px; overflow: hidden; position: relative; isolation: isolate; font-size: 13px; }
+  .app > * { position: relative; z-index: 1; min-width: 0; }
+  .nav, .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .nav i, .rail b { display: grid; place-items: center; }
+  .nav .logo { width: 30px; height: 30px; border-radius: 10px; margin-bottom: 8px; }
+  .nav i { width: 34px; height: 34px; border-radius: 10px; font-style: normal; font-size: 15px; }
+  .rail b { width: 42px; height: 42px; border-radius: 14px; font-size: 12px; font-weight: 700; position: relative; }
+  .rail b sup { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; border-radius: 9px; font-size: 10px; display: grid; place-items: center; padding: 0 4px; }
+  .rail b sub { position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 8px; padding: 0 4px; border-radius: 4px; color: #fff; font-weight: 800; }
+  .queue { display: flex; flex-direction: column; }
+  .qh { padding: 14px 14px 10px; }
+  .qh .t { font-size: 17px; font-weight: 800; }
+  .qh .s { font-size: 11.5px; opacity: .65; margin-top: 2px; }
+  .tabs { display: flex; gap: 4px; margin: 10px 0 8px; padding: 4px; border-radius: 12px; }
+  .tabs span { flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; font-size: 11.5px; font-weight: 700; position: relative; }
+  .search { height: 32px; border-radius: 10px; display: flex; align-items: center; padding: 0 11px; font-size: 12px; opacity: .8; }
+  .rows { overflow: hidden; flex: 1; }
+  .row { display: flex; gap: 10px; padding: 10px 14px; align-items: flex-start; }
+  .av { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 12px; position: relative; }
+  .av .on { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; }
+  .rmain { flex: 1; min-width: 0; }
+  .rtop { display: flex; align-items: center; gap: 6px; }
+  .rname { font-weight: 700; font-size: 13px; }
+  .rtime { margin-left: auto; font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px; }
+  .rprev { font-size: 12px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .pills { display: flex; gap: 4px; margin-top: 5px; }
+  .pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .chat { display: flex; flex-direction: column; }
+  .ch { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+  .ch .n { font-weight: 800; font-size: 14px; }
+  .ch .sub { font-size: 11px; opacity: .65; }
+  .ch .wait { margin-left: auto; font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 8px; }
+  .msgs { flex: 1; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .b { max-width: 66%; padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.45; }
+  .b.me { align-self: flex-end; }
+  .ppv { align-self: flex-end; width: 210px; border-radius: 16px; overflow: hidden; }
+  .ppv .cov { height: 92px; display: grid; place-items: center; font-size: 20px; }
+  .ppv .bar { padding: 8px 12px; font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; }
+  .typing { align-self: flex-start; padding: 10px 14px; border-radius: 16px; display: flex; gap: 4px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+  .comp { margin: 10px 14px 14px; border-radius: 16px; padding: 10px 12px; }
+  .comp .ph { font-size: 12.5px; opacity: .55; height: 34px; }
+  .comp .tools { display: flex; gap: 6px; align-items: center; }
+  .comp .tools span { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 8px; }
+  .comp .send { margin-left: auto; font-size: 12px; font-weight: 800; padding: 7px 14px; border-radius: 10px; }
+  .side { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card { border-radius: 14px; padding: 11px 12px; }
+  .card .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .6; margin-bottom: 7px; }
+  .sw { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12.5px; }
+  .sw .tg { margin-left: auto; width: 34px; height: 19px; border-radius: 10px; position: relative; }
+  .sw .tg::after { content: ""; position: absolute; top: 2px; right: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; }
+  .prog { height: 5px; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .prog i { display: block; height: 100%; width: 38%; border-radius: 3px; }
+  .notes { font-size: 12px; line-height: 1.6; opacity: .85; }
+
+  /* animations (coupées par le bouton) */
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 var(--glow); } 50% { box-shadow: 0 0 0 5px transparent; } }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: .45 } 30% { transform: translateY(-4px); opacity: 1 } }
+  @keyframes floaty { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,30px) scale(1.15); } }
+  @keyframes sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .typing i { animation: bounce 1.2s infinite; } .typing i:nth-child(2) { animation-delay: .15s } .typing i:nth-child(3) { animation-delay: .3s }
+  .av .on { animation: pulse 1.8s infinite; }
+  .b, .ppv { animation: rise .45s ease both; }
+  .noanim * { animation: none !important; transition: none !important; }
+
+  /* ---------- A · STUDIO : graphite, une couleur, très net ---------- */
+  .A { --glow: rgb(110 231 183 / .55); background: #0d0e10; color: #e8e9ec; font-family: Inter, sans-serif; border: 1px solid #1d1f23; }
+  .A .nav { background: #0b0c0e; border-right: 1px solid #1b1d21; }
+  .A .nav .logo { background: #6ee7b7; }
+  .A .nav i { color: #7c818b; } .A .nav i.on { background: #17191d; color: #6ee7b7; }
+  .A .rail { background: #0f1013; border-right: 1px solid #1b1d21; }
+  .A .rail b { background: #1a1c20; color: #cfd3da; } .A .rail b.on { outline: 2px solid #6ee7b7; outline-offset: 2px; }
+  .A .rail b sup { background: #6ee7b7; color: #062b1f; } .A .rail b sub { background: #3b82f6; } .A .rail b sub.m { background: #f59e0b; }
+  .A .queue { background: #101114; border-right: 1px solid #1b1d21; }
+  .A .tabs { background: #16181b; } .A .tabs span.on { background: #23262b; color: #6ee7b7; }
+  .A .search { background: #16181b; }
+  .A .row { border-bottom: 1px solid #17191c; } .A .row.on { background: #15171a; box-shadow: inset 2px 0 #6ee7b7; }
+  .A .av { background: #22252a; color: #aeb4bd; } .A .av .on { background: #6ee7b7; }
+  .A .rtime.w { background: rgb(110 231 183 / .12); color: #6ee7b7; } .A .rtime.r { background: rgb(248 113 113 / .12); color: #f87171; }
+  .A .pill { background: #1b1e22; color: #aab0b9; } .A .pill.a { background: rgb(110 231 183 / .12); color: #6ee7b7; }
+  .A .chat { background: #0d0e10; } .A .ch { border-bottom: 1px solid #1b1d21; } .A .ch .wait { background: rgb(110 231 183 / .12); color: #6ee7b7; }
+  .A .b { background: #1a1c20; } .A .b.me { background: #1e2a25; color: #d6f5e7; }
+  .A .ppv { background: #16181b; border: 1px solid #23262b; } .A .ppv .cov { background: #1c1f23; } .A .ppv .bar { color: #6ee7b7; }
+  .A .typing { background: #1a1c20; } .A .typing i { background: #8a909a; }
+  .A .comp { background: #131518; border: 1px solid #23262b; } .A .comp .tools span { background: #1c1f23; color: #aab0b9; } .A .comp .send { background: #6ee7b7; color: #062b1f; }
+  .A .side { background: #0f1013; border-left: 1px solid #1b1d21; }
+  .A .card { background: #15171a; border: 1px solid #1f2226; } .A .sw .tg { background: #6ee7b7; } .A .prog { background: #23262b; } .A .prog i { background: #6ee7b7; }
+
+  /* ---------- B · AURORE : nuit violette, lueurs, chaleureux ---------- */
+  .B { --glow: rgb(244 114 182 / .6); background: #0c0a1a; color: #efeaff; font-family: Outfit, sans-serif; border: 1px solid #241d44; }
+  .B::before, .B::after { content: ""; position: absolute; z-index: 0; border-radius: 50%; filter: blur(70px); opacity: .5; animation: floaty 14s ease-in-out infinite alternate; }
+  .B::before { width: 380px; height: 380px; left: 30%; top: -160px; background: #7c3aed; }
+  .B::after { width: 320px; height: 320px; right: -60px; bottom: -140px; background: #db2777; animation-duration: 18s; }
+  .B .nav { background: rgb(14 11 32 / .7); border-right: 1px solid rgb(255 255 255 / .06); }
+  .B .nav .logo { background: linear-gradient(135deg, #f472b6, #a78bfa); }
+  .B .nav i { color: #8f86b8; } .B .nav i.on { background: rgb(167 139 250 / .18); color: #f0abfc; }
+  .B .rail { background: rgb(16 12 36 / .6); border-right: 1px solid rgb(255 255 255 / .06); }
+  .B .rail b { background: linear-gradient(135deg, #3b2d72, #2a2050); color: #e9e2ff; } .B .rail b.on { box-shadow: 0 0 0 2px #f472b6, 0 0 18px rgb(244 114 182 / .5); }
+  .B .rail b sup { background: #f472b6; color: #fff; } .B .rail b sub { background: #38bdf8; } .B .rail b sub.m { background: #f59e0b; }
+  .B .queue { background: rgb(18 14 40 / .55); backdrop-filter: blur(14px); border-right: 1px solid rgb(255 255 255 / .06); }
+  .B .tabs { background: rgb(255 255 255 / .05); } .B .tabs span.on { background: linear-gradient(135deg, #f472b6, #a78bfa); color: #fff; }
+  .B .search { background: rgb(255 255 255 / .06); }
+  .B .row.on { background: linear-gradient(90deg, rgb(244 114 182 / .16), transparent); }
+  .B .av { background: linear-gradient(135deg, #4c3a8f, #2c2257); color: #e9e2ff; } .B .av .on { background: #34d399; --glow: rgb(52 211 153 / .6); }
+  .B .rtime.w { background: rgb(52 211 153 / .15); color: #6ee7b7; } .B .rtime.r { background: rgb(244 114 182 / .18); color: #f9a8d4; }
+  .B .pill { background: rgb(255 255 255 / .07); color: #c9c0ee; } .B .pill.a { background: rgb(244 114 182 / .18); color: #f9a8d4; }
+  .B .chat { background: transparent; } .B .ch { border-bottom: 1px solid rgb(255 255 255 / .06); } .B .ch .wait { background: rgb(244 114 182 / .18); color: #f9a8d4; }
+  .B .b { background: rgb(255 255 255 / .08); border-radius: 18px 18px 18px 6px; } .B .b.me { background: linear-gradient(135deg, #db2777, #7c3aed); color: #fff; border-radius: 18px 18px 6px 18px; }
+  .B .ppv { background: rgb(255 255 255 / .06); border: 1px solid rgb(255 255 255 / .1); } .B .ppv .cov { background: linear-gradient(120deg, #2a2050, #4c1d95, #2a2050); background-size: 200% 100%; animation: sheen 3.5s linear infinite; } .B .ppv .bar { color: #f9a8d4; }
+  .B .typing { background: rgb(255 255 255 / .08); } .B .typing i { background: #f0abfc; }
+  .B .comp { background: rgb(255 255 255 / .06); border: 1px solid rgb(255 255 255 / .1); } .B .comp .tools span { background: rgb(255 255 255 / .07); color: #d8cffa; } .B .comp .send { background: linear-gradient(135deg, #f472b6, #a78bfa); color: #fff; }
+  .B .side { background: rgb(16 12 36 / .5); border-left: 1px solid rgb(255 255 255 / .06); }
+  .B .card { background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .08); } .B .sw .tg { background: linear-gradient(135deg, #f472b6, #a78bfa); } .B .prog { background: rgb(255 255 255 / .1); } .B .prog i { background: linear-gradient(90deg, #f472b6, #a78bfa); }
+
+  /* ---------- C · LUMIÈRE : clair, aéré, coloré par touches ---------- */
+  .C { --glow: rgb(37 99 235 / .45); background: #f6f6f8; color: #18181b; font-family: "DM Sans", sans-serif; border: 1px solid #e4e4e7; }
+  .C .nav { background: #ffffff; border-right: 1px solid #ececef; }
+  .C .nav .logo { background: #111827; }
+  .C .nav i { color: #9ca3af; } .C .nav i.on { background: #eef2ff; color: #4f46e5; }
+  .C .rail { background: #fafafb; border-right: 1px solid #ececef; }
+  .C .rail b { background: #fff; color: #374151; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px #ececef; } .C .rail b.on { box-shadow: 0 0 0 2px #4f46e5; }
+  .C .rail b sup { background: #ef4444; color: #fff; } .C .rail b sub { background: #0ea5e9; } .C .rail b sub.m { background: #f59e0b; }
+  .C .queue { background: #ffffff; border-right: 1px solid #ececef; }
+  .C .tabs { background: #f4f4f5; } .C .tabs span.on { background: #fff; color: #4f46e5; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .C .search { background: #f4f4f5; color: #71717a; }
+  .C .row { border-bottom: 1px solid #f4f4f5; } .C .row.on { background: #f5f7ff; box-shadow: inset 3px 0 #4f46e5; }
+  .C .av { background: #e0e7ff; color: #4338ca; } .C .row:nth-child(2) .av { background: #fce7f3; color: #be185d; } .C .row:nth-child(3) .av { background: #dcfce7; color: #15803d; } .C .row:nth-child(4) .av { background: #fef3c7; color: #b45309; }
+  .C .av .on { background: #22c55e; border: 2px solid #fff; --glow: rgb(34 197 94 / .5); }
+  .C .rtime.w { background: #dcfce7; color: #15803d; } .C .rtime.r { background: #fee2e2; color: #b91c1c; }
+  .C .pill { background: #f4f4f5; color: #52525b; } .C .pill.a { background: #eef2ff; color: #4338ca; }
+  .C .chat { background: #f6f6f8; } .C .ch { background: #fff; border-bottom: 1px solid #ececef; } .C .ch .wait { background: #fef3c7; color: #b45309; }
+  .C .b { background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .06); } .C .b.me { background: #4f46e5; color: #fff; }
+  .C .ppv { background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .08); } .C .ppv .cov { background: #e0e7ff; color: #4338ca; } .C .ppv .bar { color: #4338ca; }
+  .C .typing { background: #fff; } .C .typing i { background: #a1a1aa; }
+  .C .comp { background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / .06); border: 1px solid #ececef; } .C .comp .tools span { background: #f4f4f5; color: #52525b; } .C .comp .send { background: #4f46e5; color: #fff; }
+  .C .side { background: #ffffff; border-left: 1px solid #ececef; }
+  .C .card { background: #fafafb; border: 1px solid #ececef; } .C .sw .tg { background: #4f46e5; } .C .prog { background: #e4e4e7; } .C .prog i { background: #4f46e5; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>Bloom · 3 directions de design</h1>
+    <p>Le même écran de messagerie (menu réduit en icônes, créatrices, file, conversation, fiche du fan) dans 3 styles. Aucun ne reprend Raven. Les animations restent discrètes et se coupent pour les PC lents.</p>
+    <button class="toggle" onclick="document.body.classList.toggle('noanim'); this.textContent = document.body.classList.contains('noanim') ? 'Animations : coupées' : 'Animations : activées'">Animations : activées</button>
+  </div>
+  <div id="list"></div>
+
+<script>
+const DIRS = [
+  ["A", "A · Studio", "sobre, net, ultra lisible", "Graphite neutre et UNE couleur (menthe, au choix). Rien ne distrait : la conversation est la star. Animations très légères (point « en ligne », messages qui apparaissent). Le plus rapide sur un PC lent."],
+  ["B", "B · Aurore", "chaleureux, donne envie", "Nuit violette avec des lueurs rose/violet qui bougent lentement derrière, panneaux en verre dépoli, bulles en dégradé. Le plus « wow » et le plus fun pour l’équipe ; en mode allégé, les lueurs et le flou disparaissent."],
+  ["C", "C · Lumière", "clair, aéré, moderne", "Fond clair, beaucoup d’air, avatars colorés et une couleur d’accent (indigo). Style app moderne type Linear / Notion, très facile à prendre en main. Existe aussi en version sombre."],
+];
+const ROWS = [
+  ["VI", "Vincent", "t’es là mon beau ?", "3 min", "w", true, ["Morgane · OF", "baleine"]],
+  ["AL", "Alain", "❤️ ❤️", "1 h 54", "r", false, ["Agathe · MYM"]],
+  ["NA", "Nathan", "tu préfères les brunes ?", "12 min", "w", true, ["Ines · OF"]],
+  ["NI", "Nico", "T’as déjà vu une voile…", "04:11", "", false, ["Lucie · OF"]],
+  ["AD", "Adrien", "ok je regarde ça", "02:20", "", false, ["Morgane · OF"]],
+];
+const screen = (k) => `
+<div class="app ${k}">
+  <div class="nav"><div class="logo"></div><i>⌂</i><i class="on">✉</i><i>✎</i><i>▤</i><i>⚙</i></div>
+  <div class="rail"><b class="on">Tous<sup>98</sup></b><b>MO<sup>8</sup><sub>OF</sub></b><b>IN<sup>3</sup><sub>OF</sub></b><b>AG<sup>5</sup><sub class="m">MYM</sub></b><b>LU<sub>OF</sub></b><b>PA<sup>2</sup><sub class="m">MYM</sub></b></div>
+  <div class="queue">
+    <div class="qh"><div class="t">Messagerie</div><div class="s">98 fans à répondre · toutes les créatrices</div>
+      <div class="tabs"><span>Tous</span><span>📌</span><span>New</span><span>Relance</span><span class="on">À répondre</span></div>
+      <div class="search">🔍  Rechercher un fan, un tag…</div></div>
+    <div class="rows">${ROWS.map((r, i) => `<div class="row ${i === 0 ? "on" : ""}"><div class="av">${r[0]}${r[5] ? '<span class="on"></span>' : ""}</div><div class="rmain"><div class="rtop"><span class="rname">${r[1]}</span><span class="rtime ${r[4]}">${r[3]}</span></div><div class="rprev">${r[2]}</div><div class="pills">${r[6].map((p, j) => `<span class="pill ${j === 0 ? "a" : ""}">${p}</span>`).join("")}</div></div></div>`).join("")}</div>
+  </div>
+  <div class="chat">
+    <div class="ch"><div class="av">VI<span class="on"></span></div><div><div class="n">Vincent</div><div class="sub">Petite baleine · 672 $ dépensés · Morgane OF</div></div><span class="wait">attend 3 min</span></div>
+    <div class="msgs">
+      <div class="b">salut toi 😏 tu fais quoi ce soir ?</div>
+      <div class="b me">je sors de la douche… et toi tu fais quoi ? 🙈</div>
+      <div class="ppv"><div class="cov">🔒</div><div class="bar"><span>2 photos · PPV</span><span>15 $</span></div></div>
+      <div class="b">t’es là mon beau ?</div>
+      <div class="typing"><i></i><i></i><i></i></div>
+    </div>
+    <div class="comp"><div class="ph">Écrire à Vincent…  (/ messages rapides)</div><div class="tools"><span>Scripts</span><span>Vault · PPV</span><span>😊</span><span class="send">Envoyer</span></div></div>
+  </div>
+  <div class="side">
+    <div class="card"><div class="k">Substy</div><div class="sw">IA Substy<span class="tg"></span></div></div>
+    <div class="card"><div class="k">Script en cours</div><div class="sw" style="font-size:12px">SCRIPT LUNDI · 3/8</div><div class="prog"><i></i></div></div>
+    <div class="card"><div class="k">Notes</div><div class="notes">Prénom : Vincent<br>Âge : 41<br>Aime : les brunes, la plage</div></div>
+  </div>
+</div>`;
+document.getElementById("list").innerHTML = DIRS.map(([k, t, tag, why]) => `<section class="dir"><h2>${t} <span>${tag}</span></h2><p class="why">${why}</p>${screen(k)}</section>`).join("");
+</script>
+</body>
+</html>
