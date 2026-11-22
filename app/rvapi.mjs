@@ -322,7 +322,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           setMeta(x.cid, x.fanId, 'seen_id = ?, unread = 0', c?.last?.id || null);
           // Lu aussi chez Substy (et dans la liste de Bloom tout de suite).
           patchInboxChat(x.cid, x.fanId, { unread: 0 });
-          const sub = await substy.markRead(x.cid, x.fanId).then(() => 'ok', (e) => String(e.message).slice(0, 120));
+          const sub = c?.last?.id ? await substy.markRead(x.cid, x.fanId, c.last.id).then(() => 'ok', (e) => String(e.message).slice(0, 120)) : 'no message';
           return send(res, 200, { ok: true, substy: sub });
         }
         case 'unread':

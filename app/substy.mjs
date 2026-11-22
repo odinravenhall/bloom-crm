@@ -219,7 +219,7 @@ export class SubstySession {
   browserSession(creatorId) { return this.call('agency.browser.getOrCreateSession', { creatorId, label: 'Bloom CRM' }); }
   /** Supprimer (« unsend ») un message envoyé au fan. Format relevé sur le site de Substy (22/11/2026), sans rien supprimer. */
   /** Marquer la conversation lue chez Substy (procédure vue dans le code du site). */
-  markRead(creatorId, fanId) { return this.call('messages.markRead', { creatorId, fanId: String(fanId) }); }
+  markRead(creatorId, fanId, messageId) { return this.call('messages.markRead', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }
   unsend(creatorId, fanId, messageId) { return this.call('messages.unsend', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }
   setAi(creatorId, fanId, on) { return this.call(on ? 'fans.ai.enable' : 'fans.ai.disable', { creatorId, fanId }); }
   send(creatorId, fanId, { message = '', medias = [], price, replyId = null, templateId } = {}) {
