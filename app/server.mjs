@@ -165,7 +165,10 @@ async function aiStats(from, to, ids) {
   const key = `${from}|${to}|${[...ids].sort().join(',')}`;
   const hit = aiCache.get(key);
   if (hit && Date.now() - hit.at < 120_000) return hit.v;
-  const d = await substy.employeesStats({ startDate: from, endDate: to, creatorIds: ids });
+  // Sans filtre quand on voit toutes les créatrices : mêmes chiffres que la page Statistiques de Substy
+  // (avec creatorIds, Substy compte autrement et donne un total différent).
+  const all = state.creators.every((c) => ids.includes(c.id));
+  const d = await substy.employeesStats({ startDate: from, endDate: to, creatorIds: all ? undefined : ids });
   const cur = d?.currency || 'USD';
   const eurC = (v, day = to) => toEur(Math.round((Number(v) || 0) * 100), cur, day);
   const perCreator = {};
@@ -173,6 +176,7 @@ async function aiStats(from, to, ids) {
   for (const a of d?.ai || []) {
     const m = a.stats?.messages || {};
     const cid = a.creators?.[0]?.id;
+    if (cid && !ids.includes(cid)) continue;
     const x = { net: eurC(m.sumGeneratedNet), gross: eurC(m.sumGeneratedGross), tips: eurC(m.sumTipsNet), ppvSent: m.amountPpvSent || 0, ppvPaid: m.amountPpvPaid || 0, messages: m.amountMessagesSent || 0 };
     x.unlockRate = x.ppvSent ? x.ppvPaid / x.ppvSent : 0;
     if (cid) perCreator[cid] = x;
