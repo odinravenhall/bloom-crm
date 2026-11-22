@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Languages, LayoutGrid, MessageCircle, Plus, RefreshCw, Search, Bell, UserRoundPlus, X } from "lucide-react";
-import { api } from "@/rv/lib/client";
+import { api, toast } from "@/rv/lib/client";
 import { setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import { debounce, onLive } from "@/rv/lib/liveClient";
 import { setLang, useT } from "@/lib/i18n";
@@ -226,16 +226,31 @@ export function MessagesPro() {
           openTab={(c) => {
             setConvs((x) => ({ ...x, [c.id]: c }));
             save((s) => ({ ...s, fanTabs: { ...s.fanTabs, [active]: [...new Set([...(s.fanTabs[active] ?? []), c.id])] }, view: { ...s.view, [active]: c.id } }));
+            takeOver(c.id, true, t);
           }}
-          closeTab={(id) =>
-            save((s) => ({ ...s, fanTabs: { ...s.fanTabs, [active]: (s.fanTabs[active] ?? []).filter((x) => x !== id) }, view: { ...s.view, [active]: s.view[active] === id ? "home" : s.view[active] } }))
-          }
+          closeTab={(id) => {
+            save((s) => ({ ...s, fanTabs: { ...s.fanTabs, [active]: (s.fanTabs[active] ?? []).filter((x) => x !== id) }, view: { ...s.view, [active]: s.view[active] === id ? "home" : s.view[active] } }));
+            takeOver(id, false, t);
+          }}
           notif={notifs[active] || 0}
           t={t}
         />
       ) : null}
     </div>
   );
+}
+
+/** Fan ouvert dans un onglet = repris par l'équipe : l'IA de Substy est coupée (épingle) ; onglet fermé = l'IA revient. */
+const tookOver = new Set<string>();
+function takeOver(id: string, on: boolean, t: (s: string) => string, quiet = false) {
+  if (on) tookOver.add(id);
+  else tookOver.delete(id);
+  api<{ ai?: boolean | null }>("POST", `/api/conversations/${id}/action`, { action: "pin", pin: on })
+    .then((r) => {
+      if (typeof r?.ai === "boolean") window.dispatchEvent(new CustomEvent("pro-ai", { detail: { id, on: r.ai } }));
+      if (!quiet) toast(on ? t("Fan opened in a tab: Substy AI turned off") : t("Tab closed: Substy AI turned back on"));
+    })
+    .catch((e) => toast((e as Error).message, "err"));
 }
 
 function TabShell({ on, children, onClick }: { on?: boolean; children: React.ReactNode; onClick?: () => void }) {
@@ -331,6 +346,10 @@ function Workspace({
   setView: (v: string) => void; openTab: (c: Conv) => void; closeTab: (id: string) => void; notif: number; t: (s: string) => string;
 }) {
   const [sel, setSel] = useState<Conv | null>(null);
+  // Onglets de fans déjà ouverts (avant cette règle, ou après un rechargement) : l'IA est coupée une fois.
+  useEffect(() => {
+    for (const id of fanTabs) if (!tookOver.has(id)) takeOver(id, true, t, true);
+  }, [fanTabs, t]);
   // Montants dans la devise de la créatrice (OnlyFans : dollars).
   setCurrentModel(model.id);
   // Pastille rouge sur l'onglet d'un fan qui vient d'écrire (tant qu'on n'a pas regardé l'onglet).

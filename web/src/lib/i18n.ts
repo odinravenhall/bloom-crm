@@ -785,6 +785,8 @@ const D: Record<string, [es: string, fr: string]> = {
   "Marked as unread": ["Marcado como no leído", "Remis en non lu"],
   "Fan pinned: Substy AI turned off": ["Fan fijado: IA de Substy apagada", "Fan épinglé : IA Substy coupée"],
   "Fan unpinned: Substy AI turned back on": ["Fan sin fijar: IA de Substy encendida", "Fan désépinglé : IA Substy rallumée"],
+  "Fan opened in a tab: Substy AI turned off": ["Fan abierto en pestaña: IA de Substy apagada", "Fan ouvert dans un onglet : IA Substy coupée"],
+  "Tab closed: Substy AI turned back on": ["Pestaña cerrada: IA de Substy encendida", "Onglet fermé : IA Substy rallumée"],
   // settings
   "Your Account": ["Tu cuenta", "Ton compte"],
   "Your account": ["Tu cuenta", "Ton compte"],
