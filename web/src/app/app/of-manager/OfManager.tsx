@@ -89,22 +89,33 @@ export function OfManager({ page }: { page: string }) {
 
   const path = p.path.replace("{user}", creator?.username || "");
 
-  // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) : on ne montre que le contenu, collé à gauche.
-  // Grand écran : OnlyFans centre 1280 px (menu 280 + contenu 1000) dans une largeur W. Avec W = 2C − 720 et un
-  // décalage de C − 720, la marge et le menu sortent à gauche et le contenu commence au bord (C = largeur visible).
-  // Plus petit : OnlyFans centre ≈ 706 px (menu en icônes 80 + contenu) ; même principe.
+  const list = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return creators.filter((c) => !t || `${c.name} ${c.username || ""}`.toLowerCase().includes(t));
+  }, [creators, q]);
+
+  // Le site OnlyFans a son propre menu à gauche (Home, Notifications…) et limite ses pages à 1000 px de contenu.
+  // On l'affiche en 1300 px de large (sa grande mise en page : marge 10 + menu 280 + contenu 1000 + marge 10), on fait
+  // sortir la marge et le menu à gauche (290 px) et on agrandit le tout pour que le contenu remplisse la largeur visible.
   const area = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(1200);
+  const [size, setSize] = useState({ w: 1200, h: 800 });
   useEffect(() => {
     const el = area.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    const read = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    const ro = new ResizeObserver(read);
     ro.observe(el);
-    setW(el.clientWidth);
+    read();
     return () => ro.disconnect();
   }, []);
-  const shift = w >= 1000 ? w - 720 : Math.max(80, w - 706 + 160);
-  const frame = { style: { left: -shift, width: w + shift }, cover: 0 };
+  const scale = Math.max(0.6, size.w / 1000);
+  const frameStyle: React.CSSProperties = {
+    left: 0,
+    width: 1300,
+    height: size.h / scale,
+    transform: `scale(${scale}) translateX(-290px)`,
+    transformOrigin: "0 0",
+  };
 
   return (
     <div ref={box} className="flex h-full min-h-0 bg-bg">
@@ -186,11 +197,10 @@ export function OfManager({ page }: { page: string }) {
                 key={`${s.site}${path}-${n}`}
                 src={`${s.site}${path}?theme=dark`}
                 title={`${p.title} · ${creator?.name ?? ""}`}
-                style={frame.style}
-                className="absolute top-0 h-full border-0"
+                style={frameStyle}
+                className="absolute top-0 border-0"
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
-              {frame.cover ? <div className="absolute inset-y-0 left-0" style={{ width: frame.cover, background: OF_BG }} /> : null}
             </>
           ) : null}
         </div>
