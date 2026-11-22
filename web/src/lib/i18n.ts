@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // Langue de l'interface (Settings → Your Preferences → Language) : English, Español, Français.
 // Gardée sur cet ordinateur (« bloom.lang ») ; changer de langue traduit tout de suite, sans recharger.
@@ -419,5 +419,7 @@ export function useT() {
       window.removeEventListener("storage", on);
     };
   }, []);
-  return { lang, t: (s: string, vars?: Record<string, string | number>) => translate(lang, s, vars) };
+  // Fonction stable tant que la langue ne change pas (utilisable dans les dépendances des effets).
+  const t = useCallback((s: string, vars?: Record<string, string | number>) => translate(lang, s, vars), [lang]);
+  return { lang, t };
 }

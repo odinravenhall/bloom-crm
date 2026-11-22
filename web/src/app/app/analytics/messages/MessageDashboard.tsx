@@ -47,7 +47,7 @@ export function MessageDashboard() {
   const [updated, setUpdated] = useState<number | null>(null);
   const [fresh, setFresh] = useState(0);
   const [showExport, setShowExport] = useState(false);
-  const [senders, setSenders] = useState<{ key: string; label: string }[]>([]);
+  const [senders, setSenders] = useState<{ key: string; name: string | null }[]>([]);
   const [recipients, setRecipients] = useState<{ key: string; name: string; fanId: string }[]>([]);
 
   const qs = useCallback(
@@ -74,13 +74,11 @@ export function MessageDashboard() {
         setUpdated(Date.now());
         setFresh(0);
         if (r.recipients) setRecipients(r.recipients);
-        setSenders(
-          r.bySender.map((s) => ({ key: s.key, label: s.key === "ai" ? "AI" : s.key === "auto" ? t("Automation") : s.key === "creator" ? t("Creator") : s.key === "team" ? t("Employees") : (s.name ?? s.key) })),
-        );
+        setSenders(r.bySender.map((s) => ({ key: s.key, name: s.name })));
       })
       .catch((e) => toast((e as Error).message, "err"))
       .finally(() => setBusy(false));
-  }, [qs, page, t]);
+  }, [qs, page]); // pas « t » : la fonction de traduction change à chaque rendu (sinon rechargement sans fin)
   useEffect(() => {
     load();
   }, [load]);
@@ -165,7 +163,7 @@ export function MessageDashboard() {
       </div>
       <div className="mt-4 grid max-w-[1300px] grid-cols-1 items-center gap-x-6 gap-y-3 text-[14px] sm:grid-cols-2 xl:grid-cols-[auto_1fr_auto_1fr_auto_1fr_auto_auto]">
         <span>{t("Sender")}:</span>
-        <Pick value={draft.sender} set={(v) => set("sender", v)} t={t} options={[["", t("All")], ...senders.map((s) => [s.key, s.label] as [string, string])]} />
+        <Pick value={draft.sender} set={(v) => set("sender", v)} t={t} options={[["", t("All")], ...senders.map((s) => [s.key, s.key === "ai" ? "AI" : s.key === "auto" ? t("Automation") : s.key === "creator" ? t("Creator") : s.key === "team" ? t("Employees") : (s.name ?? s.key)] as [string, string])]} />
         <span>{t("Creator")}:</span>
         <Pick value={draft.creator} set={(v) => set("creator", v)} t={t} options={[["", t("All")], ...creators.map((c) => [c.id, c.name] as [string, string])]} />
         <span>{t("Sent to")}:</span>
