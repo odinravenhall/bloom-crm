@@ -117,6 +117,12 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   const seq = useRef(0);
   useTick(15_000);
 
+  // Filtre ouvert depuis un lien de l'Accueil (?model=…&only=handoff|unread) : « à reprendre » ou « non lus ».
+  const [only, setOnly] = useState<"" | "handoff" | "unread">(() => {
+    if (typeof window === "undefined") return "";
+    const o = new URLSearchParams(window.location.search).get("only");
+    return o === "handoff" || o === "unread" ? o : "";
+  });
   const load = useCallback(async () => {
     const s = ++seq.current;
     const p = new URLSearchParams({ tab: tab === "unread" ? "reply" : tab, sort, window: String(win) });
@@ -124,11 +130,12 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
     if (q.trim()) p.set("q", q.trim());
     if (paying) p.set("paying", "1");
     if (online) p.set("online", "1");
+    if (only) p.set("only", only);
     try {
       const r = await api<QueueResp>("GET", "/api/inbox?" + p);
       if (s === seq.current) setData(r);
     } catch {}
-  }, [tab, sort, win, model, q, paying, online]);
+  }, [tab, sort, win, model, q, paying, online, only]);
 
   useEffect(() => {
     load();
@@ -207,7 +214,19 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
 
   // Lien direct vers une conversation : /app/inbox?c=<id> (depuis « Messages envoyés », une fiche modèle…)
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("c");
+    const sp = new URLSearchParams(window.location.search);
+    const o = sp.get("only");
+    if (o === "handoff" || o === "unread") {
+      // Le lien passe avant les préférences gardées sur l'ordinateur (onglet, modèle), relues juste après.
+      try {
+        localStorage.setItem("crm.tab", JSON.stringify("all"));
+        localStorage.setItem("crm.model", JSON.stringify(sp.get("model") || ""));
+      } catch {}
+      setOnly(o);
+      setTab("all");
+      setModel(sp.get("model") || "");
+    }
+    const id = sp.get("c");
     if (!id) return;
     api<{ conversation: Conv }>("GET", `/api/conversations/${encodeURIComponent(id)}`)
       .then((d) => {
@@ -364,6 +383,12 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un fan, un tag…" className="h-9 w-full rounded-xl border border-input bg-card-2/60 pr-3 pl-9 text-sm outline-none focus:border-primary" />
           </div>
+          {only ? (
+            <button onClick={() => setOnly("")} className="flex items-center gap-1.5 self-start rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold" title="Retirer le filtre">
+              {only === "handoff" ? "Seulement « à reprendre » (l’IA a passé la main)" : "Seulement les non lus"}
+              <X className="size-3.5" />
+            </button>
+          ) : null}
           <div className="flex gap-2">
             <FilterMenu sort={sort} setSort={setSort} paying={paying} setPaying={setPaying} online={online} setOnline={setOnline} reply={tab === "reply"} />
             {tab === "reply" ? (

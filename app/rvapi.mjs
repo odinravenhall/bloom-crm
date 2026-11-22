@@ -200,6 +200,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         q: p.get('q'),
         paying: p.get('paying') === '1',
         activeOnly: p.get('online') === '1',
+        only: ['handoff', 'unread'].includes(p.get('only')) ? p.get('only') : undefined,
       });
       const items = keep.slice(0, 300).map((r) =>
         convOf(r.cid, r.c, r.m, {

@@ -426,18 +426,23 @@ export function Dashboard({ role, name }: { role: Role; name?: string }) {
                     </div>
                   </div>
                   {!model ? (
-                    <div className="hidden items-center gap-3 text-xs sm:flex">
-                      <span className="text-muted" title="Messages non lus">
-                        <b className="text-fg">{count(l?.unread)}</b> non lus
+                    // Colonnes de largeur fixe : les barres ont toutes la même longueur. Un clic ouvre ces conversations.
+                    <div className="hidden shrink-0 items-center text-xs sm:flex">
+                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&only=unread`} className="w-[78px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Ouvrir les messages non lus">
+                        <b className="text-fg tabular-nums">{count(l?.unread)}</b> non lus
+                      </Link>
+                      <Link href={`/app/messagerie?model=${encodeURIComponent(c.id)}&only=handoff`} className="w-[104px] rounded-md px-1.5 py-1 text-right text-muted hover:bg-white/[0.05] hover:text-fg" title="Ouvrir les conversations où l’IA a passé la main">
+                        <b className="text-amber-300 tabular-nums">{count(l?.handoff)}</b> à reprendre
+                      </Link>
+                      <span className="w-[96px] px-1.5 text-right text-muted" title="Vendu par l’IA de Substy (chiffre de Substy)">
+                        {rev?.ai?.perCreator[c.id]?.net ? (
+                          <>
+                            <b className="text-fg tabular-nums">{eur(rev.ai.perCreator[c.id].net, 0)}</b> par l’IA
+                          </>
+                        ) : (
+                          <span className="opacity-50">— par l’IA</span>
+                        )}
                       </span>
-                      <span className="text-muted" title="À reprendre (l’IA a passé la main)">
-                        <b className="text-amber-300">{count(l?.handoff)}</b> à reprendre
-                      </span>
-                      {rev?.ai?.perCreator[c.id]?.net ? (
-                        <span className="text-muted" title="Vendu par l’IA de Substy (chiffre de Substy)">
-                          <b className="text-fg">{eur(rev.ai.perCreator[c.id].net, 0)}</b> par l’IA
-                        </span>
-                      ) : null}
                     </div>
                   ) : null}
                   <div className="w-28 text-right">

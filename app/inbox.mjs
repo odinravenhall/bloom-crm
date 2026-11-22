@@ -151,6 +151,9 @@ export function computeQueue(u, list, o = {}) {
       if (row.active) counts.active++;
       if (c.last?.fromCreator && c.last.id && at <= now - 5 * MIN && at >= now - 24 * HOUR) relCands.push(c), (row.relCand = true);
       if (o.activeOnly && !row.active) continue;
+      // Filtre venu d'un lien (Accueil) : seulement les fans « à reprendre » (l'IA a passé la main) ou non lus.
+      if (o.only === 'handoff' && !c.handoff) continue;
+      if (o.only === 'unread' && !(c.unread > 0 || m?.unread)) continue;
       rows.push(row);
     }
     perCreator[cid] = n;
