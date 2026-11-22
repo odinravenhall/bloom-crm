@@ -36,7 +36,7 @@ const NAV: (Entry | "divider")[] = [
     roles: BOSS,
     children: [
       { label: "Creator reports", icon: SquareUser, href: "/app/analytics/creators" },
-      { label: "Employee reports", icon: ContactRound, href: "/app/stats" },
+      { label: "Employee reports", icon: ContactRound, href: "/app/analytics/employees" },
       { label: "Fan reports", icon: UserRound, href: soon("Fan reports") },
       { label: "Message dashboard", icon: Activity, href: "/app/messages" },
     ],

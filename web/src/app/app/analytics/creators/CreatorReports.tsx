@@ -633,7 +633,7 @@ function Dropdown({ icon: I, label, width, small, children }: { icon: LucideIcon
 }
 
 /** Choix de la période (comme Infloww) : raccourcis à gauche, deux mois de calendrier. */
-function DateRange({ range, setRange, lang, t }: { range: { from: string; to: string }; setRange: (r: { from: string; to: string }) => void; lang: string; t: (s: string) => string }) {
+export function DateRange({ range, setRange, lang, t }: { range: { from: string; to: string }; setRange: (r: { from: string; to: string }) => void; lang: string; t: (s: string) => string }) {
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<string | null>(null);
   const [month, setMonth] = useState(() => range.to.slice(0, 7));

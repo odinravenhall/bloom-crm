@@ -33,7 +33,7 @@ const PCH: { key: Channel; label: string; color: string }[] = [
 const amt = (v: number) => `$${+v.toFixed(2)}`;
 const pctTxt = (c: number) => `${c.toFixed(2)}%`;
 // Graduations « rondes » comme Infloww (pas de 1, 2 ou 5 × 10ⁿ, 5 intervalles environ) : 454 → 0, 100 … 500.
-const niceTicks = (max: number) => {
+export const niceTicks = (max: number) => {
   if (max <= 0) return [0, 1];
   const raw = max / 5;
   const p = 10 ** Math.floor(Math.log10(raw));
@@ -286,7 +286,7 @@ export function Performance({ range, net, gran, accounts, t, lang }: { range: { 
 }
 
 /** Curseur d'Infloww sur les barres : une seule ligne verticale pointillée au milieu de la barre (pas un cadre). */
-function BarCursor(p: { x?: number; y?: number; width?: number; height?: number }) {
+export function BarCursor(p: { x?: number; y?: number; width?: number; height?: number }) {
   if (p.x == null || p.y == null || p.width == null || p.height == null) return null;
   const x = p.x + p.width / 2;
   return <line x1={x} x2={x} y1={p.y} y2={p.y + p.height} stroke="var(--of-text)" strokeWidth={1} strokeDasharray="4 3" />;
@@ -303,7 +303,7 @@ function Title({ children, tip }: { children: React.ReactNode; tip: string }) {
   );
 }
 
-function Tip({ children }: { children: React.ReactNode }) {
+export function Tip({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-md border px-3 py-2 text-[14px] leading-6 text-white" style={{ background: "#121212", borderColor: "rgba(255,255,255,.35)" }}>
       {children}
