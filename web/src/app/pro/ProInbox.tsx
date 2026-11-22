@@ -60,6 +60,36 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
   const [totals, setTotals] = useState<{ reply: number; pinned: number } | null>(null);
   // Affichage par paquets de 200 au fil du défilement (toutes les conversations sont chargées).
   const [shown, setShown] = useState(200);
+  // Puces : pas de barre de défilement, on attrape la rangée et on la fait glisser (souris ou doigt).
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
+  const dragScroll = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      drag.current = { x: e.clientX, left: e.currentTarget.scrollLeft, moved: false };
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      if (Math.abs(dx) > 4) d.moved = true;
+      if (d.moved) e.currentTarget.scrollLeft = d.left - dx;
+    },
+    onPointerUp: () => {
+      setTimeout(() => (drag.current = null), 0);
+    },
+    onPointerLeave: () => {
+      if (drag.current && !drag.current.moved) drag.current = null;
+      else setTimeout(() => (drag.current = null), 0);
+    },
+    // Après un glissé, le relâchement ne doit pas choisir la puce sous la souris.
+    onClickCapture: (e: React.MouseEvent<HTMLDivElement>) => {
+      if (drag.current?.moved) (e.stopPropagation(), e.preventDefault());
+    },
+    onWheel: (e: React.WheelEvent<HTMLDivElement>) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+    },
+  };
   useEffect(() => setShown(200), [chip, q, model.id]);
   const load = useCallback(() => {
     setBusy(true);
@@ -306,7 +336,7 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
       </div>
 
       {/* Puces */}
-      <div className="of-scroll flex gap-2 overflow-x-auto px-3 pt-4 pb-2">
+      <div ref={chipsRef} {...dragScroll} className="no-scrollbar flex cursor-grab gap-2 overflow-x-auto px-3 pt-4 pb-2 select-none active:cursor-grabbing">
         {(
           [
             ["all", "All"],
