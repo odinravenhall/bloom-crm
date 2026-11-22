@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import { requireMe } from "@/lib/server";
-import { OfManager } from "./OfManager";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "OF Manager" };
-export const dynamic = "force-dynamic";
-
-export default async function OfManagerPage() {
-  await requireMe(["admin", "manager"]);
-  return <OfManager />;
+// OF Manager : on arrive sur « Home ».
+export default function OfManagerIndex() {
+  redirect("/app/of-manager/home");
 }

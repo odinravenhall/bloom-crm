@@ -23,18 +23,18 @@ import {
   UsersRound,
   X,
   ListChecks,
-  Globe,
   MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/fmt";
 import { PlatformSwitch } from "./PlatformSwitch";
 import { useCreators } from "@/lib/creators";
+import { OF_PAGES } from "@/lib/ofmanager";
 import { Avatar, BloomMark, Logo } from "@/components/ui";
 import { ROLE_LABEL, homeOf, type Me, type Role } from "@/lib/types";
 
 type Item = { href: string; label: string; icon: LucideIcon; roles?: Role[]; soon?: boolean };
-type Group = { title: string | null; items: Item[] };
+type Group = { title: string | null; items: Item[]; pf?: "of" | "mym" };
 
 const CHAT: Role[] = ["admin", "manager", "lead", "chatter"];
 const BOSS: Role[] = ["admin", "manager", "lead"];
@@ -49,8 +49,13 @@ const GROUPS: Group[] = [
     title: null,
     items: [
       { href: "/app/messagerie", label: "Messagerie", icon: Inbox, roles: CHAT },
-      { href: "/app/of-manager", label: "OF Manager (essai)", icon: Globe, roles: MANAGE },
     ],
+  },
+  // OF Manager (comme Infloww) : le vrai site OnlyFans de la modèle, page par page. OnlyFans seulement, admins et managers.
+  {
+    title: "OF Manager",
+    pf: "of",
+    items: OF_PAGES.map((p) => ({ href: `/app/of-manager/${p.key}`, label: p.label, icon: p.icon, roles: MANAGE })),
   },
   {
     title: "Chatting",
@@ -107,7 +112,7 @@ export function SideNav({ me }: { me: Me }) {
     });
 
   // Dans la messagerie, le menu se réduit tout seul en icônes (plus de place pour chatter), sauf si on l'agrandit à la main.
-  const inChat = path.startsWith("/app/messagerie");
+  const inChat = path.startsWith("/app/messagerie") || path.startsWith("/app/of-manager");
   const [chatWide, setChatWide] = useState(false);
   useEffect(() => setChatWide(false), [inChat]);
   const userSmall = small;
@@ -116,7 +121,7 @@ export function SideNav({ me }: { me: Me }) {
 
   // « Listes » : Smart lists sur OnlyFans, Groupes sur MYM.
   const { pf } = useCreators();
-  const groups = GROUPS.map((g) => ({
+  const groups = GROUPS.filter((g) => !g.pf || g.pf === pf).map((g) => ({
     ...g,
     items: g.items.filter((i) => !i.roles || i.roles.includes(me.role)).map((i) => (i.href === "/app/listes" ? { ...i, label: pf === "mym" ? "Groupes" : "Smart lists" } : i)),
   })).filter((g) => g.items.length);
