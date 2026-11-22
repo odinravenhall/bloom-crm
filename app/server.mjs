@@ -316,6 +316,12 @@ createServer(async (req, res) => {
   console.log('Bloom CRM (API) prêt');
   startStreams();
   startBot();
+  // Une fois Discord branché, on n'entre plus que par Discord : le compte « mot de passe » de la première mise en route
+  // (créé avec l'email du compte Substy) est désactivé et ses sessions fermées.
+  if (discordReady()) {
+    const n = run('UPDATE users SET active = 0 WHERE discord_id IS NULL AND active = 1').changes;
+    if (n) run('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE discord_id IS NULL)'), console.log(`[bloom] ${n} compte(s) hors Discord désactivé(s)`);
+  }
   startRevenue();
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});

@@ -53,7 +53,8 @@ export function onCreator(creatorId) {
 // ---------------------------------------------------------------- page Équipe
 export function teamView() {
   const since = parisMidnight(parisDay(Date.now()));
-  const users = all('SELECT id, name, email, role, avatar, discord_id, active, all_creators, created_at FROM users ORDER BY active DESC, name COLLATE NOCASE');
+  // Seulement les membres du serveur Discord (le compte de la première mise en route, lié à Substy, n'est pas une personne de l'équipe).
+  const users = all('SELECT id, name, email, role, avatar, discord_id, active, all_creators, created_at FROM users WHERE discord_id IS NOT NULL ORDER BY active DESC, name COLLATE NOCASE');
   const access = all('SELECT user_id, creator_id FROM user_creators');
   const sent = all(
     `SELECT user_id, COUNT(*) AS msgs, SUM(price > 0) AS ppv, SUM(price) AS ppvValue, MAX(at) AS last FROM sent_log WHERE at >= ? GROUP BY user_id`,
