@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Search, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { ago, cn, moneyC, usd } from "@/lib/fmt";
-import { useCreators } from "@/lib/creators";
+import { PLATFORM, PlatformBadge, platformOf, useCreators } from "@/lib/creators";
 import { ROLE_LABEL, seesAll, type Me, type Member } from "@/lib/types";
 import { Avatar, Pill, btnCls, inputCls } from "@/components/ui";
 
@@ -136,7 +136,9 @@ export function Team({ me }: { me: Me }) {
                     ) : m.creators.length ? (
                       <span className="flex flex-wrap gap-1">
                         {m.creators.map((id) => (
-                          <Pill key={id}>{byId.get(id)?.name ?? "?"}</Pill>
+                          <Pill key={id}>
+                            {byId.get(id)?.name ?? "?"} <PlatformBadge c={byId.get(id)} className="ml-0.5" />
+                          </Pill>
                         ))}
                       </span>
                     ) : (
@@ -184,6 +186,7 @@ function AccessEditor({ member, onClose, onSaved }: { member: Member; onClose: (
   const [allC, setAll] = useState(member.allCreators);
   const [sel, setSel] = useState(() => new Set(member.creators));
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
   const save = async () => {
     setBusy(true);
     try {
@@ -215,8 +218,12 @@ function AccessEditor({ member, onClose, onSaved }: { member: Member; onClose: (
             <span className="text-xs text-muted">y compris celles ajoutées plus tard</span>
           </span>
         </label>
-        <div className={cn("mt-3 flex max-h-72 flex-col gap-1.5 overflow-y-auto", allC && "pointer-events-none opacity-40")}>
-          {creators.map((c) => {
+        <div className={cn("relative mt-3", allC && "pointer-events-none opacity-40")}>
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
+          <input className={cn(inputCls, "h-9 pl-9")} placeholder="Chercher une créatrice…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className={cn("mt-2 flex max-h-72 flex-col gap-1.5 overflow-y-auto", allC && "pointer-events-none opacity-40")}>
+          {creators.filter((c) => !q.trim() || c.name.toLowerCase().includes(q.trim().toLowerCase())).map((c) => {
             const on = sel.has(c.id);
             return (
               <button
@@ -233,8 +240,10 @@ function AccessEditor({ member, onClose, onSaved }: { member: Member; onClose: (
               >
                 <Avatar src={c.avatar} name={c.name} size="size-8" />
                 <span className="flex-1">
-                  <b className="block text-sm">{c.name}</b>
-                  <span className="text-xs text-muted">{/mym/i.test(c.platform || "") ? "MYM" : "OnlyFans"}</span>
+                  <b className="flex items-center gap-1.5 text-sm">
+                    {c.name} <PlatformBadge c={c} />
+                  </b>
+                  {c.username ? <span className="text-xs text-muted">@{c.username}</span> : <span className="text-xs text-muted">{PLATFORM[platformOf(c)]}</span>}
                 </span>
                 <span className={cn("grid size-6 place-items-center rounded-full border", on ? "border-primary bg-primary text-white" : "")}>{on ? <Check className="size-3.5" /> : null}</span>
               </button>

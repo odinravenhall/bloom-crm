@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Clock, Gift, Image as ImageIcon, Lock, RefreshCw, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, eur, moneyC, num, when } from "@/lib/fmt";
-import { useCreators } from "@/lib/creators";
+import { PlatformBadge, useCreators } from "@/lib/creators";
 import type { Count, Dashboard as Live, RevenueR, Role } from "@/lib/types";
 import { Avatar, Pill } from "@/components/ui";
 import { AreaStack, DeltaPct, pctChange } from "@/components/charts";
@@ -253,11 +253,10 @@ export function Dashboard({ role }: { role: Role }) {
                         <span className="flex items-center gap-3">
                           <Avatar src={c.avatar} name={c.name} size="size-9" />
                           <span>
-                            <b className="block">{c.name}</b>
-                            <span className="text-xs text-muted">
-                              {mymC ? "MYM" : "OnlyFans"}
-                              {l ? (l.live ? " · en direct" : " · connexion…") : ""}
-                            </span>
+                            <b className="flex items-center gap-1.5">
+                              {c.name} <PlatformBadge c={c} />
+                            </b>
+                            <span className="text-xs text-muted">{l ? (l.live ? "en direct" : "connexion…") : mymC ? "MYM" : "OnlyFans"}</span>
                           </span>
                         </span>
                       </td>

@@ -1,5 +1,6 @@
 "use client";
 
+import { PlatformBadge } from "@/lib/creators";
 import { useCallback, useEffect, useState } from "react";
 import { api, toast } from "@/lib/api";
 import { ago, cn } from "@/lib/fmt";
@@ -83,7 +84,9 @@ export function Integrations() {
               return (
                 <div key={c.id} className="flex items-center gap-3 rounded-xl border bg-card-2/50 px-3 py-2">
                   <Avatar src={c.avatar} name={c.name} size="size-8" />
-                  <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate font-semibold">
+                    {c.name} <PlatformBadge c={c} />
+                  </span>
                   <select
                     value={m?.account ?? ""}
                     onChange={(e) => map(c.id, e.target.value)}

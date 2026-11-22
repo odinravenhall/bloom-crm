@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, ImagePlus, Lock, Plus, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, eur, num, usd, when } from "@/lib/fmt";
-import { CreatorTabs, useCreators } from "@/lib/creators";
+import { CreatorTabs, PLATFORM, platformOf, useCreators } from "@/lib/creators";
 import type { FanList, MassMessage, Media } from "@/lib/types";
 import { VaultPicker } from "../messagerie/VaultPicker";
 import { Pill, btnCls, inputCls } from "@/components/ui";
@@ -126,7 +126,7 @@ export function Mass({ canSend }: { canSend: boolean }) {
       {draft && creatorId ? (
         <Draft
           creatorId={creatorId}
-          creatorName={creator?.name ?? ""}
+          creatorName={creator ? `${creator.name} (${PLATFORM[platformOf(creator)]})` : ""}
           lists={lists ?? []}
           onClose={() => setDraft(false)}
           onSent={() => {

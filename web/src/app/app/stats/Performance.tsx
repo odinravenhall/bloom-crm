@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, eur, num } from "@/lib/fmt";
-import { useCreators } from "@/lib/creators";
+import { PlatformBadge, platformOf, useCreators } from "@/lib/creators";
 import { fmtRange, usePeriod } from "@/lib/period";
 import type { Perf, PerfSeller } from "@/lib/types";
 import { Avatar, Pill, Table, tdCls, thCls } from "@/components/ui";
@@ -94,7 +94,7 @@ export function Performance() {
                 <option value="">Toutes les créatrices</option>
                 {data.creators.map((c) => (
                   <option key={c.creatorId} value={c.creatorId}>
-                    {name.get(c.creatorId)?.name ?? c.creatorId}
+                    {name.get(c.creatorId)?.name ?? c.creatorId} · {platformOf(name.get(c.creatorId)) === "mym" ? "MYM" : "OF"}
                   </option>
                 ))}
               </select>
@@ -145,7 +145,7 @@ export function Performance() {
                           .sort((a, b) => b[1] - a[1])
                           .slice(0, 5)
                           .map(([id, v]) => (
-                            <span key={id} title={`${name.get(id)?.name ?? id} : ${eur(v, 0)}`}>
+                            <span key={id} title={`${name.get(id)?.name ?? id} (${platformOf(name.get(id)) === "mym" ? "MYM" : "OF"}) : ${eur(v, 0)}`}>
                               <Avatar src={name.get(id)?.avatar} name={name.get(id)?.name} size="size-6" className="ring-2 ring-card" />
                             </span>
                           ))}
@@ -192,6 +192,7 @@ export function Performance() {
                       <div className="flex items-center gap-2">
                         <Avatar src={cr?.avatar} name={cr?.name} size="size-7" />
                         <span className="font-semibold">{cr?.name ?? c.creatorId}</span>
+                        <PlatformBadge c={cr} />
                       </div>
                     </td>
                     <td className={cn(tdCls, "text-right")}>

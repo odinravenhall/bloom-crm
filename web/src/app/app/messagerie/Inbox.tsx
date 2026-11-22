@@ -216,7 +216,7 @@ export function Inbox({ boss = false }: { boss?: boolean }) {
       <div className="flex flex-wrap items-center gap-3 border-b bg-panel px-4 py-2.5">
         <h1 className="text-2xl">Messagerie</h1>
         <span className={cn("size-2 rounded-full", live ? "bg-emerald-400" : "bg-amber-400")} title={live ? "Temps réel actif" : "Temps réel : connexion…"} />
-        <CreatorTabs className="min-w-0" />
+        <CreatorTabs className="min-w-0" align="left" />
       </div>
       <div className="flex min-h-0 flex-1">
         {/* Liste des conversations */}

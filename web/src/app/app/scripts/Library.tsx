@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronLeft, Copy, ImagePlus, Lock, MoreHorizontal, Pencil, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, moneyC, num, usd } from "@/lib/fmt";
-import { useCreators } from "@/lib/creators";
+import { platformOf, useCreators } from "@/lib/creators";
 import type { LibGroup, LibItem, Library as LibraryT, Media } from "@/lib/types";
 import { Pill, btnCls, inputCls } from "@/components/ui";
 import { VaultPicker } from "../messagerie/VaultPicker";
@@ -126,13 +126,13 @@ export function Library({ kind }: { kind: LibGroup["kind"] }) {
             <div key={g.id} className="relative">
               <GroupRow active={sel === g.id} name={g.name} unit={w.item} count={g.items.length} s={sumItems(g.items)} onClick={() => (setSel(g.id), setMobile(true))} onMenu={canEdit ? () => setMenu(menu === g.id ? null : g.id) : undefined} />
               {menu === g.id ? (
-                <div className="absolute top-10 right-2 z-20 w-60 rounded-2xl border bg-card p-1 text-sm shadow-xl" onMouseLeave={() => setMenu(null)}>
+                <div className="scroll-thin absolute top-10 right-2 z-20 max-h-[60vh] w-64 overflow-y-auto rounded-2xl border bg-card p-1 text-sm shadow-xl" onMouseLeave={() => setMenu(null)}>
                   <MenuBtn icon={Pencil} label="Renommer" onClick={() => (setMenu(null), rename(g))} />
                   <MenuBtn icon={ArrowUp} label="Monter" onClick={() => (setMenu(null), moveGroup(g, -1))} />
                   <MenuBtn icon={ArrowDown} label="Descendre" onClick={() => (setMenu(null), moveGroup(g, 1))} />
                   <p className="px-3 pt-2 pb-1 text-[11px] font-semibold text-muted uppercase">Copier vers</p>
                   {creators.map((c) => (
-                    <MenuBtn key={c.id} icon={Copy} label={c.id === creatorId ? `${c.name} (dupliquer)` : c.name} onClick={() => (setMenu(null), copy(g, c.id))} />
+                    <MenuBtn key={c.id} icon={Copy} label={`${c.name} · ${platformOf(c) === "mym" ? "MYM" : "OF"}${c.id === creatorId ? " (dupliquer)" : ""}`} onClick={() => (setMenu(null), copy(g, c.id))} />
                   ))}
                   <MenuBtn icon={Trash2} label="Supprimer" danger onClick={() => (setMenu(null), remove(g))} />
                 </div>
