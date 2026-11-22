@@ -1,5 +1,6 @@
 // Messagerie de Bloom : routes de lecture / envoi au-dessus du pont Substy, et diffusion du temps réel aux navigateurs.
 import { all, getSetting, one, run, setSetting } from './store.mjs';
+import { onMessageAlert } from './alerts.mjs';
 import { libItemOf } from './library.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
 
@@ -117,6 +118,7 @@ export function broadcast(creatorId, type, data) {
     payload.message = messageView(data.data, bloomSenderOf(data.data));
     logMessage(creatorId, data.data.fanId, payload.message);
     onLiveMessage(creatorId, data.data.fanId, payload.message);
+    onMessageAlert(creatorId, data.data.fanId, payload.message);
   } else if (data?.data) payload.data = data.data;
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const [c, u] of clients) if (canSee(u, creatorId)) c.write(line);

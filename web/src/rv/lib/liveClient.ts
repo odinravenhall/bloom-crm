@@ -18,7 +18,7 @@ function ensure() {
   es = new EventSource("/api/live");
   es.onopen = () => emit("open", {});
   es.onmessage = (ev) => {
-    let e: { creatorId?: string; type?: string; fanId?: string; message?: { fromFan?: boolean }; data?: { fanId?: string; status?: string } };
+    let e: { creatorId?: string; type?: string; fanId?: string; message?: { fromFan?: boolean }; data?: { fanId?: string; status?: string; [k: string]: unknown } };
     try {
       e = JSON.parse(ev.data);
     } catch {
@@ -26,6 +26,8 @@ function ensure() {
     }
     if (!e.creatorId) return;
     if (e.type === "new_message" && e.fanId) emit("conv", { id: `${e.creatorId}~${e.fanId}`, modelId: e.creatorId, fromFan: !!e.message?.fromFan });
+    // Notifications de Bloom (PPV envoyé par l'IA, PPV pas payé après 3 min, vente) : en bas à droite de la messagerie.
+    else if (e.type === "bloom_alert" && e.data) emit("alert", { ...e.data, modelId: e.creatorId });
     else if (e.type === "ai_generation_status" && e.data?.fanId) emit("ai", { id: `${e.creatorId}~${e.data.fanId}`, modelId: e.creatorId, status: e.data.status });
   };
 }

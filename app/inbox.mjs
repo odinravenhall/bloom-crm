@@ -6,7 +6,6 @@ import { all, db, one, run } from './store.mjs';
 import { inboxChats } from './chat.mjs';
 import { canChat, canSee, isBoss } from './team.mjs';
 import { parisDay, revenue } from './revenue.mjs';
-import { chatterFilter } from './lists.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS fan_meta (
@@ -21,6 +20,11 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS creator_boxes (creator_id TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, names TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS user_boxes (user_id INTEGER NOT NULL, creator_id TEXT NOT NULL, boxes TEXT NOT NULL DEFAULT '[]', PRIMARY KEY (user_id, creator_id));
 `);
+
+// Épingle qui a coupé l'IA du fan (mode hybride) : on la rallume en le désépinglant.
+try {
+  db.exec('ALTER TABLE fan_meta ADD COLUMN pin_cut INTEGER NOT NULL DEFAULT 0');
+} catch {}
 
 /** Boîte d'un fan : toujours la même (empreinte de son identifiant), réparties à peu près également. */
 export function boxOf(fanId, count) {
@@ -125,9 +129,7 @@ export function computeQueue(u, list, o = {}) {
     const inScope = scope.includes(cid);
     const cfg = boxes.get(cid);
     const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
-    // Mode de chatting de la créatrice : en hybride / full IA, un chatteur ne voit que les fans sans IA.
-    const flt = chatterFilter(u, cid);
-    const chats = flt ? [...inb.chats].filter(flt) : [...inb.chats];
+    const chats = [...inb.chats];
     const isReply = (c) => {
       const at = c.last ? Date.parse(c.last.at) || 0 : 0;
       return waiting(c, metas.get(`${cid}:${c.fanId}`)) && (!win || at >= now - win);

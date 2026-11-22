@@ -164,9 +164,10 @@ export class SubstySession {
   vaultMedias(creatorId, { listId, cursor, limit = 40 } = {}) {
     return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}) });
   }
-  /** Image / vidéo via le relais de Substy (chemins « /api/creators/<id>/medias/view?url=… » fournis par leur API). */
+  /** Image / vidéo via le relais de Substy (chemins « /api/creators/<id>/medias/… » fournis par leur API). */
   async media(path) {
-    if (!/^\/api\/creators\/[\w-]+\/medias\/view\?/.test(path)) throw new SubstyError(400, 'Chemin de média invalide');
+    // Deux formes : « …/medias/view?url=… » (messages, vault) et « …/medias/<id>/thumb|full|preview » (étapes des scripts).
+    if (!/^\/api\/creators\/[\w-]+\/medias\/(view\?|[\w-]+\/(thumb|full|preview)(\?|$))/.test(path)) throw new SubstyError(400, 'Chemin de média invalide');
     const jwt = await this.token();
     return fetch(`${APP}${path}`, { headers: { authorization: `Bearer ${jwt}`, 'user-agent': UA }, signal: AbortSignal.timeout(30_000) });
   }

@@ -10,6 +10,7 @@ import { libraryRoutes } from './library.mjs';
 import { inboxRoutes } from './inbox.mjs';
 import { rvRoutes } from './rvapi.mjs';
 import { listRoutes } from './lists.mjs';
+import { startAlerts } from './alerts.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -400,6 +401,7 @@ createServer(async (req, res) => {
     if (n) run('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE discord_id IS NULL)'), console.log(`[bloom] ${n} compte(s) hors Discord désactivé(s)`);
   }
   startRevenue();
+  startAlerts(substy);
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);

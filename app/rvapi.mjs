@@ -5,6 +5,7 @@ import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { img, inboxChat, inboxChats, mediaView, messageView, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
+import { pinFan } from './lists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
 import { canChat, canSee, isBoss } from './team.mjs';
 
@@ -294,9 +295,11 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const b = await body(req);
       const key = convId(x.cid, x.fanId);
       switch (b.action) {
-        case 'pin':
-          setMeta(x.cid, x.fanId, 'pinned = ?, pinned_by = ?', b.pin ? 1 : 0, b.pin ? x.u.name : null);
-          return send(res, 200, { pinned: !!b.pin });
+        // Épingler = reprendre le fan : en hybride, l'IA est coupée sur lui (rallumée quand on le désépingle).
+        case 'pin': {
+          const ai = await pinFan(substy, x.u, x.cid, x.fanId, !!b.pin);
+          return send(res, 200, { pinned: !!b.pin, ai });
+        }
         case 'read': {
           const c = inboxChat(x.cid, x.fanId);
           setMeta(x.cid, x.fanId, 'seen_id = ?, unread = 0', c?.last?.id || null);

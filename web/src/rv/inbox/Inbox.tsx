@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Crown, Lock, Pencil, Pin, KeyRound, Eye, EyeOff, SlidersHorizontal, Inbox as InboxIcon, MessageCircle, BellRing, Sparkles, Check, X, Hand } from "lucide-react";
+import { Search, Crown, Lock, Pencil, Pin, KeyRound, Eye, EyeOff, SlidersHorizontal, Inbox as InboxIcon, MessageCircle, BellRing, Sparkles, Check, X, Hand, BadgeDollarSign } from "lucide-react";
 import { MiniCard } from "@/rv/components/ScoreCard";
 import { newSubDay } from "@/rv/components/NewSub";
 import { FanAvatar } from "@/rv/components/FanAvatar";
@@ -21,6 +21,8 @@ import type { BoxInfo, Conv, Model, QueueResp } from "./types";
 import { Chat } from "./Chat";
 import { FanPanel } from "./FanPanel";
 import { NotifHistory } from "./NotifHistory";
+import { LiveAlerts } from "./LiveAlerts";
+import { AI_EVENT } from "./SubstyCard";
 
 type Me = { id: number; name: string; admin: boolean };
 
@@ -171,6 +173,14 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
     },
     [currentId],
   );
+  /** Ouvre une conversation par son id (notifications). */
+  const openById = useCallback(
+    (id: string) =>
+      api<{ conversation: Conv }>("GET", `/api/conversations/${id}`)
+        .then((d) => open(d.conversation))
+        .catch((e) => toast((e as Error).message, "err")),
+    [open],
+  );
 
   // Glisser / bouton : non lu (gardé par le CRM dans « À répondre ») <-> lu (aussi sur Reveal).
   const toggleUnread = useCallback(
@@ -194,9 +204,14 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
       setPinned((p) => (p && p.id === c.id ? { ...p, pinned: !c.pinned } : p));
       setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === c.id ? { ...x, pinned: !c.pinned } : x)) } : d));
       try {
-        const r = await api<{ pinned: boolean }>("POST", `/api/conversations/${c.id}/action`, { action: "pin", pin: !c.pinned });
-        toast(r.pinned ? "Épinglé pour toute l’équipe" : "Désépinglé");
+        // Épingler = reprendre le fan : l'IA est coupée sur lui (et rallumée quand on le désépingle).
+        const r = await api<{ pinned: boolean; ai?: boolean }>("POST", `/api/conversations/${c.id}/action`, { action: "pin", pin: !c.pinned });
+        if (typeof r.ai === "boolean") window.dispatchEvent(new CustomEvent(AI_EVENT, { detail: { id: c.id, on: r.ai } }));
+        toast(r.pinned ? (r.ai === false ? "Épinglé : l’IA est coupée, à toi de jouer" : "Épinglé pour toute l’équipe") : r.ai ? "Désépinglé : l’IA reprend le fan" : "Désépinglé");
       } catch (e) {
+        // Refusé (ex. l'IA n'a pas encore envoyé de PPV) : on remet l'épingle comme avant.
+        setPinned((p) => (p && p.id === c.id ? { ...p, pinned: c.pinned } : p));
+        setData((d) => (d ? { ...d, items: d.items.map((x) => (x.id === c.id ? { ...x, pinned: c.pinned } : x)) } : d));
         toast((e as Error).message, "err");
       }
       load();
@@ -280,6 +295,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
   return (
     <div className="flex h-full min-h-0">
       <Toaster />
+      <LiveAlerts model={model} models={models} onOpen={openById} />
       {/* Rail des modèles */}
       <div className="scroll-thin hidden w-[64px] shrink-0 flex-col items-center gap-2 overflow-y-auto border-r bg-panel py-3 backdrop-blur sm:flex 2xl:w-[76px]">
         <RailButton on={!model} onClick={() => setModel("")} onMenu={(x, y) => setMenu({ x, y, id: "" })} label="Tous les modèles · clic droit (ou appui long) : masquer / réafficher des modèles" count={data?.allReply ?? 0}>
@@ -313,15 +329,7 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <NotifHistory
-                model={model}
-                models={models}
-                onOpen={(id) =>
-                  api<{ conversation: Conv }>("GET", `/api/conversations/${id}`)
-                    .then((d) => open(d.conversation))
-                    .catch((e) => toast((e as Error).message, "err"))
-                }
-              />
+              <NotifHistory model={model} models={models} onOpen={openById} />
               {data?.boxes ? <BoxMenu info={data.boxes} admin={me.admin} onChanged={load} /> : null}
             </div>
           </div>
@@ -374,6 +382,13 @@ export function Inbox({ me, models, hasConnection }: { me: Me; models: Model[]; 
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un fan, un tag…" className="h-9 w-full rounded-xl border border-input bg-card-2/60 pr-3 pl-9 text-sm outline-none focus:border-primary" />
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => setPaying(!paying)}
+              title="Seulement les fans qui ont déjà payé"
+              className={cn("flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold", paying ? "border-primary bg-primary text-white" : "bg-card-2 text-muted hover:text-fg")}
+            >
+              <BadgeDollarSign className="size-3.5" /> Ont payé
+            </button>
             <FilterMenu sort={sort} setSort={setSort} paying={paying} setPaying={setPaying} online={online} setOnline={setOnline} reply={tab === "reply"} />
             {tab === "reply" ? (
               <select value={win} onChange={(e) => setWin(Number(e.target.value))} className="h-8 rounded-lg border bg-card-2 px-2 text-xs" title="Ancienneté max">

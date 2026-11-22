@@ -1,20 +1,21 @@
 // Façon de chatter de chaque créatrice, et listes automatiques de fans.
 //
 // Mode de chatting (réglé par créatrice dans « Configuration IA ») :
-//   - hybrid : l'IA de Substy parle à tous les fans ; dès qu'un fan entre dans la « liste de passage »
-//              (ex. « a dépensé au moins 1 $ »), Bloom coupe l'IA sur ce fan et les chatteurs prennent la main.
-//              Les chatteurs ne voient que les fans sans IA (coupée, ou passés à la main par l'IA).
-//   - human  : pas d'IA, les chatteurs voient et répondent à tous les fans.
-//   - ai     : l'IA fait tout ; les chatteurs ne voient que les fans que l'IA leur passe (ou dont l'IA est coupée).
-//   - pas de réglage : comme avant (les chatteurs voient tout, Bloom ne coupe rien).
-// Les admins, managers et team leaders voient toujours tous les fans.
+//   - hybrid : l'IA de Substy parle à tous les fans. Quand un chatteur ÉPINGLE un fan pour le reprendre, Bloom coupe
+//              l'IA sur ce fan ; quand il le désépingle, Bloom la rallume. Pour un chatteur, il faut que l'IA ait déjà
+//              envoyé un PPV au fan (sinon l'IA n'a pas encore fait son travail).
+//   - human  : pas d'IA, les chatteurs répondent à tous les fans (épingler ne touche pas à l'IA).
+//   - ai     : l'IA fait tout (épingler ne coupe pas l'IA).
+//   - pas de réglage : comme l'hybride.
+// Les chatteurs voient toujours tous les fans (filtre « ont payé » dans la messagerie).
 //
 // Listes automatiques : chaque créatrice a ses propres listes, avec une règle (pour l'instant : « a dépensé au moins X »,
 // en $ sur OnlyFans, en € sur MYM). Un fan entre tout seul dans la liste dès qu'il remplit la règle, et y reste.
 // Ce qu'un fan a dépensé : le total de Substy, ou à défaut les ventes vues (Substy en direct, Infloww / MyPulse),
 // sans les abonnements.
 import { all, db, one, run } from './store.mjs';
-import { inboxChats, patchInboxChat, refreshInboxTop } from './chat.mjs';
+import './inbox.mjs'; // table fan_meta (épingles)
+import { inboxChat, inboxChats, patchInboxChat, refreshInboxTop } from './chat.mjs';
 import { canChat, canSee, isBoss, seesAll } from './team.mjs';
 
 db.exec(`
@@ -29,13 +30,50 @@ export const MODES = ['hybrid', 'human', 'ai'];
 export function modeOf(cid) {
   return one('SELECT mode, list_id FROM chat_mode WHERE creator_id = ?', String(cid)) || null;
 }
-/** Ce qu'un chatteur voit d'une créatrice : null = tous les fans ; sinon un filtre sur la conversation. */
-export function chatterFilter(u, cid) {
-  if (!u || isBoss(u)) return null;
-  const m = modeOf(cid);
-  if (!m || m.mode === 'human') return null;
-  // Hybride et full IA : seulement les fans sans IA (coupée par Bloom, à la main, ou passés à la main par l'IA).
-  return (c) => !c.ai || !!c.handoff;
+
+// ---------------------------------------------------------------- épingler = reprendre le fan
+/** L'IA a-t-elle déjà envoyé un PPV à ce fan ? (journal de Bloom, sinon les derniers messages chez Substy) */
+async function aiSentPpv(substy, cid, fanId) {
+  if (one("SELECT 1 FROM msg_log WHERE creator_id = ? AND fan_id = ? AND from_fan = 0 AND kind = 'ai' AND price > 0", cid, String(fanId))) return true;
+  let cursor;
+  for (let i = 0; i < 3; i++) {
+    const r = await substy.messages(cid, fanId, { limit: 30, cursor });
+    const price = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
+    if ((r?.items || []).some((m) => m.isSentByCreator && m.sentByAi && price(m.price) > 0)) return true;
+    cursor = r?.nextCursor;
+    if (!cursor) break;
+  }
+  return false;
+}
+const err = (status, message) => Object.assign(new Error(message), { status });
+/**
+ * Épingler / désépingler un fan. En hybride : épingler coupe l'IA sur ce fan (un chatteur ne peut le faire qu'après
+ * le premier PPV de l'IA), désépingler la rallume (seulement si c'est l'épingle qui l'avait coupée).
+ * Renvoie l'état de l'IA sur le fan s'il a changé (sinon undefined).
+ */
+export async function pinFan(substy, u, cid, fanId, pin) {
+  const mode = modeOf(cid)?.mode || 'hybrid';
+  const meta = one('SELECT pinned, pin_cut FROM fan_meta WHERE creator_id = ? AND fan_id = ?', cid, String(fanId));
+  const c = inboxChat(cid, fanId);
+  let ai;
+  let cut = meta?.pin_cut || 0;
+  if (pin && mode === 'hybrid' && c?.ai) {
+    if (!isBoss(u) && !(await aiSentPpv(substy, cid, fanId))) throw err(400, 'L’IA n’a pas encore envoyé de PPV à ce fan : attends son premier PPV avant de le reprendre.');
+    await substy.setAi(cid, fanId, false);
+    patchInboxChat(cid, fanId, { ai: false });
+    ai = false;
+    cut = 1;
+  } else if (!pin && cut) {
+    if (mode === 'hybrid') {
+      await substy.setAi(cid, fanId, true);
+      patchInboxChat(cid, fanId, { ai: true });
+      ai = true;
+    }
+    cut = 0;
+  }
+  run('INSERT OR IGNORE INTO fan_meta (creator_id, fan_id, updated_at) VALUES (?, ?, ?)', cid, String(fanId), Date.now());
+  run('UPDATE fan_meta SET pinned = ?, pinned_by = ?, pin_cut = ?, updated_at = ? WHERE creator_id = ? AND fan_id = ?', pin ? 1 : 0, pin ? u.name : null, cut, Date.now(), cid, String(fanId));
+  return ai;
 }
 
 const listsOf = (cid) => all('SELECT * FROM auto_lists WHERE creator_id = ? ORDER BY id', String(cid));
@@ -67,66 +105,33 @@ function paidMap(cid, chats) {
   return out;
 }
 
-// ---------------------------------------------------------------- moteur (toutes les 20 s)
+// ---------------------------------------------------------------- listes (toutes les 20 s)
 let SUB = null;
 let CREATORS = () => [];
 const lastSale = new Map(); // creatorId -> dernière vente vue
-const fails = new Map(); // `${cid}:${fanId}` -> essais ratés
 let busy = false;
 
-/** Met à jour les listes d'une créatrice ; renvoie les fans dont il faut couper l'IA (mode hybride). */
+/** Met à jour les listes d'une créatrice (les fans qui remplissent la règle y entrent). */
 function updateLists(cid) {
   const lists = listsOf(cid);
-  if (!lists.length) return [];
-  const inb = inboxChats(cid);
-  const chats = [...inb.chats];
-  const paid = paidMap(cid, chats);
+  if (!lists.length) return;
+  const paid = paidMap(cid, [...inboxChats(cid).chats]);
   const now = Date.now();
   const ins = db.prepare('INSERT OR IGNORE INTO auto_list_members (list_id, fan_id, joined_at) VALUES (?, ?, ?)');
   for (const l of lists) for (const [fanId, v] of paid) if (v > 0 && v >= l.min_spent) ins.run(l.id, fanId, now);
-  const m = modeOf(cid);
-  if (m?.mode !== 'hybrid' || !m.list_id || !inb.complete) return [];
-  // Fans de la liste de passage pas encore traités : l'IA est coupée une seule fois, à l'entrée
-  // (si un manager la rallume ensuite sur un fan, Bloom ne la recoupe pas).
-  const byId = new Map(chats.map((c) => [c.fanId, c]));
-  const todo = [];
-  for (const r of all('SELECT fan_id FROM auto_list_members WHERE list_id = ? AND handled = 0', m.list_id)) {
-    const c = byId.get(r.fan_id);
-    if (!c) continue;
-    if (!c.ai) run('UPDATE auto_list_members SET handled = 1 WHERE list_id = ? AND fan_id = ?', m.list_id, r.fan_id);
-    else todo.push({ cid, fanId: r.fan_id, listId: m.list_id });
-  }
-  return todo;
 }
 
 export async function tick() {
   if (busy || !SUB) return;
   busy = true;
   try {
-    const ids = new Set(all('SELECT DISTINCT creator_id FROM auto_lists').map((r) => r.creator_id));
-    const todo = [];
-    for (const cid of ids) {
+    for (const cid of new Set(all('SELECT DISTINCT creator_id FROM auto_lists').map((r) => r.creator_id))) {
       if (!CREATORS().some((c) => c.id === cid)) continue;
       // Nouvelle vente : on relit le haut de sa liste de conversations pour avoir la dépense à jour.
       const last = one('SELECT MAX(first_seen) AS t FROM rv_live WHERE creator_id = ?', cid)?.t || 0;
       if (last > (lastSale.get(cid) ?? last - 1)) await refreshInboxTop(cid);
       lastSale.set(cid, last);
-      todo.push(...updateLists(cid));
-    }
-    // Coupures, une à une (au plus 40 par tour, le reste au tour suivant).
-    for (const t of todo.slice(0, 40)) {
-      const k = `${t.cid}:${t.fanId}`;
-      if ((fails.get(k) || 0) >= 3) continue;
-      try {
-        await SUB.setAi(t.cid, t.fanId, false);
-        patchInboxChat(t.cid, t.fanId, { ai: false });
-        run('UPDATE auto_list_members SET handled = 1 WHERE list_id = ? AND fan_id = ?', t.listId, t.fanId);
-        console.log(`[bloom] IA coupée sur le fan ${t.fanId} (${t.cid}) : entré dans la liste de passage`);
-      } catch (e) {
-        fails.set(k, (fails.get(k) || 0) + 1);
-        console.warn(`[bloom] coupure IA du fan ${t.fanId} :`, e.message);
-      }
-      await new Promise((r) => setTimeout(r, 300));
+      updateLists(cid);
     }
   } catch (e) {
     console.warn('[bloom] listes automatiques :', e.message);
@@ -173,19 +178,14 @@ export function listRoutes({ substy, userFrom, send, body, creators }) {
       if (!auth(req, res, cid)) return;
       send(res, 200, view(cid));
     },
-    // Choisir le mode (admins / managers). Hybride : il faut une liste de passage (créée si besoin : « A dépensé 1 $ »).
+    // Choisir le mode (admins / managers).
     'POST /api/chat-setup/mode': async (req, res) => {
       const b = await body(req);
       const cid = String(b.creatorId || '');
       const u = auth(req, res, cid, true);
       if (!u) return;
       if (!MODES.includes(b.mode)) return send(res, 400, { error: 'Mode inconnu' });
-      let listId = b.mode === 'hybrid' ? Number(b.listId) || null : null;
-      if (listId && !one('SELECT id FROM auto_lists WHERE id = ? AND creator_id = ?', listId, cid)) return send(res, 400, { error: 'Liste inconnue' });
-      if (b.mode === 'hybrid' && !listId) {
-        listId = listsOf(cid).find((l) => l.min_spent === 1)?.id || Number(run('INSERT INTO auto_lists (creator_id, name, min_spent, created_at) VALUES (?, ?, ?, ?)', cid, 'Payeurs', 1, Date.now()).lastInsertRowid);
-      }
-      run('INSERT INTO chat_mode (creator_id, mode, list_id, updated_at, updated_by) VALUES (?, ?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET mode = excluded.mode, list_id = excluded.list_id, updated_at = excluded.updated_at, updated_by = excluded.updated_by', cid, b.mode, listId, Date.now(), u.name || null);
+      run('INSERT INTO chat_mode (creator_id, mode, list_id, updated_at, updated_by) VALUES (?, ?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET mode = excluded.mode, list_id = NULL, updated_at = excluded.updated_at, updated_by = excluded.updated_by', cid, b.mode, null, Date.now(), u.name || null);
       updateLists(cid);
       send(res, 200, view(cid));
     },
@@ -215,7 +215,6 @@ export function listRoutes({ substy, userFrom, send, body, creators }) {
       const cid = String(b.creatorId || '');
       if (!auth(req, res, cid, true)) return;
       const id = Number(b.id);
-      if (modeOf(cid)?.list_id === id) return send(res, 400, { error: 'C’est la liste de passage du mode hybride : choisis-en une autre avant de la supprimer.' });
       run('DELETE FROM auto_list_members WHERE list_id = ? AND list_id IN (SELECT id FROM auto_lists WHERE creator_id = ?)', id, cid);
       run('DELETE FROM auto_lists WHERE id = ? AND creator_id = ?', id, cid);
       send(res, 200, view(cid));
