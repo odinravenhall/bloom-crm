@@ -81,11 +81,13 @@ function report(u, creators, p) {
   const prev = zero();
   const per = new Map(accs.map((a) => [a.id, { ...a, cur: zero(), prev: zero(), total: 0, prevTotal: 0, refunds: 0, newSubs: 0, renewals: 0, subNew: 0, subRecurring: 0, tx: 0, spenders: new Set() }]));
   let refunded = 0;
+  const statuses = {}; // statuts des ventes vus (pour reconnaître les remboursements d'Infloww)
   if (accs.length) {
     const ph = accs.map(() => '?').join(',');
     for (const r of all(`SELECT account, type, raw_type, gross, net, status, fan_id, fan_name, at FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accs.map((a) => a.id), prevStart, end)) {
       const c = per.get(r.account);
       const v = (net ? r.net : r.gross) / 100;
+      if (r.at >= start) statuses[r.status ?? 'null'] = (statuses[r.status ?? 'null'] || 0) + 1;
       if (REFUND.test(r.status || '')) {
         if (r.at >= start) (refunded += Math.abs(v)), (c.refunds += Math.abs(v));
         continue;
@@ -140,6 +142,7 @@ function report(u, creators, p) {
     summary: Object.fromEntries([['total', { v: round(total), change: pct(total, prevTotal) }], ...CHANNELS.map((k) => [k, { v: round(cur[k]), change: pct(cur[k], prev[k]) }])]),
     trends: buckets.map((b, i) => ({ label: b.label, ...Object.fromEntries(CHANNELS.map((k) => [k, round(b[k])])), total: round(b.total), change: i ? pct(b.total, buckets[i - 1].total) : null })),
     kpi: { creators: accs.length, messages: round(cur.messages), total: round(total), refunded: round(refunded) },
+    statuses,
     creators: [...per.values()].map((c) => {
       const m = c.creatorId ? msg.get(c.creatorId) : null;
       const spenders = c.spenders.size;
