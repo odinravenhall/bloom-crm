@@ -55,14 +55,21 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
       return n;
     });
 
+  // Liste demandée au serveur selon la puce (All / Pinned / Unread = à répondre, même règle que la pastille de
+  // l'onglet : fans qui attendent depuis moins de 72 h), et compteurs des puces calculés par le serveur.
+  const [totals, setTotals] = useState<{ reply: number; pinned: number } | null>(null);
   const load = useCallback(() => {
     setBusy(true);
-    const qs = new URLSearchParams({ model: model.id, tab: "all", sort: p.order, ...(q ? { q } : {}), ...(online ? { online: "1" } : {}) });
+    const tab = chip === "pinned" ? "pinned" : chip === "unread" || chip === "priority" ? "reply" : "all";
+    const qs = new URLSearchParams({ model: model.id, tab, sort: p.order, ...(tab === "reply" ? { window: "72" } : {}), ...(q ? { q } : {}), ...(online ? { online: "1" } : {}) });
     api<QueueResp>("GET", `/api/inbox?${qs}`)
       .then(setData)
       .catch((e) => toast((e as Error).message, "err"))
       .finally(() => setBusy(false));
-  }, [model.id, p.order, q, online]);
+    api<QueueResp>("GET", `/api/inbox?${new URLSearchParams({ model: model.id, tab: "reply", window: "72" })}`)
+      .then((r) => setTotals({ reply: r.totals.reply, pinned: r.totals.pinned ?? 0 }))
+      .catch(() => {});
+  }, [model.id, p.order, q, online, chip]);
   useEffect(() => {
     load();
   }, [load]);
@@ -89,7 +96,7 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
     unreadTips: (c) => c.needsReply && c.totalSpent > 0,
     fanLast: (c) => c.lastFromFan,
   };
-  const count = (k: Chip) => base.filter(test[k]).length;
+  const count = (k: Chip) => (k === "unread" && totals ? totals.reply : k === "pinned" && totals ? totals.pinned : base.filter(test[k]).length);
   const shownList = base.filter(test[chip]).filter(test[p.filter]).filter((c) => !list || list.fans.has(String(c.memberId)));
 
   const markRead = async (ids: string[]) => {
