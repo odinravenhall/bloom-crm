@@ -75,7 +75,7 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 - `web/` (Next.js 16 + Tailwind 4) = l'**interface**, avec SA direction artistique « floraison » (thème clair crème / prune / rose pétale / sauge, titres Fraunces, texte Manrope, aucune animation décorative) — ne pas recopier le look de Raven. Elle relaie `/api/*` et `/media` vers
   l'API (`next.config.mjs`, réseau Docker, alias `api`). Pages : `/connexion`, `/app` (vue d'ensemble), `/app/messagerie`,
   `/app/fans`, `/app/vault`, `/app/creatrices`, `/app/reglages` ; rubriques à venir : `app/app/[slug]/page.tsx`.
-  Navigation EN HAUT (`app/app/TopNav.tsx`), pas de menu latéral. Thèmes clair / sombre / onyx (`lib/theme.ts`, variables dans `globals.css`).
+  Menu à GAUCHE (`app/app/SideNav.tsx`) : tout visible, petits titres en serif, réductible en icônes — pas l'accordéon de Raven. Thèmes clair / sombre / onyx (`lib/theme.ts`, variables dans `globals.css`).
 - `docker-compose.yml` : `app` (API, réseau interne) + `web` (alias `bloom-web` sur le réseau du Caddy de /root/zebre).
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
   `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).

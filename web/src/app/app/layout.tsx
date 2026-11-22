@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireMe } from "@/lib/server";
 import { CreatorsProvider } from "@/lib/creators";
-import { TopNav } from "./TopNav";
+import { SideNav } from "./SideNav";
 
 export const metadata: Metadata = { title: { default: "Bloom CRM", template: "%s · Bloom CRM" } };
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const me = await requireMe();
   return (
     <CreatorsProvider>
-      <div className="flex h-dvh w-full max-w-full flex-col">
-        <TopNav me={me} />
+      <div className="flex h-dvh w-full max-w-full flex-col md:flex-row">
+        <SideNav me={me} />
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </CreatorsProvider>
