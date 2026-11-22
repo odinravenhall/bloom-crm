@@ -128,7 +128,7 @@ export function MessagesPro() {
   const showList = adding || !active;
 
   return (
-    <div className={`pro flex h-dvh flex-col overflow-hidden ${sfw ? "pro-sfw" : ""}`} style={{ background: "var(--pro-page)", color: "var(--of-text)" }}>
+    <div className={`pro fixed inset-0 flex flex-col overflow-hidden ${sfw ? "pro-sfw" : ""}`} style={{ background: "var(--pro-page)", color: "var(--of-text)" }}>
       {/* Onglets des créatrices */}
       <div className="flex h-12 shrink-0 items-end gap-1 px-3" style={{ background: "var(--pro-bar)" }}>
         {showList ? (

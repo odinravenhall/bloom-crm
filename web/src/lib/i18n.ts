@@ -575,6 +575,7 @@ const D: Record<string, [es: string, fr: string]> = {
   "SFW: blur photos and videos": ["SFW: difuminar fotos y vídeos", "SFW : flouter photos et vidéos"],
   Back: ["Atrás", "Retour"],
   Recent: ["Recientes", "Récents"],
+  Retry: ["Reintentar", "Réessayer"],
   // settings
   "Your Account": ["Tu cuenta", "Ton compte"],
   "Your account": ["Tu cuenta", "Ton compte"],

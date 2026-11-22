@@ -45,14 +45,18 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
   const name = nick || conv.memberName || "Fan";
   const online = !!conv.lastSeenAt && Date.now() - Date.parse(conv.lastSeenAt) < 15 * 60_000;
 
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const r = await api<MsgResp>("GET", `/api/conversations/${conv.id}/messages`);
       setMsgs([...r.data].reverse());
+      setLoadErr(null);
       if (r.sentBy) setSentBy((s) => ({ ...s, ...r.sentBy }));
       setCursor((c) => c ?? (r.pageInfo?.hasNextPage ? r.pageInfo.endCursor : ""));
     } catch (e) {
-      toast((e as Error).message, "err");
+      // Pas de bulle d'erreur à chaque rafraîchissement : le message reste affiché dans le fil.
+      setLoadErr((e as Error).message);
+      setMsgs((m) => m ?? []);
     }
   }, [conv.id]);
   const loadPins = useCallback(() => api<{ items: Pin[] }>("GET", `/api/pro/pins?conv=${encodeURIComponent(conv.id)}`).then((r) => setPins(r.items)).catch(() => {}), [conv.id]);
@@ -275,6 +279,12 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
           className="of-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
         >
           {msgs === null ? <p className="py-10 text-center text-[13px]" style={{ color: "var(--of-muted)" }}>{t("Loading…")}</p> : null}
+          {loadErr && !all.length ? (
+            <div className="mx-auto mt-10 max-w-[460px] rounded-lg border px-4 py-3 text-center text-[13px]" style={{ borderColor: "var(--pro-line)", color: "var(--of-muted)" }}>
+              {loadErr}
+              <button onClick={load} className="mt-2 block w-full" style={{ color: BLUE }}>{t("Retry")}</button>
+            </div>
+          ) : null}
           {shown.map((m) => (
             <Bubble
               key={m.message.id}

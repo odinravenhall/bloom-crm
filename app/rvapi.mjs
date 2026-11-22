@@ -254,7 +254,18 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (!x) return;
       const cursor = new URL(req.url, 'http://x').searchParams.get('cursor') || undefined;
       const c = inboxChat(x.cid, x.fanId);
-      const r = await substy.messages(x.cid, x.fanId, { limit: 30, cursor });
+      // Substy échoue parfois sur certains fans (« Failed to get messages ») : on retente avec moins de messages.
+      let r = null;
+      let lastErr = null;
+      for (const limit of [30, 10, 3]) {
+        try {
+          r = await substy.messages(x.cid, x.fanId, { limit, cursor });
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!r) return send(res, 502, { error: `Substy n’arrive pas à charger les messages de ce fan (${lastErr?.message || 'erreur'}). Réessaie plus tard ou ouvre-le dans Substy.` });
       const logs = all('SELECT s.text, s.at, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? ORDER BY s.at DESC LIMIT 200', x.cid, x.fanId);
       const who = (m) => {
         if (!m.isSentByCreator) return null;
