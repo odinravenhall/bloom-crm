@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, Lock, Send, X } from "lucide-react";
+import { ImagePlus, Lock, ScrollText, Send, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { cn, dayLabel, hhmm, usd } from "@/lib/fmt";
 import type { AiLog, Chat as ChatT, Media, Message, Presence } from "@/lib/types";
@@ -9,6 +9,7 @@ import { Avatar, btnCls } from "@/components/ui";
 import type { LiveEvent } from "./Inbox";
 import { FanPanel } from "./FanPanel";
 import { VaultPicker } from "./VaultPicker";
+import { ScriptPicker } from "./ScriptPicker";
 
 type Page = { items: Message[]; olderCursor: string | null; aiLog?: AiLog[] };
 
@@ -107,6 +108,9 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
   const [sel, setSel] = useState<Media[]>([]);
   const [price, setPrice] = useState(0);
   const [picker, setPicker] = useState(false);
+  // Étape de script préparée (envoyée avec son identifiant, pour les statistiques du script chez Substy)
+  const [step, setStep] = useState<{ id: string; name: string } | null>(null);
+  const [scripts, setScripts] = useState(false);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
@@ -115,7 +119,8 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
     setSending(true);
     setErr("");
     try {
-      await api("POST", "/api/send", { creatorId, fanId: chat.fanId, message: text, medias: sel.map((m) => m.id), price });
+      await api("POST", "/api/send", { creatorId, fanId: chat.fanId, message: text, medias: sel.map((m) => m.id), price, templateId: step?.id ?? null });
+      setStep(null);
       setText("");
       setSel([]);
       setPrice(0);
@@ -226,7 +231,8 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
             <span className="text-xs text-muted">
               {sel.length} média{sel.length > 1 ? "s" : ""} · {price ? "PPV " + usd(price) : "gratuit"}
             </span>
-            <button onClick={() => (setSel([]), setPrice(0))} className="ml-auto rounded-lg p-1 text-muted hover:text-fg" title="Retirer">
+            {step ? <span className="rounded-full bg-petal px-2 py-0.5 text-[11px] font-semibold text-primary-soft">script : {step.name}</span> : null}
+            <button onClick={() => (setSel([]), setPrice(0), setStep(null))} className="ml-auto rounded-lg p-1 text-muted hover:text-fg" title="Retirer">
               <X className="size-4" />
             </button>
           </div>
@@ -251,6 +257,9 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
             <button onClick={() => setPicker(true)} className={btnCls.ghost}>
               <ImagePlus className="size-4" /> Médias / PPV
             </button>
+            <button onClick={() => setScripts(true)} className={btnCls.ghost}>
+              <ScrollText className="size-4" /> Scripts
+            </button>
             {err ? <span className="truncate text-xs font-semibold text-rose-300">{err}</span> : null}
             <button onClick={send} disabled={sending || (!text.trim() && !sel.length)} className={cn(btnCls.primary, "ml-auto")}>
               <Send className="size-4" /> Envoyer
@@ -260,6 +269,23 @@ export function Chat({ creatorId, chat, lastEvent, onPatch, watchers = [] }: { c
       </div>
 
       <FanPanel creatorId={creatorId} fanId={chat.fanId} onLoaded={(f) => onPatch(chat.fanId, { name: f.name, avatar: f.avatar, username: f.username, ai: f.ai })} />
+      {scripts ? (
+        <ScriptPicker
+          creatorId={creatorId}
+          fanId={chat.fanId}
+          fanName={chat.name}
+          onClose={() => setScripts(false)}
+          onPick={(st) => {
+            setText(st.text);
+            setSel(st.medias.map(({ context: _c, ...m }) => m));
+            setPrice(st.medias.length ? st.price : 0);
+            setStep({ id: st.id, name: st.name });
+            setScripts(false);
+            toast(st.aiCaption && !st.text ? "Étape prête : écris ta légende, puis envoie" : "Étape prête : relis, puis envoie");
+            requestAnimationFrame(() => input.current?.focus());
+          }}
+        />
+      ) : null}
       {picker ? (
         <VaultPicker
           creatorId={creatorId}

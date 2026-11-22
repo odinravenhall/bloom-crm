@@ -331,6 +331,34 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       .then((list) => (list || []).slice(0, 40).map((x) => ({ id: String(x.id), type: x.type, at: x.createdAt, price: x.price, fan: x.userName || null, fanId: x.userId ? String(x.userId) : null, creatorId: x.creatorId, creator: x.creatorName })))
       .catch(() => []);
 
+  const scriptView = (s) => ({
+    id: s.id,
+    name: plain(s.name),
+    description: plain(s.description),
+    position: s.position ?? 0,
+    enabled: !!s.enabled,
+    ai: !!s.isAi,
+    human: !!s.isHuman,
+    steps: s._count?.messageTemplates ?? (s.templates || []).length,
+    medias: s._stats?.totalMedia ?? null,
+    totalPrice: s._stats?.totalPrice ?? null,
+    minPrice: s._stats?.minPrice ?? null,
+    maxPrice: s._stats?.maxPrice ?? null,
+  });
+  const stepView = (t) => ({
+    id: t.id,
+    position: t.position ?? 0,
+    name: plain(t.name),
+    text: plain(t.content),
+    aiCaption: !!t.isAiCaption,
+    locked: !!t.isLockedText,
+    price: Number(t.price) || 0,
+    medias: (t.medias || []).map((m) => ({ ...mediaView({ ...m, files: { thumb: m.files?.thumb || m.files?.preview, full: m.files?.full } }), context: m.context || null })),
+    followUps: (t.postMediaMessages || []).sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((f) => ({ text: plain(f.message), wait: f.waitTime ?? null, ifRead: !f.doNotSendIfRead, ifReply: !f.doNotSendIfReply, ifPaid: !f.doNotSendIfPaid })),
+    sent: !!t.alreadySent,
+    purchase: t.purchaseState?.status || null,
+  });
+
   /** Toute la configuration IA d'une créatrice, en une réponse (réglages, personnalité, fiche, ce qui manque, dernières modifications). */
   async function aiConfig(cid) {
     const [settings, presets, creators] = await Promise.all([substy.aiSettings(cid), substy.voicePresets(cid).catch(() => []), substy.creators()]);
@@ -444,6 +472,34 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       await substy.updateCreator({ ...next, id: cid });
       run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'profile', JSON.stringify(Object.keys(pr)), Date.now());
       send(res, 200, await aiConfig(cid));
+    },
+
+    // ------------------------------------------------ scripts (séquences de Substy, partagées avec l'IA)
+    'GET /api/scripts': async (req, res) => {
+      const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
+      const list = (await substy.scripts(String(p.get('creatorId')))) || [];
+      send(res, 200, list.map(scriptView).sort((a, b) => a.position - b.position));
+    },
+    'GET /api/scripts/steps': async (req, res) => {
+      const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
+      const steps = (await substy.scriptSteps(String(p.get('creatorId')), String(p.get('scriptId')))) || [];
+      send(res, 200, steps.map(stepView).sort((a, b) => a.position - b.position));
+    },
+    // Où en est un fan dans chaque script : étapes envoyées, achetées, étape suivante.
+    'GET /api/fan-scripts': async (req, res) => {
+      const p = q(req);
+      if (!authC(req, res, p.get('creatorId'))) return;
+      const list = (await substy.fanScripts(String(p.get('creatorId')), String(p.get('fanId')))) || [];
+      send(
+        res,
+        200,
+        list.map((s) => {
+          const steps = (s.templates || []).map(stepView).sort((a, b) => a.position - b.position);
+          return { ...scriptView(s), steps, next: steps.find((x) => !x.sent)?.id ?? null, sent: steps.filter((x) => x.sent).length, bought: steps.filter((x) => x.purchase === 'bought').length };
+        }),
+      );
     },
 
     // ------------------------------------------------ équipe
@@ -611,7 +667,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
           return send(res, 400, { error: 'Mot interdit dans le message', details: v });
       }
       run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at) VALUES (?, ?, ?, ?, ?, ?)', u.id, String(b.creatorId), String(b.fanId), message, price, Date.now());
-      const r = await substy.send(String(b.creatorId), String(b.fanId), { message, medias, price: price || undefined, replyId: b.replyId || null });
+      const r = await substy.send(String(b.creatorId), String(b.fanId), { message, medias, price: price || undefined, replyId: b.replyId || null, templateId: b.templateId ? String(b.templateId) : undefined });
       send(res, 200, { ok: true, result: r ?? null });
     },
 

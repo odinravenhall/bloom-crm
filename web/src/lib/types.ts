@@ -123,3 +123,9 @@ export type Member = {
 };
 /** Quelqu'un d'autre sur la même créatrice (messagerie). */
 export type Presence = { userId: number; name: string; avatar: string | null; fanId: string | null };
+
+/** Scripts de Substy (séquences d'étapes, partagées avec l'IA). */
+export type Script = { id: string; name: string; description: string; position: number; enabled: boolean; ai: boolean; human: boolean; steps: number; medias: number | null; totalPrice: number | null; minPrice: number | null; maxPrice: number | null };
+export type FollowUp = { text: string; wait: number | null; ifRead: boolean; ifReply: boolean; ifPaid: boolean };
+export type ScriptStep = { id: string; position: number; name: string; text: string; aiCaption: boolean; locked: boolean; price: number; medias: (Media & { context: string | null })[]; followUps: FollowUp[]; sent: boolean; purchase: string | null };
+export type FanScript = Omit<Script, "steps"> & { steps: ScriptStep[]; next: string | null; sent: number; bought: number };

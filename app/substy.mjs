@@ -167,6 +167,12 @@ export class SubstySession {
   aiSettings(creatorId) { return this.call('settings.getSettings', { creatorId }); }
   /** Personnalités disponibles (fournies par Substy + créées par l'agence). Lecture seule. */
   voicePresets(creatorId) { return this.call('settings.voicePreset.getAll', { creatorId }); }
+  // --- Scripts (les mêmes pour l'IA et les chatteurs). Lecture seule.
+  scripts(creatorId) { return this.call('scripts.getScripts', { creatorId }); }
+  scriptSteps(creatorId, scriptId) { return this.call('scripts.templates.getTemplates', { creatorId, scriptId }); }
+  /** Scripts d'un fan, avec pour chaque étape : déjà envoyée ? achetée ? */
+  fanScripts(creatorId, fanId) { return this.call('creators.fans.getFanScripts', { creatorId, fanId }); }
+
   // --- Écriture de la configuration IA (formats relevés sur de vrais enregistrements du site, 22/11/2026) ---
   /** Réglages du chatteur IA : on envoie exactement les champs que le site de Substy envoie. */
   updateSettings(creatorId, s) {
