@@ -101,6 +101,16 @@ function liveMsg(v, fanId, fanName) {
   return out;
 }
 
+/** Noms des tags d'un script : son tag principal puis ceux en plus (façon Infloww). */
+function tagNames(i, gname) {
+  let extra = [];
+  try {
+    extra = JSON.parse(i.tags || '[]');
+  } catch {}
+  const names = [i.group_id, ...extra].map((id) => gname.get(id)?.name).filter(Boolean);
+  return names.length ? [...new Set(names)] : ['Général'];
+}
+
 /** Bibliothèque de Bloom (tags + séquences) → format `Lib` de Raven, avec ce qui a déjà été envoyé au fan. */
 function libOf(cid, fanId) {
   const groups = all('SELECT id, kind, name, position, updated_at FROM lib_groups WHERE creator_id = ? ORDER BY position, id', cid);
@@ -123,7 +133,7 @@ function libOf(cid, fanId) {
     try {
       medias = JSON.parse(i.medias || '[]').map(rvMedia);
     } catch {}
-    return { id: i.id, title: i.name || '', content: i.text, note: i.note || null, price: i.price ? cents(i.price) : null, medias, tags: [gname.get(i.group_id)?.name || 'Général'], fromReveal: false, uses: s?.uses || 0, sales: s?.sales || 0, revenue: s?.revenue || 0, usedWithFan: f ? iso(f.at) : null, usedBy: f?.by || null };
+    return { id: i.id, title: i.name || '', content: i.text, note: i.note || null, price: i.price ? cents(i.price) : null, medias, tags: tagNames(i, gname), fromReveal: false, uses: s?.uses || 0, sales: s?.sales || 0, revenue: s?.revenue || 0, usedWithFan: f ? iso(f.at) : null, usedBy: f?.by || null };
   });
   const sequences = [];
   for (const g of groups) {

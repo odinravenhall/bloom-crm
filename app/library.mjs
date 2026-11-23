@@ -18,13 +18,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS lib_items_group ON lib_items (group_id, position);
 `);
-for (const sql of ['ALTER TABLE sent_log ADD COLUMN lib_item INTEGER', 'ALTER TABLE sent_log ADD COLUMN message_id TEXT', 'CREATE INDEX IF NOT EXISTS sent_lib ON sent_log (lib_item)']) {
+// Façon Infloww (23/11/2026) : un script peut être dans plusieurs tags (`tags` = ids des tags en plus de `group_id`),
+// une étape de séquence peut être conditionnelle (`cond` : '' normale, 'bought' si l'étape d'avant est achetée,
+// 'not_bought' si elle ne l'est pas), et garder les créatrices taguées (release forms OnlyFans, `creator_tags`).
+for (const sql of ["ALTER TABLE lib_items ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'", "ALTER TABLE lib_items ADD COLUMN cond TEXT NOT NULL DEFAULT ''", "ALTER TABLE lib_items ADD COLUMN creator_tags TEXT NOT NULL DEFAULT '[]'", 'ALTER TABLE sent_log ADD COLUMN lib_item INTEGER', 'ALTER TABLE sent_log ADD COLUMN message_id TEXT', 'CREATE INDEX IF NOT EXISTS sent_lib ON sent_log (lib_item)']) {
   try {
     db.exec(sql);
   } catch {}
 }
 
 const KINDS = ['tag', 'sequence'];
+const CONDS = ['', 'bought', 'not_bought'];
 const tx = (fn) => {
   db.exec('BEGIN');
   try {
@@ -82,10 +86,11 @@ function library(creatorId, fanId) {
         ).map((r) => [r.id, r]),
       )
     : null;
+  const inGroup = (i, g) => i.group_id === g.id || (g.kind === 'tag' && parse(i.tags).includes(g.id));
   return groups.map((g) => ({
     ...g,
     items: items
-      .filter((i) => i.group_id === g.id)
+      .filter((i) => inGroup(i, g))
       .map((i) => {
         const s = stats.get(i.id);
         const f = toFan?.get(i.id);
@@ -96,6 +101,10 @@ function library(creatorId, fanId) {
           note: i.note || null,
           price: i.price || 0,
           medias: parse(i.medias),
+          groupId: i.group_id,
+          tags: [i.group_id, ...parse(i.tags).filter((x) => x !== i.group_id)],
+          cond: i.cond || '',
+          creatorTags: parse(i.creator_tags),
           uses: s?.uses || 0,
           fans: s?.fans || 0,
           ppvSent: s?.ppv || 0,
@@ -162,7 +171,14 @@ export function libraryRoutes({ userFrom, send, body }) {
       if (!g) return send(res, 404, { error: 'Introuvable' });
       if (!editor(req, res, g.creator_id)) return;
       tx(() => {
-        run('DELETE FROM lib_items WHERE group_id = ?', g.id);
+        // Un script qui est aussi dans un autre tag y reste.
+        for (const i of all('SELECT id, tags FROM lib_items WHERE group_id = ?', g.id)) {
+          const rest = parse(i.tags).filter((x) => x !== g.id && one('SELECT 1 AS x FROM lib_groups WHERE id = ?', x));
+          if (rest.length) run('UPDATE lib_items SET group_id = ?, tags = ? WHERE id = ?', rest[0], JSON.stringify(rest.slice(1)), i.id);
+          else run('DELETE FROM lib_items WHERE id = ?', i.id);
+        }
+        for (const i of all('SELECT i.id, i.tags FROM lib_items i JOIN lib_groups x ON x.id = i.group_id WHERE x.creator_id = ?', g.creator_id))
+          if (parse(i.tags).includes(g.id)) run('UPDATE lib_items SET tags = ? WHERE id = ?', JSON.stringify(parse(i.tags).filter((x) => x !== g.id)), i.id);
         run('DELETE FROM lib_groups WHERE id = ?', g.id);
       });
       send(res, 200, { ok: true });
@@ -214,18 +230,55 @@ export function libraryRoutes({ userFrom, send, body }) {
       if (price && !medias.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
       if (price && price < 3) return send(res, 400, { error: 'Prix minimum d’un PPV : 3 $' });
       const name = String(b.name || '').trim().slice(0, 80);
-      const note = String(b.note || '').trim().slice(0, 200) || null;
+      const note = String(b.note || '').trim().slice(0, 500) || null;
+      const cond = g.kind === 'sequence' && CONDS.includes(b.cond) ? b.cond : '';
+      const creatorTags = (Array.isArray(b.creatorTags) ? b.creatorTags : []).map((x) => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 20);
+      // Tags (onglet Tag) : le 1er devient le tag principal, les autres sont gardés à côté. Seulement des tags de la même créatrice.
+      let home = g;
+      let extra = [];
+      if (g.kind === 'tag' && Array.isArray(b.tags)) {
+        const ok = b.tags.map(Number).map((id) => one("SELECT id FROM lib_groups WHERE id = ? AND creator_id = ? AND kind = 'tag'", id, g.creator_id)).filter(Boolean);
+        if (ok.length) {
+          home = cur && ok.some((x) => x.id === cur.group_id) ? groupOf(cur.group_id) : groupOf(ok[0].id);
+          extra = ok.map((x) => x.id).filter((id) => id !== home.id);
+        }
+      }
       if (cur) {
-        run('UPDATE lib_items SET name = ?, text = ?, note = ?, price = ?, medias = ?, updated_at = ? WHERE id = ?', name, text, note, price, JSON.stringify(medias), Date.now(), cur.id);
+        run('UPDATE lib_items SET name = ?, text = ?, note = ?, price = ?, medias = ?, group_id = ?, tags = ?, cond = ?, creator_tags = ?, updated_at = ? WHERE id = ?', name, text, note, price, JSON.stringify(medias), home.id, JSON.stringify(extra), cond, JSON.stringify(creatorTags), Date.now(), cur.id);
         return send(res, 200, { id: cur.id });
       }
-      const pos = (one('SELECT MAX(position) AS m FROM lib_items WHERE group_id = ?', g.id)?.m ?? -1) + 1;
+      const pos = (one('SELECT MAX(position) AS m FROM lib_items WHERE group_id = ?', home.id)?.m ?? -1) + 1;
       const r = run(
-        'INSERT INTO lib_items (group_id, position, name, text, note, price, medias, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        g.id, pos, name || String(pos + 1), text, note, price, JSON.stringify(medias), Date.now(), Date.now(),
+        'INSERT INTO lib_items (group_id, position, name, text, note, price, medias, tags, cond, creator_tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        home.id, pos, name || String(pos + 1), text, note, price, JSON.stringify(medias), JSON.stringify(extra), cond, JSON.stringify(creatorTags), Date.now(), Date.now(),
       );
       run('UPDATE lib_groups SET updated_at = ? WHERE id = ?', Date.now(), g.id);
       send(res, 200, { id: Number(r.lastInsertRowid) });
+    },
+    // « Share » d'un script vers d'autres créatrices : copié dans un tag du même nom (créé s'il manque).
+    // Médias et prix ne suivent pas (chaque vault est propre à la créatrice).
+    'POST /api/lib/item/share': async (req, res) => {
+      const b = await body(req);
+      const i = itemOf(b.id);
+      if (!i) return send(res, 404, { error: 'Introuvable' });
+      const g = groupOf(i.group_id);
+      const u = editor(req, res, i.creator_id);
+      if (!u) return;
+      const to = [...new Set((Array.isArray(b.toCreatorIds) ? b.toCreatorIds : []).map(String))].filter((c) => c !== i.creator_id);
+      if (!to.length) return send(res, 400, { error: 'Choisis au moins une créatrice' });
+      for (const c of to) if (!canSee(u, c)) return send(res, 403, { error: 'Tu n’as pas accès à une de ces créatrices.' });
+      tx(() => {
+        for (const c of to) {
+          let tg = one('SELECT id FROM lib_groups WHERE creator_id = ? AND kind = ? AND name = ?', c, g.kind, g.name);
+          if (!tg) {
+            const gp = (one('SELECT MAX(position) AS m FROM lib_groups WHERE creator_id = ? AND kind = ?', c, g.kind)?.m ?? -1) + 1;
+            tg = { id: Number(run('INSERT INTO lib_groups (creator_id, kind, name, position, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', c, g.kind, g.name, gp, u.id, Date.now(), Date.now()).lastInsertRowid) };
+          }
+          const pos = (one('SELECT MAX(position) AS m FROM lib_items WHERE group_id = ?', tg.id)?.m ?? -1) + 1;
+          run('INSERT INTO lib_items (group_id, position, name, text, note, price, medias, cond, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)', tg.id, pos, i.name, i.text, i.note, '[]', i.cond || '', Date.now(), Date.now());
+        }
+      });
+      send(res, 200, { ok: true, count: to.length });
     },
     'POST /api/lib/item/delete': async (req, res) => {
       const b = await body(req);

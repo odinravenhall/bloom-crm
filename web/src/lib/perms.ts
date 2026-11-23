@@ -11,7 +11,6 @@ const PATHS: [string, string][] = [
   ["/pro", "messagespro"],
   ["/app/smart", "growth.smart"],
   ["/app/listes", "growth.lists"],
-  ["/app/autofollow", "growth.autofollow"],
   ["/app/vault", "growth.vault"],
   ["/app/scripts", "growth.scripts"],
   ["/app/tracking", "growth.tracking"],

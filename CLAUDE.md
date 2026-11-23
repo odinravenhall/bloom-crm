@@ -117,7 +117,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Envoi depuis la messagerie (bouton « Scripts ») : `libItemId` → `sent_log.lib_item`, puis l'id du message reçu en temps réel
   → `sent_log.message_id`. Achat = vente Substy (`rv_live.message_id`). L'avancement d'un fan dans une séquence = les étapes
   déjà envoyées à ce fan (pas un index : réordonner ne casse rien).
-- `{prenom}` est remplacé par le prénom du fan. L'onglet « IA Substy » montre en lecture les scripts de l'IA de Substy.
+- `{name}` (comme Infloww), `{prenom}` ou `{prénom}` sont remplacés par le prénom du fan.
+- Façon Infloww (23/11/2026) : un script peut être dans plusieurs tags (`lib_items.tags`), une étape de séquence peut être
+  conditionnelle (`cond` : si l'étape d'avant est achetée / pas achetée), créatrices taguées (`creator_tags`), « Share » d'un
+  script vers d'autres créatrices (`/api/lib/item/share`, sans médias ni prix).
+- Onglet « IA Substy » (`app/aiscripts.mjs`) : voir ET modifier les scripts de l'IA (admins / managers) ; Bloom relit le
+  script / l'étape chez Substy avant d'écrire et ne change que les champs touchés (`scripts.updateScript`,
+  `scripts.templates.updateTemplate|createTemplate|deleteTemplate`). Onglet « Analytics » = `scripts.globalStats` (dates en
+  superjson `meta`). Modifications notées dans `ai_changes`.
 
 ## Messagerie = celle de Raven CRM — `web/src/rv/`, `app/rvapi.mjs`
 

@@ -54,7 +54,6 @@ export const PERMS = [
   { key: 'messagespro', group: 'Messages Pro', label: 'Messages Pro', bases: C },
   { key: 'growth.smart', group: 'Growth', label: 'Smart Messages', bases: B },
   { key: 'growth.lists', group: 'Growth', label: 'Smart lists', bases: C },
-  { key: 'growth.autofollow', group: 'Growth', label: 'Auto-follow', bases: B },
   { key: 'growth.vault', group: 'Growth', label: 'Vault Pro', bases: C },
   { key: 'growth.scripts', group: 'Growth', label: 'Scripts', bases: C },
   { key: 'growth.tracking', group: 'Growth', label: 'Tracking links', bases: B },

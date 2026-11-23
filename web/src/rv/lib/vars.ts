@@ -1,5 +1,5 @@
-/** Variables des scripts : {prénom} (ou {prenom}) remplacé par le prénom du fan. */
-const PRENOM = /\{\s*pr[ée]nom\s*\}/gi;
+/** Variables des scripts : {name} (comme Infloww), {prénom} ou {prenom} remplacés par le prénom du fan. */
+const PRENOM = /\{\s*(?:pr[ée]nom|name)\s*\}/gi;
 
 export function hasVars(text: string) {
   return PRENOM.test(text) && !(PRENOM.lastIndex = 0);

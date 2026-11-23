@@ -120,13 +120,13 @@ export class SubstySession {
   }
 
   /** Appel tRPC (format batch du site). */
-  async call(proc, input) {
+  async call(proc, input, meta) {
     const go = async () => {
       const jwt = await this.token();
       return fetch(`${APP}/api/trpc/${proc}?batch=1`, {
         method: 'POST',
         headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json', origin: APP, referer: `${APP}/`, 'user-agent': UA },
-        body: JSON.stringify({ 0: input === undefined ? { json: null, meta: { values: ['undefined'], v: 1 } } : { json: input } }),
+        body: JSON.stringify({ 0: input === undefined ? { json: null, meta: { values: ['undefined'], v: 1 } } : meta ? { json: input, meta } : { json: input } }),
         signal: AbortSignal.timeout(30_000),
       });
     };
@@ -188,6 +188,25 @@ export class SubstySession {
   scriptSteps(creatorId, scriptId) { return this.call('scripts.templates.getTemplates', { creatorId, scriptId }); }
   /** Scripts d'un fan, avec pour chaque étape : déjà envoyée ? achetée ? */
   fanScripts(creatorId, fanId) { return this.call('creators.fans.getFanScripts', { creatorId, fanId }); }
+  // --- Scripts de l'IA : écriture (formats relevés le 23/11/2026 sur les erreurs de validation de Substy, sans rien modifier).
+  //  updateScript : {creatorId, id, name, description, startTime, endTime, enabled, isCustom, isAi, isHuman, targetFanListIds}
+  //  templates.updateTemplate : {creatorId, id, template: {name, price, scriptId, content, medias, basePrice, maxPrice,
+  //    postMediaMessages, pricingMode FIXED|SMART, intervalMin, intervalMax, isAiCaption, isLockedText, language, creatorTags}}
+  //  Média : {id, price, type PHOTO|VIDEO|AUDIO, files, createdAt} ; relance (postMediaMessages) : {waitTime, medias, …}.
+  updateScript(input) { return this.call('scripts.updateScript', input); }
+  createScript(input) { return this.call('scripts.createScript', input); }
+  deleteScript(creatorId, id) { return this.call('scripts.deleteScript', { creatorId, id }); }
+  updateTemplate(creatorId, id, template) { return this.call('scripts.templates.updateTemplate', { creatorId, id, template }); }
+  createTemplate(creatorId, template) { return this.call('scripts.templates.createTemplate', { creatorId, template }); }
+  deleteTemplate(creatorId, id) { return this.call('scripts.templates.deleteTemplate', { creatorId, id }); }
+  /** Stats des scripts (page Scripts → Analytics de Substy) : envoyés, payés, taux, revenus, courbe par jour, par script. */
+  scriptStats(creatorId, { start, end, page = 1, pageSize = 50, sortBy = 'revenue', search } = {}) {
+    const input = { creatorId, page, pageSize, sortBy, ...(search ? { search } : {}) };
+    const values = {};
+    if (start) (input.startDate = new Date(start).toISOString()), (values.startDate = ['Date']);
+    if (end) (input.endDate = new Date(end).toISOString()), (values.endDate = ['Date']);
+    return this.call('scripts.globalStats', input, Object.keys(values).length ? { values } : undefined);
+  }
   // --- Envois groupés (format relevé sur le site de Substy le 22/11/2026, requête bloquée avant envoi).
   /** Historique des messages groupés : `{items, total, page, pageSize, totalPages}`. */
   massMessages(creatorId, page = 1, pageSize = 20) { return this.call('creators.massMessage.list', { creatorId, page, pageSize }); }

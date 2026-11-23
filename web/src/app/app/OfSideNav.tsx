@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Ban, Bot, ChartArea, ChartColumn, ChevronDown, Clock, Contact, ContactRound,
   Feather, Images, LayoutGrid, ListFilter, Menu, MessageCirclePlus, MessagesSquare, Route, ScrollText, SlidersHorizontal, SquareArrowOutUpRight,
-  SquareUser, UserPlus, UserRound, Bell, ShieldCheck, type LucideIcon,
+  SquareUser, UserRound, Bell, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
@@ -51,7 +51,6 @@ const NAV: (Entry | "divider")[] = [
     children: [
       { label: "Smart Messages", icon: MessagesSquare, href: "/app/smart" },
       { label: "Smart lists", icon: ListFilter, href: "/app/listes" },
-      { label: "Auto-follow", icon: UserPlus, href: "/app/autofollow" },
       { label: "Vault Pro", icon: Images, href: "/app/vault" },
       { label: "Scripts", icon: ScrollText, href: "/app/scripts" },
       { label: "Tracking links", icon: Route, href: "/app/tracking" },
