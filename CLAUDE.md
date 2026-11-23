@@ -85,7 +85,18 @@ Vérifié le 21/11/2026 (code dans `app/substy.mjs`) :
 - Vérifier le TypeScript sans Node : lier `web/node_modules` vers celui de Raven (mêmes versions) puis
   `deno run -A node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (enlever le lien avant de commit).
 
-## Rôles (donnés sur Discord, le plus haut gagne) — `app/team.mjs`
+## Rôles et accès : c'est BLOOM qui décide (depuis le 23/11/2026) — `app/staff.mjs`
+
+- Discord sert seulement à se connecter (il faut rester sur le serveur). Le rôle se règle dans Bloom :
+  Employees → Manage employees (groupes, rôle, créatrices, activer / désactiver / supprimer, « Add employee » par pseudo
+  Discord) et Employees → Role settings (rôles perso : nom, description, type = admin / manager / lead / chatter / model,
+  cases d'accès page par page ; seuls les admins les modifient).
+- `users.role` = le type du rôle Bloom (`bl_roles.base`) : toutes les vérifications de l'API s'appuient dessus. Les cases
+  d'accès (`PERMS`, `web/src/lib/perms.ts`) ferment les pages et le menu.
+- Un nouveau venu avec un rôle Discord Bloom reçoit ce rôle comme point de départ ; sans rôle, il doit avoir été ajouté.
+- Accès changés → notification « Permissions updated » (cloche, `/app/notifications`, bouton Refresh Now).
+
+### Rôles de départ (anciens rôles Discord)
 
 | Rôle Discord | Rôle Bloom | Voit |
 |---|---|---|

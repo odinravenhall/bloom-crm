@@ -1,5 +1,5 @@
 export type Role = "admin" | "manager" | "lead" | "chatter" | "model";
-export type Me = { id: number; email: string; name: string; role: Role; avatar: string | null; discord_id: string | null };
+export type Me = { id: number; email: string; name: string; role: Role; avatar: string | null; discord_id: string | null; roleName?: string | null; perms?: string[] };
 export const ROLE_LABEL: Record<string, string> = { admin: "Admin", manager: "Manager", lead: "Team leader", chatter: "Chatteur", model: "Modèle" };
 /** Managers et admins : toutes les créatrices. */
 export const seesAll = (r?: string | null) => r === "admin" || r === "manager";

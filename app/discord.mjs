@@ -6,6 +6,7 @@
 // gardés chiffrés dans la base (jamais dans le dépôt ni dans .env).
 import { createHash, randomBytes } from 'node:crypto';
 import { all, getSetting, one, open, run, seal, setSetting } from './store.mjs';
+import { accountFor } from './staff.mjs';
 
 const API = 'https://discord.com/api/v10';
 const BASE = (process.env.PUBLIC_URL || 'https://bloom.ravencrm.xyz').replace(/\/$/, '');
@@ -139,21 +140,9 @@ async function bloomRole(roleIds = [], isAdmin = false) {
   return best;
 }
 
-/** Membre du serveur avec un rôle Bloom → compte Bloom (créé au premier passage, rôle recalé sur Discord ensuite). */
-function upsertUser({ discordId, name, avatar, role }) {
-  let u = one('SELECT id, active, role FROM users WHERE discord_id = ?', discordId);
-  if (!u) {
-    const r = run(
-      'INSERT INTO users (email, name, role, pass_hash, active, created_at, discord_id, avatar) VALUES (?, ?, ?, NULL, 1, ?, ?, ?)',
-      `discord:${discordId}`, String(name || 'Chatteur').slice(0, 60), role, Date.now(), discordId, avatar || null,
-    );
-    u = { id: Number(r.lastInsertRowid), active: 1, role };
-  } else {
-    run('UPDATE users SET name = ?, avatar = ?, role = ? WHERE id = ?', String(name || 'Chatteur').slice(0, 60), avatar || null, role, u.id);
-  }
-  if (!u.active) throw new Error('Ton compte Bloom est désactivé. Vois avec un admin.');
-  run('UPDATE users SET discord_checked = ? WHERE id = ?', Date.now(), u.id);
-  return u;
+/** Compte Bloom d'un membre du serveur : c'est Bloom qui décide (voir staff.mjs) ; le rôle Discord ne sert qu'aux nouveaux venus. */
+function upsertUser(who) {
+  return accountFor(who);
 }
 function linkFor(who) {
   const u = upsertUser(who);
@@ -186,13 +175,13 @@ export async function oauthFinish(code) {
   const u = m.user || {};
   const owner = (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id;
   const role = await bloomRole(m.roles, u.id === owner);
-  if (!role) throw new LoginError('Tu n’as pas encore accès à Bloom : demande à un admin de te donner le rôle Chatteur sur Discord.');
   try {
     return upsertUser({
       discordId: u.id,
+      username: u.username,
       name: m.nick || u.global_name || u.username,
       avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null,
-      role,
+      discordRole: role,
     });
   } catch (e) {
     throw new LoginError(e.message);
@@ -227,12 +216,12 @@ async function onInteraction(i) {
   try {
     const perms = BigInt(i.member.permissions || '0');
     const role = await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR);
-    if (!role) return reply(i, '🚫 Tu n’as pas encore accès à Bloom : demande à un admin de te donner un rôle (**Chatteur**, **Team Leader**, **Manager** ou **Modèle**).');
     const d = linkFor({
       discordId: u.id,
+      username: u.username,
       name: i.member.nick || u.global_name || u.username,
       avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : null,
-      role,
+      discordRole: role,
     });
     await reply(i, `🌸 Ton lien de connexion à Bloom, **rien que pour toi** : valable 5 min, utilisable une seule fois. Ne le partage pas.${d.firstTime ? '\nPremière connexion : bienvenue !' : ''}`, d.url);
   } catch (e) {
@@ -478,21 +467,14 @@ export function restartBot() {
   registerCommand();
 }
 
-// Toutes les 10 min : rôle Bloom recalé sur le rôle Discord ; plus de rôle ou plus sur le serveur = sessions fermées.
+// Toutes les 10 min : qui a quitté le serveur Discord perd ses sessions. Le rôle, lui, se règle dans Bloom (Employees).
 async function checkMembers() {
   if (!discordReady()) return;
-  const users = all('SELECT DISTINCT u.id, u.discord_id, u.role FROM users u JOIN sessions s ON s.user_id = u.id WHERE u.discord_id IS NOT NULL AND s.expires_at > ?', Date.now());
-  const owner = (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id;
+  const users = all('SELECT DISTINCT u.id, u.discord_id FROM users u JOIN sessions s ON s.user_id = u.id WHERE u.discord_id IS NOT NULL AND s.expires_at > ?', Date.now());
   for (const u of users) {
     try {
-      const m = await discord('GET', `/guilds/${discordGuild()}/members/${u.discord_id}`);
-      const role = await bloomRole(m.roles, u.discord_id === owner);
-      if (!role) {
-        run('DELETE FROM sessions WHERE user_id = ?', u.id);
-        console.log('[bot] accès retiré (plus de rôle Bloom) :', u.id);
-        continue;
-      }
-      run('UPDATE users SET role = ?, discord_checked = ? WHERE id = ?', role, Date.now(), u.id);
+      await discord('GET', `/guilds/${discordGuild()}/members/${u.discord_id}`);
+      run('UPDATE users SET discord_checked = ? WHERE id = ?', Date.now(), u.id);
     } catch (e) {
       if (e.status === 404) {
         run('DELETE FROM sessions WHERE user_id = ?', u.id);

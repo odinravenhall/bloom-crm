@@ -27,3 +27,4 @@ export async function requireMe(allow?: Role[]) {
 }
 export const CHAT_ROLES: Role[] = ["admin", "manager", "lead", "chatter"];
 export const BOSS_ROLES: Role[] = ["admin", "manager", "lead"];
+export const MANAGE_ROLES: Role[] = ["admin", "manager"];

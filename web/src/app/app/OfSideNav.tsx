@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Ban, Bot, ChartArea, ChartColumn, ChevronDown, Clock, Contact, ContactRound,
   Feather, Images, LayoutGrid, ListFilter, Menu, MessageCirclePlus, MessagesSquare, Route, ScrollText, SlidersHorizontal, SquareArrowOutUpRight,
-  SquareUser, UserPlus, UserRound, type LucideIcon,
+  SquareUser, UserPlus, UserRound, Bell, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
@@ -15,6 +15,7 @@ import { useT } from "@/lib/i18n";
 import { OF_PAGES } from "@/lib/ofmanager";
 import { BloomMark } from "@/components/ui";
 import type { Me, Role } from "@/lib/types";
+import { canOpen } from "@/lib/perms";
 import { PlatformSwitch } from "./PlatformSwitch";
 
 type Child = { label: string; icon: LucideIcon; href: string; roles?: Role[] };
@@ -59,14 +60,15 @@ const NAV: (Entry | "divider")[] = [
     ],
   },
   "divider",
-  { key: "creators", label: "Creators", icon: SquareUser, roles: MANAGE, children: [{ label: "Manage creators", icon: SquareUser, href: "/app/creatrices" }] },
+  { key: "creators", label: "Creators", icon: SquareUser, roles: MANAGE, children: [{ label: "Manage creators", icon: SquareUser, href: "/app/creators" }] },
   {
     key: "employees",
     label: "Employees",
     icon: Contact,
     roles: BOSS,
     children: [
-      { label: "Manage employees", icon: Contact, href: "/app/equipe" },
+      { label: "Manage employees", icon: Contact, href: "/app/employees" },
+      { label: "Role settings", icon: ShieldCheck, href: "/app/roles", roles: MANAGE },
       { label: "Shift schedule", icon: Clock, href: soon("Shift schedule") },
     ],
   },
@@ -100,8 +102,23 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
     return () => clearInterval(t);
   }, []);
 
-  const allowed = (r?: Role[]) => !r || r.includes(me.role);
-  const entries = NAV.filter((e) => e === "divider" || allowed(e.roles)).map((e) => (e === "divider" ? e : { ...e, children: e.children?.filter((c) => allowed(c.roles)) }));
+  // Système : notifications (« Permissions updated ») — pastille sur la cloche.
+  const [notifs, setNotifs] = useState(0);
+  useEffect(() => {
+    const load = () =>
+      api<{ unread: number }>("GET", "/api/notifs")
+        .then((r) => setNotifs(r.unread))
+        .catch(() => {});
+    load();
+    const t = setInterval(() => document.visibilityState === "visible" && load(), 60_000);
+    return () => clearInterval(t);
+  }, [path]);
+
+  // Rôle (base) puis cases d'accès du rôle Bloom (Role settings).
+  const allowed = (r?: Role[], href?: string) => (!r || r.includes(me.role)) && (!href || canOpen(me, href));
+  const entries = NAV.filter((e) => e === "divider" || allowed(e.roles, e.href))
+    .map((e) => (e === "divider" ? e : { ...e, children: e.children?.filter((c) => allowed(c.roles, c.href)) }))
+    .filter((e) => e === "divider" || !e.children || e.children.length);
   const first = me.name.split(/\s+/)[0];
 
   return (
@@ -137,6 +154,17 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
       </nav>
 
       <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--of-side-line)" }}>
+        <Link
+          href="/app/notifications"
+          title={narrow ? t("Notifications") : undefined}
+          className={cn("of-item flex items-center gap-3 rounded-lg px-2.5 py-2 text-[15px]", narrow && "justify-center px-0", same(path, "/app/notifications") && "on")}
+        >
+          <span className="relative">
+            <Bell className="size-[18px] shrink-0" />
+            {notifs ? <span className="absolute -top-1.5 -right-2 grid h-4 min-w-4 place-items-center rounded-full bg-pink-500 px-1 text-[10px] font-bold text-white">{notifs}</span> : null}
+          </span>
+          {narrow ? null : t("Notifications")}
+        </Link>
         <Link
           href="/app/settings"
           title={narrow ? t("Settings") : undefined}

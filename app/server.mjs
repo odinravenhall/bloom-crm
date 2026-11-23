@@ -23,6 +23,7 @@ import { proRoutes } from './pro.mjs';
 import { smartRoutes } from './smart.mjs';
 import { vaultProRoutes } from './vaultpro.mjs';
 import { trackingRoutes } from './tracking.mjs';
+import { permsOf, staffRoutes } from './staff.mjs';
 import { sensitiveRoutes } from './sensitive.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
@@ -121,12 +122,15 @@ const creatorView = (c) => ({
 function userFrom(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.cookie || '');
   if (!m) return null;
-  const u = one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1', m[1], Date.now()) ?? null;
-  if (!u) return null;
+  const row = one('SELECT u.id, u.email, u.name, u.role, u.avatar, u.discord_id, u.all_creators, r.name AS role_name, r.perms AS role_perms FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN bl_roles r ON r.id = u.role_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1 AND u.deleted = 0 AND (r.id IS NULL OR r.active = 1)', m[1], Date.now()) ?? null;
+  if (!row) return null;
+  const { role_name, role_perms, ...u } = row;
+  u.roleName = role_name || null;
+  u.perms = permsOf(u.role, role_perms);
   // Plateforme choisie en haut du menu (cookie « bloom_pf » : OnlyFans par défaut). Voient toute l'agence : l'Accueil
   // (« pf=all » dans l'adresse) et les pages communes (IA, équipe, réglages).
   const pf = /(?:^|;\s*)bloom_pf=(of|mym)(?:;|$)/.exec(req.headers.cookie || '')?.[1] || 'of';
-  const common = /[?&]pf=all(&|$)/.test(req.url || '') || /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
+  const common = /[?&]pf=all(&|$)/.test(req.url || '') || /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|staff|notifs|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
   return { ...u, pf: common ? null : pf };
 }
 function login(res, userId) {
@@ -400,6 +404,7 @@ Object.assign(routes, smartRoutes({ substy, userFrom, send, body }));
 Object.assign(routes, vaultProRoutes({ substy, userFrom, send, body }));
 Object.assign(routes, trackingRoutes({ userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, sensitiveRoutes({ userFrom, send, body }));
+Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
 Object.assign(routes, ofb.routes);
