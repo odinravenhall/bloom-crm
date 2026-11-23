@@ -20,7 +20,19 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
     const r = await Promise.race([substy.revenue([cid], start, end, mode), new Promise((_, no) => setTimeout(() => no(new Error('Substy ne répond pas')), 20_000))]);
     const byDay = new Map((r?.totalCharts || []).map((x) => [String(x.date).slice(0, 10), Number(x.count) || 0]));
     const series = Array.from({ length: days }, (_, i) => byDay.get(ymd(Date.now() - (days - 1 - i) * DAY)) || 0);
-    const v = { total: Number(r?.total) || 0, delta: r?.totalDelta ?? null, series, currency: r?.currency || 'EUR', newSubs: Number(r?.totalNewSubs) || 0, parts: { messages: Number(r?.messages) || 0, tips: Number(r?.tips) || 0, subscriptions: Number(r?.subscriptions) || 0, posts: Number(r?.posts) || 0 } };
+    let v = { total: Number(r?.total) || 0, delta: r?.totalDelta ?? null, series, currency: r?.currency || 'EUR', newSubs: Number(r?.totalNewSubs) || 0, source: 'overview', since: null, parts: { messages: Number(r?.messages) || 0, tips: Number(r?.tips) || 0, subscriptions: Number(r?.subscriptions) || 0, posts: Number(r?.posts) || 0 } };
+    // Le tableau de revenus de Substy ne couvre pas MYM (0) : ventes du flux Substy, enregistrées par Bloom en direct.
+    if (!v.total) {
+      const from = Date.now() - days * DAY;
+      const rows = all('SELECT at, gross FROM rv_live WHERE creator_id = ? AND at >= ?', cid, from - days * DAY);
+      const cur = rows.filter((x) => x.at >= from);
+      const before = rows.filter((x) => x.at < from).reduce((a, x) => a + x.gross, 0) / 100;
+      const total = cur.reduce((a, x) => a + x.gross, 0) / 100;
+      const byDay2 = new Map();
+      for (const x of cur) byDay2.set(ymd(x.at), (byDay2.get(ymd(x.at)) || 0) + x.gross / 100);
+      const first = all('SELECT MIN(at) AS t FROM rv_live WHERE creator_id = ?', cid)[0]?.t || null;
+      v = { ...v, total, delta: before > 0 ? ((total - before) / before) * 100 : null, series: Array.from({ length: days }, (_, i) => Math.round((byDay2.get(ymd(Date.now() - (days - 1 - i) * DAY)) || 0) * 100) / 100), source: 'live', since: first, sales: cur.length };
+    }
     cache.set(key, { at: Date.now(), v });
     return v;
   };
@@ -57,6 +69,9 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
             newSubs: rev.newSubs,
             parts: rev.parts,
             error: rev.error || null,
+            source: rev.source || null,
+            since: rev.since || null,
+            sales: rev.sales ?? null,
             fans: { ...counts, checked: fans.length, payers: fans.filter((f) => f.gross > 0).length },
             team: { leads: team.filter((x) => ['admin', 'manager', 'lead'].includes(x.role)).length, chatters: team.filter((x) => x.role === 'chatter').length, total: team.length },
             online: onCreator(c.id).map((o) => ({ name: o.name, avatar: o.avatar })),
@@ -85,6 +100,8 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
           accounts: list.length,
           online: new Set(list.flatMap((c) => c.online.map((o) => o.name))).size,
         },
+        source: list.some((c) => c.source === 'live') ? 'live' : 'overview',
+        since: list.map((c) => c.since).filter(Boolean).sort()[0] || null,
         accounts: list,
       });
     },

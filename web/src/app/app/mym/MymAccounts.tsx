@@ -12,7 +12,7 @@ type Acc = {
   id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null;
   fans: { active: number; old: number; interested: number; checked: number; payers: number }; team: { leads: number; chatters: number; total: number }; online: { name: string; avatar: string | null }[];
 };
-type Data = { days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
+type Data = { source: "live" | "overview"; since: number | null; days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
 const eur = (v: number) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ | /g, " ")} €`;
 const int = (v: number) => v.toLocaleString("fr-FR").replace(/ | /g, " ");
 
@@ -85,7 +85,7 @@ export function MymAccounts() {
           ))}
         </div>
         <span className="flex-1" />
-        <div className="flex rounded-lg p-1" style={card}>
+        <div className="flex rounded-lg p-1" style={{ ...card, display: d?.source === "live" ? "none" : undefined }}>
           {(["net", "gross"] as const).map((m) => (
             <button key={m} onClick={() => setMode(m)} className="rounded-md px-3 py-1 text-[13px] font-medium" style={mode === m ? { background: "var(--mp-accent)", color: "var(--mp-on-accent)" } : undefined}>{m === "net" ? "Net" : "Brut"}</button>
           ))}
@@ -99,7 +99,9 @@ export function MymAccounts() {
           <p className="mt-2 text-[38px] leading-none font-bold" style={{ color: "var(--mp-accent)" }}>{T ? eur(T.revenue) : "…"}</p>
           <p className="mt-3 flex items-center gap-2 text-[12px]"><Delta v={T?.delta ?? null} /> vs les {days} jours précédents</p>
           <p className="mt-2 text-[12px]">Moyenne / jour <b style={{ color: "var(--mp-head)" }}>{T ? eur(T.perDay) : "…"}</b></p>
-          <p className="mt-1 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>{mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}</p>
+          <p className="mt-1 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>
+            {d?.source === "live" ? `Ventes vues par Substy (montants payés par les fans), enregistrées par Bloom depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"}` : mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}
+          </p>
           <div className="-mx-5 mt-3">{T ? <Spark data={T.series} w={600} h={56} fill /> : <div className="h-14" />}</div>
         </div>
         <Kpi icon={<span className="text-[11px] font-black">m</span>} label="MYM" value={T ? eur(T.revenue) : "…"} foot={<><Delta v={T?.delta ?? null} /> Comptes : {T?.accounts ?? 0}</>} />

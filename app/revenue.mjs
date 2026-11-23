@@ -596,7 +596,12 @@ async function tick() {
 export function startRevenue() {
   setTimeout(tick, 5_000);
   setInterval(tick, 20_000);
-  setInterval(() => run('DELETE FROM rv_live WHERE at < ?', Date.now() - 60 * DAY), 6 * 3600_000);
+  // Ventes Substy en direct : 60 jours suffisent pour OnlyFans (Infloww a l'historique). MYM : gardées (c'est la seule
+  // source Substy du chiffre d'affaires MYM, le tableau de revenus de Substy ne couvre pas MYM).
+  setInterval(() => {
+    const mym = substyCreators.filter((c) => /mym/i.test(c.platform || '')).map((c) => String(c.id));
+    run(`DELETE FROM rv_live WHERE at < ?${mym.length ? ` AND creator_id NOT IN (${mym.map(() => '?').join(',')})` : ''}`, Date.now() - 60 * DAY, ...mym);
+  }, 6 * 3600_000);
 }
 
 export function status() {
