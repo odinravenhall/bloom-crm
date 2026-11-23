@@ -357,7 +357,9 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
         send(res, 502, { error: e.message });
       }
     },
-    // Écriture dans le mym.cloud (formats lus dans le code du site le 23/11/2026, PAS encore vérifiés sur un vrai envoi) :
+    // Écriture dans le mym.cloud (formats lus dans le code du site le 23/11/2026). L'import d'une image a été vérifié le
+    // 23/11/2026 (image de test arrivée « Ready » chez MYM, puis supprimée) ; créer une collection et y ranger des médias
+    // ne l'ont pas encore été. Supprimer un média : DELETE /v1/cloud/medias { medias: [ids] } (vérifié, pas branché dans Bloom).
     //  - créer une collection : POST /v1/cloud/collections { name }
     //  - ranger des médias : POST /v1/cloud/collections/<id>/medias { medias: [ids] }
     //  - importer un fichier (moins de 100 Mo = une seule partie) : POST api.mym.fans/medias/upload
