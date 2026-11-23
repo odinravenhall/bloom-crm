@@ -111,7 +111,7 @@ export function SideNav({ me }: { me: Me }) {
     });
 
   // Dans la messagerie, le menu se réduit tout seul en icônes (plus de place pour chatter), sauf si on l'agrandit à la main.
-  const inChat = path.startsWith("/app/messagerie") || path.startsWith("/app/of-manager");
+  const inChat = path.startsWith("/app/messagerie") || path.startsWith("/app/mym/chatting") || path.startsWith("/app/of-manager");
   const [chatWide, setChatWide] = useState(false);
   useEffect(() => setChatWide(false), [inChat]);
   const userSmall = small;
