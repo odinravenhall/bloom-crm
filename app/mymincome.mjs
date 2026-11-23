@@ -288,8 +288,11 @@ export function mymIncomeRoutes({ userFrom, send, creators, live = () => ({}) })
         const types = Object.fromEntries(all("SELECT type, COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym' GROUP BY type", cid).map((r) => [r.type, r.n]));
         const titles = all("SELECT raw, COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym' GROUP BY raw ORDER BY n DESC LIMIT 12", cid).map((r) => `${r.raw} (${r.n})`);
         const substy = one("SELECT COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND COALESCE(src, '') <> 'mym'", cid)?.n || 0;
+        const origins = Object.fromEntries(all("SELECT COALESCE(origin, 'inconnu') AS o, COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym' AND attr_at IS NOT NULL GROUP BY 1", cid).map((r) => [r.o, r.n]));
+        // Journal des messages sur 3 jours, par source (substy / mym) et auteur : pour vérifier la reconnaissance de l'IA.
+        const journal = all("SELECT COALESCE(src, 'substy') AS src, from_fan AS fromFan, COALESCE(kind, '-') AS kind, COUNT(*) AS n, SUM(text IS NOT NULL AND text <> '') AS withText FROM msg_log WHERE creator_id = ? AND at > ? GROUP BY 1, 2, 3", cid, Date.now() - 3 * DAY);
         const s = st(cid);
-        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done:${cid}`), ...a, types, titles, substyRows: substy, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
+        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done:${cid}`), ...a, types, titles, substyRows: substy, origins, journal, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
       });
       send(res, 200, { creators: list, live: live() });
     },
