@@ -5,11 +5,12 @@
 //  - Abonnés   : abonnement « active » ;
 //  - Anciens   : un abonnement qui n'est plus actif (expiré, annulé…) ;
 //  - Intéressés : pas d'abonnement (le fan suit la créatrice / lui écrit sans être abonné).
-// « Modifier » : surnom → `fans.rename` (Substy) ; groupes → listes Substy (`fans.lists.add` / `remove`) ;
-// âge, genre, source, notes → gardés par Bloom (`mym_fan_meta`).
+// « Modifier » : surnom → `fans.rename` (Substy) ; groupes = groupes de Bloom (comme ceux de MyPulse, faits par nous :
+// manuels ou automatiques, `fanlists.mjs`) ; âge, genre, source, notes → gardés par Bloom (`mym_fan_meta`).
 import { all, db, one, run } from './store.mjs';
 import { img, inboxChats, money, plain } from './chat.mjs';
 import { canSee, isBoss, platformOfCreator } from './team.mjs';
+import { forgetFans, mymGroups } from './fanlists.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_fans (
@@ -106,15 +107,6 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
     if (edit && u.role === 'model') return send(res, 403, { error: 'Pas autorisé' }), null;
     return u;
   };
-  const listsCache = new Map();
-  const listsOf = async (cid) => {
-    const hit = listsCache.get(cid);
-    if (hit && Date.now() - hit.at < 60_000) return hit.v;
-    const r = await substy.fanLists(cid).catch(() => null);
-    const v = (r?.items || []).map((l) => ({ id: String(l.id), name: plain(l.name || ''), type: String(l.type || ''), fans: Number(l.fanCount) || 0 }));
-    listsCache.set(cid, { at: Date.now(), v });
-    return v;
-  };
 
   return {
     /** Abonnés / Anciens / Intéressés d'une créatrice MYM. */
@@ -132,11 +124,11 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       const checked = all_.filter((f) => f.status !== undefined);
       const counts = { active: 0, old: 0, interested: 0 };
       for (const f of checked) counts[tabOf(f.status)]++;
-      const lists = await listsOf(cid);
+      const groups = mymGroups(cid);
+      const groupsOf = (fanId) => groups.filter((g) => g.members.has(fanId)).map((g) => ({ id: g.id, name: g.name, color: g.color, icon: g.icon, kind: g.kind }));
       const inTab = checked.filter((f) => tabOf(f.status) === tab);
-      const listCount = new Map();
-      for (const f of inTab) for (const l of J(f.lists, [])) listCount.set(l.id, (listCount.get(l.id) || 0) + 1);
-      let rows = inTab.filter((f) => (!q || `${f.name} ${f.username || ''}`.toLowerCase().includes(q)) && (!listIds.length || J(f.lists, []).some((l) => listIds.includes(l.id))));
+      const lists = groups.map((g) => ({ id: g.id, name: g.name, color: g.color, icon: g.icon, kind: g.kind, count: inTab.filter((f) => g.members.has(f.fan_id)).length }));
+      let rows = inTab.filter((f) => (!q || `${f.name} ${f.username || ''}`.toLowerCase().includes(q)) && (!listIds.length || groups.some((g) => listIds.includes(g.id) && g.members.has(f.fan_id))));
       rows.sort((a, b) => (sort === 'name' ? String(a.name).localeCompare(String(b.name)) : sort === 'since' ? (b.subscribed_at || 0) - (a.subscribed_at || 0) : b.gross - a.gross));
       const total = rows.length;
       const meta = new Map(all('SELECT fan_id, age, gender, source, notes FROM mym_fan_meta WHERE creator_id = ?', cid).map((m) => [m.fan_id, m]));
@@ -145,11 +137,11 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
         tab,
         counts,
         progress: { checked: checked.length, total: all_.length },
-        lists: lists.map((l) => ({ ...l, count: listCount.get(l.id) || 0 })),
+        lists,
         total,
         rows: rows.map((f) => ({
           fanId: f.fan_id, name: f.name, username: f.username, avatar: f.avatar, status: f.status, since: f.subscribed_at, expires: f.expires_at, canceled: !!f.canceled,
-          gross: f.gross, net: f.net, purchases: f.purchases, lastPurchase: f.last_purchase, lists: J(f.lists, []), meta: meta.get(f.fan_id) || null, lastAt: f.lastAt,
+          gross: f.gross, net: f.net, purchases: f.purchases, lastPurchase: f.last_purchase, lists: groupsOf(f.fan_id), meta: meta.get(f.fan_id) || null, lastAt: f.lastAt,
         })),
       });
     },
@@ -164,14 +156,13 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
         const cur = one('SELECT name, lists FROM mym_fans WHERE creator_id = ? AND fan_id = ?', cid, fanId);
         const nick = String(b.nickname ?? '').trim().slice(0, 60);
         if (nick && nick !== cur?.name) await substy.call('fans.rename', { creatorId: cid, fanId, displayName: nick });
+        // Groupes manuels de Bloom (les automatiques se remplissent tout seuls).
         if (Array.isArray(b.lists)) {
           const want = new Set(b.lists.map(String));
-          const had = new Set(J(cur?.lists, []).map((l) => l.id));
-          const add = [...want].filter((x) => !had.has(x));
-          const del = [...had].filter((x) => !want.has(x));
-          if (add.length) await substy.call('fans.lists.add', { creatorId: cid, fanId, listIds: add });
-          if (del.length) await substy.call('fans.lists.remove', { creatorId: cid, fanId, listIds: del });
-          listsCache.delete(cid);
+          for (const g of mymGroups(cid).filter((x) => x.kind === 'manual')) {
+            if (want.has(g.id) && !g.members.has(fanId)) run('INSERT OR IGNORE INTO fan_list_members (list_id, fan_id, added_at, added_by) VALUES (?, ?, ?, ?)', Number(g.id), fanId, Date.now(), u.name || null);
+            if (!want.has(g.id) && g.members.has(fanId)) run('DELETE FROM fan_list_members WHERE list_id = ? AND fan_id = ?', Number(g.id), fanId);
+          }
         }
         run(
           `INSERT INTO mym_fan_meta (creator_id, fan_id, age, gender, source, notes, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -180,33 +171,26 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
         );
         const f = await substy.call('fans.get', { creatorId: cid, fanId }).catch(() => null);
         if (f) save(cid, f);
+        forgetFans(cid);
         send(res, 200, { ok: true });
       } catch (e) {
         send(res, 502, { error: `Substy : ${e.message}` });
       }
     },
-    /** « Ajouter au groupe » : plusieurs fans dans une liste Substy. */
+    /** « Ajouter au groupe » : plusieurs fans dans un groupe manuel de Bloom. */
     'POST /api/mym/fans/add-to-list': async (req, res) => {
       const b = await body(req);
       const cid = String(b.creatorId || '');
       if (!auth(req, res, cid, true)) return;
       const ids = (Array.isArray(b.fanIds) ? b.fanIds : []).map(String).slice(0, 500);
-      const listId = String(b.listId || '');
-      if (!ids.length || !listId) return send(res, 400, { error: 'Choisis des fans et un groupe' });
-      let ok = 0;
-      for (const fanId of ids) {
-        try {
-          await substy.call('fans.lists.add', { creatorId: cid, fanId, listIds: [listId] });
-          const cur = one('SELECT lists FROM mym_fans WHERE creator_id = ? AND fan_id = ?', cid, fanId);
-          const l = J(cur?.lists, []);
-          if (!l.some((x) => x.id === listId)) run('UPDATE mym_fans SET lists = ? WHERE creator_id = ? AND fan_id = ?', JSON.stringify([...l, { id: listId, name: String(b.listName || '') }]), cid, fanId);
-          ok++;
-        } catch {}
-      }
-      listsCache.delete(cid);
-      send(res, 200, { ok, failed: ids.length - ok });
+      const g = one("SELECT id FROM fan_lists WHERE id = ? AND creator_id = ? AND kind = 'manual'", Number(b.listId), cid);
+      if (!ids.length || !g) return send(res, 400, { error: 'Choisis des fans et un groupe manuel' });
+      const who = userFrom(req);
+      for (const fanId of ids) run('INSERT OR IGNORE INTO fan_list_members (list_id, fan_id, added_at, added_by) VALUES (?, ?, ?, ?)', g.id, fanId, Date.now(), who?.name || null);
+      forgetFans(cid);
+      send(res, 200, { ok: ids.length, failed: 0 });
     },
-    /** Créer un groupe (liste Substy) — depuis la fenêtre « Ajouter au groupe ». */
+    /** Créer un groupe manuel de Bloom — depuis la fenêtre « Ajouter au groupe ». */
     'POST /api/mym/fans/lists': async (req, res) => {
       const b = await body(req);
       const cid = String(b.creatorId || '');
@@ -215,13 +199,9 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
       const name = String(b.name || '').trim().slice(0, 60);
       if (!name) return send(res, 400, { error: 'Donne un nom' });
-      try {
-        const r = await substy.call('fans.lists.create', { creatorId: cid, name });
-        listsCache.delete(cid);
-        send(res, 200, { id: r?.id ? String(r.id) : null });
-      } catch (e) {
-        send(res, 502, { error: `Substy : ${e.message}` });
-      }
+      const pos = (one('SELECT MAX(position) AS p FROM fan_lists WHERE creator_id = ?', cid)?.p ?? -1) + 1;
+      const r = run("INSERT INTO fan_lists (creator_id, kind, name, color, icon, position, reset, created_at, updated_at, updated_by) VALUES (?, 'manual', ?, '#364574', 'users', ?, 'never', ?, ?, ?)", cid, name, pos, Date.now(), Date.now(), u.name || null);
+      send(res, 200, { id: String(r.lastInsertRowid) });
     },
   };
 }

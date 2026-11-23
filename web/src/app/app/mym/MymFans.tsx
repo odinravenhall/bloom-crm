@@ -6,17 +6,18 @@ import { ChevronDown, Plus, Search, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import { Avatar } from "@/components/ui";
+import { groupIcon } from "./groupIcons";
 
 // MYM → Fans : Abonnés / Anciens / Intéressés, copie des pages de MyPulse (données Substy).
 type Tab = "active" | "old" | "interested";
-type L = { id: string; name: string; type: string; fans: number; count: number };
+type L = { id: string; name: string; color: string | null; icon: string | null; kind: "manual" | "auto"; count: number };
+type RG = { id: string; name: string; color: string | null; icon: string | null; kind: "manual" | "auto" };
 type Meta = { age: string | null; gender: string | null; source: string | null; notes: string | null } | null;
-type Row = { fanId: string; name: string; username: string | null; avatar: string | null; status: string | null; since: number | null; expires: number | null; canceled: boolean; gross: number; purchases: number; lists: { id: string; name: string }[]; meta: Meta; lastAt: string | null };
+type Row = { fanId: string; name: string; username: string | null; avatar: string | null; status: string | null; since: number | null; expires: number | null; canceled: boolean; gross: number; purchases: number; lists: RG[]; meta: Meta; lastAt: string | null };
 type Data = { tab: Tab; counts: Record<Tab, number>; progress: { checked: number; total: number }; lists: L[]; total: number; rows: Row[] };
 const TITLE: Record<Tab, string> = { active: "Abonnés Actifs", old: "Anciens Abonnés", interested: "Fans Intéressés" };
 const SOURCES = ["Instagram", "Twitter", "Snap", "Facebook", "Tiktok", "Telegram", "Autre"];
-const COLORS = ["#364574", "#3cd188", "#f7b84b", "#f06548", "#8b5cf6", "#299cdb", "#e83e8c", "#b6a220"];
-const color = (id: string) => COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+const color = (g: { color: string | null }) => g.color || "#364574";
 const date = (t: number | null) => (t ? new Date(t).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" };
 
@@ -66,12 +67,12 @@ export function MymFans({ tab }: { tab: Tab }) {
               const on = lists.includes(l.id);
               return (
                 <button key={l.id} onClick={() => setLists(on ? lists.filter((x) => x !== l.id) : [...lists, l.id])} className="flex items-center gap-2 rounded-full border px-3 py-1 text-[12px]" style={{ borderColor: on ? "var(--mp-accent)" : "var(--mp-line)", color: on ? "var(--mp-head)" : undefined }}>
-                  <span className="size-3 rounded-full border-2" style={{ borderColor: color(l.id), background: on ? color(l.id) : "transparent" }} />
-                  {l.name} <span style={{ color: "var(--mp-muted)" }}>[{l.count}]</span>
+                  <span className="size-3 rounded-full border-2" style={{ borderColor: color(l), background: on ? color(l) : "transparent" }} />
+                  <GIcon g={l} /> {l.name} <span style={{ color: "var(--mp-muted)" }}>[{l.count}]</span>
                 </button>
               );
             })}
-            {d && !d.lists.length ? <span className="text-[12px]" style={{ color: "var(--mp-muted)" }}>Aucun groupe pour l’instant — crée-en un avec « Ajouter au groupe ».</span> : null}
+            {d && !d.lists.length ? <span className="text-[12px]" style={{ color: "var(--mp-muted)" }}>Aucun groupe pour l’instant — crée-les dans <Link href="/app/mym/groupes" className="underline">Groupes</Link>.</span> : null}
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px]">
@@ -126,7 +127,7 @@ export function MymFans({ tab }: { tab: Tab }) {
                     <>
                       <td className="px-3 text-right font-medium" style={{ color: "var(--mp-head)" }}>{r.gross.toFixed(2)}</td>
                       <td className="px-3">
-                        <span className="flex flex-wrap gap-1">{r.lists.map((l) => <span key={l.id} className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold text-white" style={{ background: color(l.id) }}>{l.name}</span>)}</span>
+                        <span className="flex flex-wrap gap-1">{r.lists.map((l) => <span key={l.id} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold text-white" style={{ background: color(l) }}><GIcon g={l} small />{l.name}</span>)}</span>
                       </td>
                       <td className="px-3 text-[12px]" style={{ color: "var(--mp-muted)" }}>{tab === "old" ? date(r.expires) : date(r.since)}</td>
                       <td className="px-3 text-right whitespace-nowrap">
@@ -153,7 +154,7 @@ export function MymFans({ tab }: { tab: Tab }) {
         </div>
       </div>
       {edit && creatorId ? <EditFan creatorId={creatorId} row={edit} lists={d?.lists ?? []} onClose={() => setEdit(null)} onSaved={() => (setEdit(null), load())} /> : null}
-      {addTo && creatorId ? <AddToGroup creatorId={creatorId} fanIds={[...picked]} lists={d?.lists ?? []} onClose={() => setAddTo(false)} onDone={() => (setAddTo(false), setPicked(new Set()), load())} /> : null}
+      {addTo && creatorId ? <AddToGroup creatorId={creatorId} fanIds={[...picked]} lists={(d?.lists ?? []).filter((l) => l.kind === "manual")} onClose={() => setAddTo(false)} onDone={() => (setAddTo(false), setPicked(new Set()), load())} /> : null}
     </div>
   );
 }
@@ -173,7 +174,7 @@ const field = "mt-1 h-9 w-full rounded-md px-3 outline-none";
 const fieldSt = { background: "#2f343a", color: "var(--mp-head)" };
 
 function EditFan({ creatorId, row, lists, onClose, onSaved }: { creatorId: string; row: Row; lists: L[]; onClose: () => void; onSaved: () => void }) {
-  const [v, setV] = useState({ nickname: row.name, age: row.meta?.age ?? "", gender: row.meta?.gender ?? "Masculin", source: row.meta?.source ?? "", notes: row.meta?.notes ?? "- Job :\n- Passions :\n- Préférences sexuelles :\n- En couple ? :\n- Jour de paye :\n- Notes importantes :", lists: row.lists.map((l) => l.id) });
+  const [v, setV] = useState({ nickname: row.name, age: row.meta?.age ?? "", gender: row.meta?.gender ?? "Masculin", source: row.meta?.source ?? "", notes: row.meta?.notes ?? "- Job :\n- Passions :\n- Préférences sexuelles :\n- En couple ? :\n- Jour de paye :\n- Notes importantes :", lists: row.lists.filter((l) => l.kind === "manual").map((l) => l.id) });
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
@@ -205,16 +206,17 @@ function EditFan({ creatorId, row, lists, onClose, onSaved }: { creatorId: strin
       <p className="mt-3 font-semibold">Groupe(s)</p>
       <div className="mt-1.5 flex flex-wrap gap-2">
         {lists.map((l) => {
-          const on = v.lists.includes(l.id);
+          const auto = l.kind === "auto";
+          const on = auto ? row.lists.some((x) => x.id === l.id) : v.lists.includes(l.id);
           return (
-            <button key={l.id} onClick={() => setV({ ...v, lists: on ? v.lists.filter((x) => x !== l.id) : [...v.lists, l.id] })} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: on ? "#299cdb" : "#3a4047", background: on ? "rgba(41,156,219,.18)" : "transparent", color: "var(--mp-head)" }}>
-              <span className="size-2.5 rounded-full" style={{ background: color(l.id) }} />{l.name}{on ? " ✓" : ""}
+            <button key={l.id} disabled={auto} title={auto ? "Groupe automatique : le fan y entre tout seul selon ses dépenses" : undefined} onClick={() => setV({ ...v, lists: on ? v.lists.filter((x) => x !== l.id) : [...v.lists, l.id] })} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12px] font-semibold disabled:cursor-default disabled:opacity-60" style={{ borderColor: on ? "#299cdb" : "#3a4047", background: on ? "rgba(41,156,219,.18)" : "transparent", color: "var(--mp-head)" }}>
+              <span className="size-2.5 rounded-full" style={{ background: color(l) }} /><GIcon g={l} small />{l.name}{on ? " ✓" : ""}
             </button>
           );
         })}
         {!lists.length ? <span style={{ color: "var(--mp-muted)" }}>Aucun groupe</span> : null}
       </div>
-      <p className="mt-3 text-[11px]" style={{ color: "var(--mp-muted)" }}>Surnom et groupes sont enregistrés sur Substy ; âge, genre, source et notes dans Bloom.</p>
+      <p className="mt-3 text-[11px]" style={{ color: "var(--mp-muted)" }}>Le surnom est enregistré sur Substy ; groupes, âge, genre, source et notes dans Bloom. Les groupes automatiques se remplissent tout seuls.</p>
     </Modal>
   );
 }
@@ -261,4 +263,9 @@ function AddToGroup({ creatorId, fanIds, lists, onClose, onDone }: { creatorId: 
       ) : null}
     </Modal>
   );
+}
+
+function GIcon({ g, small }: { g: { icon: string | null }; small?: boolean }) {
+  const I = groupIcon(g.icon);
+  return <I className={small ? "size-3" : "size-3.5"} />;
 }

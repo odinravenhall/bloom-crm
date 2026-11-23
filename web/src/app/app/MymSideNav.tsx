@@ -25,7 +25,7 @@ const NAV: Entry[] = [
     key: "fans", label: "Fans", icon: Users, roles: CHAT,
     children: [
       { label: "Abonnés", href: "/app/mym/abonnes" }, { label: "Anciens", href: "/app/mym/anciens" }, { label: "Intéressés", href: "/app/mym/interesses" },
-      { label: "Groupes", href: "/app/listes" },
+      { label: "Groupes", href: "/app/mym/groupes" },
     ],
   },
   {
