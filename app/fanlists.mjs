@@ -45,13 +45,16 @@ export function fanData(cid) {
   if (hit && Date.now() - hit.at < 20_000) return hit.fans;
   const chats = [...inboxChats(cid).chats];
   const fans = new Map();
+  // MYM : statut, date d'abonnement et dépense relus chez Substy fan par fan (mymfans.mjs), quand on les a.
+  const sub = new Map(all('SELECT fan_id, status, subscribed_at, gross FROM mym_fans WHERE creator_id = ? AND status IS NOT NULL', cid).map((r) => [r.fan_id, r]));
   for (const c of chats) {
+    const m = sub.get(c.fanId);
     fans.set(c.fanId, {
       c,
-      total: Math.max(Number(c.paid) || 0, Number(c.spent) || 0),
+      total: Math.max(Number(c.paid) || 0, Number(c.spent) || 0, m?.gross || 0),
       ppvTips: null,
-      since: c.since ? Date.parse(c.since) || null : null,
-      expired: /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
+      since: c.since ? Date.parse(c.since) || null : m?.subscribed_at || null,
+      expired: m ? !/^active$/i.test(m.status) : /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
       ppvSent: 0,
       ppvBought: 0,
     });

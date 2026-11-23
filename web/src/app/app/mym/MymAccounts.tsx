@@ -9,10 +9,10 @@ import { Avatar } from "@/components/ui";
 
 // MYM → Compte Creator : copie de « Mes Comptes » de MyPulse (ventes MyPulse de chaque modèle MYM, équipe, accès).
 type Acc = {
-  id: string; name: string; handle: string | null; avatar: string | null; linked: boolean; total: number; prev: number; delta: number | null; isNew: boolean; series: number[];
-  sales: number; payers: number; basket: number; team: { leads: number; chatters: number; total: number }; online: { name: string; avatar: string | null }[];
+  id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null;
+  fans: { active: number; old: number; interested: number; checked: number; payers: number }; team: { leads: number; chatters: number; total: number }; online: { name: string; avatar: string | null }[];
 };
-type Data = { days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; payers: number; sales: number; accounts: number; linked: number; online: number }; accounts: Acc[] };
+type Data = { days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
 const eur = (v: number) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ | /g, " ")} €`;
 const int = (v: number) => v.toLocaleString("fr-FR").replace(/ | /g, " ");
 
@@ -95,7 +95,7 @@ export function MymAccounts() {
       {/* Chiffres */}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
         <div className="relative overflow-hidden rounded-2xl p-5 pb-0" style={{ background: "radial-gradient(90% 120% at 90% 0%, rgba(199,255,74,.14), transparent 60%), #1c2018", border: "1px solid rgba(199,255,74,.25)" }}>
-          <p className="flex items-center gap-2 text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-accent)" }}><CircleDollarSign className="size-4" /> Chiffre d’affaires · {days} derniers jours <span title="Ventes MyPulse des comptes MYM, remboursements exclus"><Info className="size-3.5 opacity-70" /></span></p>
+          <p className="flex items-center gap-2 text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-accent)" }}><CircleDollarSign className="size-4" /> Chiffre d’affaires · {days} derniers jours <span title="Chiffres de Substy pour les comptes MYM"><Info className="size-3.5 opacity-70" /></span></p>
           <p className="mt-2 text-[38px] leading-none font-bold" style={{ color: "var(--mp-accent)" }}>{T ? eur(T.revenue) : "…"}</p>
           <p className="mt-3 flex items-center gap-2 text-[12px]"><Delta v={T?.delta ?? null} /> vs les {days} jours précédents</p>
           <p className="mt-2 text-[12px]">Moyenne / jour <b style={{ color: "var(--mp-head)" }}>{T ? eur(T.perDay) : "…"}</b></p>
@@ -103,8 +103,8 @@ export function MymAccounts() {
           <div className="-mx-5 mt-3">{T ? <Spark data={T.series} w={600} h={56} fill /> : <div className="h-14" />}</div>
         </div>
         <Kpi icon={<span className="text-[11px] font-black">m</span>} label="MYM" value={T ? eur(T.revenue) : "…"} foot={<><Delta v={T?.delta ?? null} /> Comptes : {T?.accounts ?? 0}</>} />
-        <Kpi icon={<Users className="size-4" />} label="Fans payants" value={T ? int(T.payers) : "…"} foot={<>{T ? int(T.sales) : 0} ventes sur la période</>} />
-        <Kpi icon={<ShieldCheck className="size-4" />} label="Comptes" value={T ? String(T.accounts) : "…"} foot={<>{T?.linked ?? 0} reliés à MyPulse · {(T?.accounts ?? 0) - (T?.linked ?? 0)} à corriger</>} />
+        <Kpi icon={<Users className="size-4" />} label="Abonnés actifs" value={T ? int(T.active) : "…"} foot={<>Somme des comptes affichés · {T ? int(T.newSubs) : 0} nouveaux sur la période</>} />
+        <Kpi icon={<ShieldCheck className="size-4" />} label="Comptes" value={T ? String(T.accounts) : "…"} foot={<>{T?.online ?? 0} membre(s) de l’équipe en ligne</>} />
       </div>
 
       {/* Liste des comptes */}
@@ -127,7 +127,7 @@ export function MymAccounts() {
               </span>
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>{a.name}</p>
-                <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--mp-muted)" }}>MYM{a.handle ? <span>@{a.handle}</span> : null}{!a.linked ? <span style={{ color: "var(--mp-down)" }}>pas relié à MyPulse</span> : null}</p>
+                <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--mp-muted)" }}>MYM{a.handle ? <span>@{a.handle}</span> : null}{a.error ? <span style={{ color: "var(--mp-down)" }}>chiffres indisponibles</span> : null}</p>
               </div>
             </div>
             <div className="mt-3 rounded-xl p-3.5" style={{ background: "var(--mp-card-2)" }}>
@@ -137,20 +137,20 @@ export function MymAccounts() {
                   <p className="mt-1 text-[22px] font-semibold" style={{ color: "var(--mp-head)" }}>{eur(a.total)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <Delta v={a.delta} isNew={a.isNew} />
+                  <Delta v={a.delta} />
                   <div className="w-[110px]"><Spark data={a.series} /></div>
                 </div>
               </div>
               <div className="mt-2 flex justify-between border-t pt-2 text-[12px]" style={{ borderColor: "var(--mp-line)" }}>
-                <span>Période précédente</span><b style={{ color: "var(--mp-head)" }}>{eur(a.prev)}</b>
+                <span>Nouveaux abonnés</span><b style={{ color: "var(--mp-head)" }}>{int(a.newSubs)}</b>
               </div>
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-2">
-              {[[int(a.payers), "Fans payants"], [int(a.sales), "Ventes"], [eur(a.basket), "Panier moyen"]].map(([v, l]) => (
-                <div key={l} className="rounded-xl px-3 py-2.5" style={{ border: "1px solid var(--mp-line)" }}>
+              {([[int(a.fans.active), "Abonnés", "/app/mym/abonnes"], [int(a.fans.old), "Anciens", "/app/mym/anciens"], [int(a.fans.interested), "Intéressés", "/app/mym/interesses"]] as const).map(([v, l, href]) => (
+                <Link key={l} href={href} onClick={() => setCreator(a.id)} className="rounded-xl px-3 py-2.5" style={{ border: "1px solid var(--mp-line)" }}>
                   <p className="text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>{v}</p>
                   <p className="text-[10.5px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-muted)" }}>{l}</p>
-                </div>
+                </Link>
               ))}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 px-1 text-[11px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-muted)" }}>
