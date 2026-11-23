@@ -44,9 +44,10 @@ function chatOf(c) {
 }
 
 /** Une page de conversations (30), de la plus récente à la plus ancienne. */
-export async function mymChatPage(cid, cursor) {
+export async function mymChatPage(cid, cursor, search) {
   const qs = new URLSearchParams({ limit: '30', last_message_opts: 'full' });
   if (cursor) qs.set('cursor', cursor);
+  if (search) qs.set('search', search);
   const d = await mym(cid, `/v1/chats?${qs}`, { base: STYX });
   return { items: (d?.data || []).map(chatOf).filter(Boolean), nextCursor: d?.cursor || null };
 }

@@ -3,6 +3,8 @@
 //    à la plus ancienne. Pour chacune : une carte « card-income » (data-transaction-id, titre « Subscription » /
 //    « Private content »…, montant « +11.27 € », <time datetime>, état) et un panneau « panel--income--<id> »
 //    (commande « #… », pseudo du fan, lien « /app/chat/fan/<idFan>/init »).
+//  - Le fan y est désigné par son ancien numéro ; la messagerie (styx) utilise un autre identifiant. Bloom fait le lien
+//    par le pseudo (liste des conversations, sinon recherche chez MYM) et garde l'identifiant de la messagerie.
 //  - Les montants sont NETS : ce que MYM crédite à la créatrice (pas ce que le fan a payé). Abonnement gratuit = 0 €.
 //  - Le site s'affiche en français ou en anglais selon le compte : les titres sont reconnus dans les deux langues.
 // Ces transactions vont dans `rv_live` (src = 'mym') : tout Bloom lit déjà cette table (Compte Creator, Mes ventes,
@@ -12,7 +14,8 @@
 import './revenue.mjs';
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { isLinked, mymSiteRaw } from './mym.mjs';
-import { mymAuthor, mymChatMessages } from './mymchat.mjs';
+import { mymAuthor, mymChatMessages, mymChatPage } from './mymchat.mjs';
+import { inboxFanByUsername } from './chat.mjs';
 
 const DAY = 864e5;
 const KEEP_DAYS = 90;
@@ -91,7 +94,7 @@ function save(cid, list) {
     const type = typeOf(t.title, t.amount);
     const r = run(
       `INSERT OR IGNORE INTO rv_live (id, creator_id, type, at, gross, currency, fan_id, fan_name, message_id, matched, first_seen, src, raw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'mym', ?)`,
-      `mym:${t.id}`, cid, type, t.at, t.amount, t.currency, t.fanId, t.fan, now, t.title.slice(0, 80),
+      `mym:${t.id}`, cid, type, t.at, t.amount, t.currency, inboxFanByUsername(cid, t.fan) || t.fanId, t.fan, now, t.title.slice(0, 80),
     );
     if (r.changes) fresh++;
   }
@@ -152,9 +155,28 @@ async function backfill(cid) {
   }
 }
 
+/** Ventes payantes encore rangées sous l'ancien numéro du fan : on retrouve son identifiant de messagerie par le pseudo. */
+const searched = new Set();
+async function relink(cid) {
+  const rows = all("SELECT DISTINCT fan_id, fan_name FROM rv_live WHERE creator_id = ? AND src = 'mym' AND gross > 0 AND fan_id NOT LIKE '%-%' AND fan_name IS NOT NULL AND at > ?", cid, Date.now() - 14 * DAY);
+  let calls = 0;
+  for (const r of rows) {
+    let id = inboxFanByUsername(cid, r.fan_name);
+    const key = `${cid}:${r.fan_id}`;
+    if (!id && !searched.has(key) && calls < 5) {
+      searched.add(key);
+      calls++;
+      const found = await mymChatPage(cid, undefined, r.fan_name).catch(() => null);
+      id = found?.items.find((c) => String(c.username || '').toLowerCase() === String(r.fan_name).toLowerCase())?.fanId || null;
+      await sleep(300);
+    }
+    if (id) run("UPDATE rv_live SET fan_id = ? WHERE creator_id = ? AND src = 'mym' AND fan_id = ?", id, cid, r.fan_id);
+  }
+}
+
 /** Qui a fait la vente : le message acheté (contenu privé) ou le dernier message avant le pourboire (2 h). */
 async function attribute(cid) {
-  const rows = all("SELECT id, type, at, fan_id FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type IN ('ppv', 'tip') AND gross > 0 AND fan_id IS NOT NULL AND attr_at IS NULL AND at > ? ORDER BY at DESC LIMIT 4", cid, Date.now() - 14 * DAY);
+  const rows = all("SELECT id, type, at, fan_id FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type IN ('ppv', 'tip') AND gross > 0 AND fan_id LIKE '%-%' AND attr_at IS NULL AND at > ? ORDER BY at DESC LIMIT 6", cid, Date.now() - 14 * DAY);
   for (const r of rows) {
     // Vente toute fraîche : on laisse une minute à Substy pour dire si son IA a écrit le message.
     if (Date.now() - r.at < 60_000) continue;
@@ -195,6 +217,7 @@ async function tick(cid) {
     dropSubsty(cid);
     await backfill(cid);
     dropSubsty(cid);
+    await relink(cid);
     await attribute(cid);
     s.ok = Date.now();
     s.error = null;
@@ -261,7 +284,7 @@ export function mymIncomeRoutes({ userFrom, send, creators, live = () => ({}) })
       if (!['admin', 'manager'].includes(u.role)) return send(res, 403, { error: 'Réservé aux admins et managers' });
       const list = creators().filter((c) => /mym/i.test(c.platform || '') && isLinked(c.id)).map((c) => {
         const cid = String(c.id);
-        const a = one("SELECT COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last, SUM(gross > 0) AS paid, SUM(attr_at IS NOT NULL) AS attributed, SUM(origin = 'ai') AS ai, SUM(origin = 'bloom') AS bloom FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid);
+        const a = one("SELECT COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last, SUM(gross > 0) AS paid, SUM(attr_at IS NOT NULL) AS attributed, SUM(gross > 0 AND fan_id LIKE '%-%') AS linked, SUM(message_id IS NOT NULL) AS withMessage, SUM(origin = 'ai') AS ai, SUM(origin = 'bloom') AS bloom FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid);
         const types = Object.fromEntries(all("SELECT type, COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym' GROUP BY type", cid).map((r) => [r.type, r.n]));
         const titles = all("SELECT raw, COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym' GROUP BY raw ORDER BY n DESC LIMIT 12", cid).map((r) => `${r.raw} (${r.n})`);
         const substy = one("SELECT COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND COALESCE(src, '') <> 'mym'", cid)?.n || 0;

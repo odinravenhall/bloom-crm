@@ -269,6 +269,13 @@ const strip = ({ _t, ...c }) => c;
 export function inboxChat(cid, fanId) {
   return INBOX.get(cid)?.map.get(String(fanId)) ?? inboxOf(cid).map.get(String(fanId)) ?? null;
 }
+/** Le fan d'une créatrice d'après son pseudo (sans relancer la lecture des conversations). */
+export function inboxFanByUsername(cid, username) {
+  const n = String(username || '').trim().toLowerCase();
+  if (!n) return null;
+  for (const c of inboxOf(cid).map.values()) if (String(c.username || '').trim().toLowerCase() === n) return c.fanId;
+  return null;
+}
 export function inboxChats(cid) {
   const b = inboxOf(cid);
   b.usedAt = Date.now();
