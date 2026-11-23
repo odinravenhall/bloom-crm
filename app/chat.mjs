@@ -34,11 +34,14 @@ export const img = (u) => {
   if (u && typeof u === 'object') u = u.thumbUrl || u.url || null;
   return !u ? null : String(u).startsWith('/api/creators/') ? `/media?p=${encodeURIComponent(u)}` : String(u);
 };
+// Fichier d'un média : chemin Substy (« /api/creators/… », relayé par /media) ou adresse complète (CDN de MYM, lisible
+// directement par le navigateur).
+const fileUrl = (u) => (!u ? null : /^https?:\/\//i.test(u) ? String(u) : `/media?p=${encodeURIComponent(u)}`);
 export const mediaView = (m) => ({
   id: m.id,
   type: (m.type || '').toLowerCase(),
-  thumb: m.files?.thumb ? `/media?p=${encodeURIComponent(m.files.thumb)}` : null,
-  full: m.files?.full ? `/media?p=${encodeURIComponent(m.files.full)}` : null,
+  thumb: fileUrl(m.files?.thumb),
+  full: fileUrl(m.files?.full),
   duration: m.duration ?? null,
 });
 
