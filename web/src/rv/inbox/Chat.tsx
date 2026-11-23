@@ -10,6 +10,7 @@ import { clearDraft, getDraft, setDraft } from "@/rv/lib/draft";
 import { fillVars } from "@/rv/lib/vars";
 import { useNow } from "@/rv/lib/useNow";
 import { Avatar, Pill } from "@/rv/components/ui";
+import { MpAvatar } from "@/rv/components/MpAvatar";
 import type { Conv, LiveMsg, Media, Model } from "./types";
 import type { Lib, LibScript, LibSequence } from "./scriptTypes";
 import { AI_EVENT } from "./SubstyCard";
@@ -467,7 +468,7 @@ export function Chat({
             <ArrowLeft className="size-5" />
           </button>
           <span className="relative shrink-0">
-            <Avatar src={conv.memberAvatar} name={nick || conv.memberName || "?"} size="size-8" />
+            <MpAvatar name={conv.memberName || nick} size="size-8" />
             <span className={cn("absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-[#212529]", fanOnline ? "bg-emerald-400" : "bg-zinc-600")} />
           </span>
           {renaming !== null ? (

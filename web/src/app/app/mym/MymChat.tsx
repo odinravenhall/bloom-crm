@@ -6,7 +6,7 @@ import { api, toast } from "@/rv/lib/client";
 import { debounce, onLive } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
 import { money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
-import { Avatar } from "@/rv/components/ui";
+import { MpAvatar } from "@/rv/components/MpAvatar";
 import { Toaster } from "@/rv/components/Toaster";
 import { Chat } from "@/rv/inbox/Chat";
 import { MymFanPanel } from "./MymFanPanel";
@@ -214,7 +214,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
               <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? addTab(c) : open(c))} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), addTab(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
                 <span className="flex shrink-0 flex-col items-center gap-1">
                   <span className="relative">
-                    <Avatar src={c.memberAvatar} name={c.nickname || c.memberName || "?"} size="size-9" />
+                    <MpAvatar name={c.memberName || c.nickname} size="size-9" />
                     {online ? <span className="absolute right-0 bottom-0 size-2.5 rounded-full border-2" style={{ background: "#3cd188", borderColor: "var(--mp-card)" }} title="En ligne : le fan vient d’écrire" /> : null}
                     {c.pinned ? <Pin className="absolute -top-1 -left-1 size-3.5 rounded-full p-0.5 text-white" style={{ background: "#f06548" }} /> : null}
                   </span>
@@ -258,7 +258,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
               return (
                 <span key={id} className="flex shrink-0 items-center gap-1.5 rounded-md py-1 pr-1 pl-1.5 text-[12.5px]" style={{ background: on ? "rgba(64,81,137,.45)" : "var(--mp-card-2)" }}>
                   <button disabled={!t} onClick={() => t && open(t)} className="flex items-center gap-1.5">
-                    <span className="relative"><Avatar src={t?.memberAvatar} name={t?.nickname || t?.memberName || "?"} size="size-6" />{t?.fresh && !on ? <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background: "#2f6bff" }} /> : null}</span>
+                    <span className="relative"><MpAvatar name={t?.memberName || t?.nickname} size="size-6" className="!text-[11px]" />{t?.fresh && !on ? <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background: "#2f6bff" }} /> : null}</span>
                     <span className="max-w-28 truncate" style={{ color: "var(--mp-head)", fontWeight: on || t?.fresh ? 600 : 400 }}>{t?.nickname || t?.memberName || "…"}</span>
                   </button>
                   <button onClick={() => closeTab(id)} title="Fermer l’onglet : le fan est désépinglé et Substy le reprend" className="grid size-5 place-items-center rounded" style={{ color: "var(--mp-muted)" }}><X className="size-3" /></button>
