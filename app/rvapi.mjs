@@ -5,6 +5,7 @@ import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
+import { mymChatMessages, mymDirect } from './mymchat.mjs';
 import { pinFan } from './lists.mjs';
 import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
@@ -53,7 +54,8 @@ function convOf(cid, c, m, extra = {}) {
     // Dépense du fan en brut (ce qu'il a payé), comme Infloww.
     totalSpent: cents(c.paid ?? c.spent),
     // Substy ne dit pas si le fan est en ligne : on prend l'heure de son dernier message.
-    lastSeenAt: fromFan ? last.at : null,
+    // MYM en direct : en ligne maintenant, sinon sa dernière connexion à MYM.
+    lastSeenAt: c.mym ? (c.online ? new Date().toISOString() : c.seenAt || null) : fromFan ? last.at : null,
     lastMessageAt: last?.at || null,
     preview: last ? last.text || (last.media ? '📷 Média' : '') : '',
     lastFromFan: fromFan,
@@ -176,7 +178,7 @@ function mymRow(cid, c) {
   const gone = /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || '');
   return {
     aiEver: x.ai.has(c.fanId) || (!!c.ai && !!c.last?.fromCreator),
-    sub: st ? /^active$/i.test(st) : !!c.since && !gone,
+    sub: c.mym ? !!c.sub : st ? /^active$/i.test(st) : !!c.since && !gone,
     groups: x.groups.filter((g) => g.members.has(c.fanId)).slice(0, 3).map((g) => ({ name: g.name, color: g.color || null })),
   };
 }
@@ -303,6 +305,35 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (!x) return;
       const cursor = new URL(req.url, 'http://x').searchParams.get('cursor') || undefined;
       const c = inboxChat(x.cid, x.fanId);
+      // Créatrice MYM reliée : les messages viennent de MYM en direct. Qui a envoyé (chatteur, IA, automatisation) :
+      // MYM ne le sait pas, c'est le journal de Bloom qui le dit. Si MYM ne répond pas, on retombe sur Substy.
+      if (mymDirect(x.cid)) {
+        const d = await mymChatMessages(x.cid, x.fanId, { cursor }).catch((e) => (console.warn('[bloom] messages MYM en direct :', e.message), null));
+        if (d) {
+          const logs = all('SELECT s.text, s.at, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? ORDER BY s.at DESC LIMIT 200', x.cid, x.fanId);
+          const ids = d.views.filter((v) => !v.fromFan).map((v) => v.id);
+          const kinds = ids.length ? new Map(all(`SELECT id, kind, by_name FROM msg_log WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids).map((r) => [r.id, r])) : new Map();
+          for (const v of d.views) {
+            if (v.fromFan) continue;
+            const at = Date.parse(v.at);
+            const mine = logs.find((l) => l.message_id === v.id || (l.text.trim() === v.text.trim() && Math.abs(l.at - at) < 90000));
+            const k = kinds.get(v.id);
+            v.by = mine ? { kind: 'bloom', name: mine.name }
+              : k?.kind === 'ai' ? { kind: 'ai', name: 'IA' }
+              : k?.kind === 'auto' ? { kind: 'auto', name: 'Automatisation' }
+              : k?.kind === 'script' ? { kind: 'script', name: 'Script' }
+              : k?.kind === 'employee' ? { kind: 'employee', name: k.by_name || 'Employé' }
+              : k?.kind === 'bloom' ? { kind: 'bloom', name: k.by_name || 'Bloom' }
+              : v.kind === 'push' ? { kind: 'auto', name: 'Push' }
+              : { kind: 'creator', name: 'Créatrice' };
+          }
+          const sentBy = Object.fromEntries(d.views.filter((v) => v.by?.kind === 'bloom').map((v) => [v.id, v.by.name]));
+          const data = d.views.map((v) => liveMsg(v, x.fanId, c?.name || 'Fan'));
+          data.sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));
+          const readAt = d.views.filter((v) => !v.fromFan && v.read).map((v) => v.at).sort().pop() || null;
+          return send(res, 200, { data, pageInfo: d.nextCursor ? { hasNextPage: true, endCursor: d.nextCursor } : { hasNextPage: false, endCursor: '' }, memberLastReadAt: readAt, sentBy, source: 'mym' });
+        }
+      }
       // Substy échoue parfois sur certains fans (« Failed to get messages ») : on retente avec moins de messages.
       let r = null;
       let lastErr = null;

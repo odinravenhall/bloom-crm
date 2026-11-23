@@ -151,7 +151,8 @@ export function computeQueue(u, list, o = {}) {
       if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
       const row = { c, m, cid, at, reply, boxIdx: box, box: box != null ? boxName(box) : null };
       row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
-      row.active = !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
+      // MYM en direct : le fan est en ligne sur MYM ; sinon (Substy) : il a écrit il y a moins de 10 minutes.
+      row.active = c.mym ? !!c.online : !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
       counts.all++;
       if (reply) counts.reply++;
       if (m?.pinned) counts.pinned++;

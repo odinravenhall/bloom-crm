@@ -3,6 +3,7 @@ import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { onMessageAlert } from './alerts.mjs';
 import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
+import { mymChatPage, mymDirect } from './mymchat.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 
 export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
@@ -213,6 +214,34 @@ function put(b, chat) {
   } catch {}
 }
 
+/**
+ * Créatrice MYM reliée : la liste des conversations vient de MYM en direct (dernier message, non lu, en ligne, abonné).
+ * De Substy on ne garde que ce que lui seul connaît : l'état de son IA sur le fan et la dépense. `pages` = nombre de
+ * pages de 30 à relire (les plus récentes d'abord).
+ */
+const mymSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Une conversation vue par Substy : si elle est déjà lue chez MYM, Substy ne met à jour que l'IA et la dépense. */
+const fromSubsty = (b, c) => {
+  const old = b.map.get(c.fanId);
+  return old?.mym ? { ...strip(old), ai: c.ai, handoff: c.handoff, spent: c.spent, paid: c.paid, name: c.name || old.name, avatar: c.avatar || old.avatar, subscribed: c.subscribed ?? old.subscribed, since: c.since ?? old.since } : c;
+};
+async function overlayMym(cid, pages) {
+  if (!mymDirect(cid)) return;
+  const b = inboxOf(cid);
+  let cursor;
+  for (let i = 0; i < pages; i++) {
+    const r = await mymChatPage(cid, cursor);
+    for (const m of r.items) {
+      const old = b.map.get(m.fanId);
+      const base = old ? strip(old) : { name: m.username || 'Fan', avatar: null, ai: false, handoff: false, spent: 0, paid: 0, subscribed: m.sub ? 'active' : null, since: null };
+      put(b, { ...base, ...m, name: base.name || m.username || 'Fan', mym: true });
+    }
+    cursor = r.nextCursor;
+    if (!cursor || !r.items.length) break;
+    if (pages > 2) await mymSleep(120);
+  }
+}
+
 async function crawl(cid) {
   const b = inboxOf(cid);
   if (b.crawling || !SUB) return;
@@ -232,7 +261,7 @@ async function crawl(cid) {
         const c = chatView(it);
         if (!seen.has(c.fanId)) fresh++;
         seen.add(c.fanId);
-        put(b, c);
+        put(b, fromSubsty(b, c));
       }
       // Sécurité : 3 pages de suite sans nouveau fan = la pagination tourne en rond, on s'arrête.
       stale = fresh ? 0 : stale + 1;
@@ -240,6 +269,8 @@ async function crawl(cid) {
       b.resume = cursor;
     } while (cursor && stale < 3 && ++pages < 2000);
     b.resume = undefined;
+    // MYM en direct par-dessus (tour complet : toutes les conversations, y compris celles que Substy ne connaît pas).
+    await overlayMym(cid, 400).catch((e) => console.warn('[bloom] conversations MYM en direct :', e.message));
     b.complete = true;
     b.crawledAt = Date.now();
     setSetting(`inbox_done:${cid}`, String(b.crawledAt));
@@ -257,8 +288,13 @@ async function refreshTop(cid) {
   const b = inboxOf(cid);
   try {
     const r = await SUB.chats(cid, { limit: 30 });
-    for (const it of r?.items || []) put(b, chatView(it));
+    for (const it of r?.items || []) put(b, fromSubsty(b, chatView(it)));
   } catch {}
+  // Le haut de la liste (60 conversations) relu chez MYM ; la toute première fois, toutes les conversations.
+  if (mymDirect(cid) && !b.mymFull) {
+    b.mymFull = true;
+    overlayMym(cid, 400).catch((e) => ((b.mymFull = false), console.warn('[bloom] conversations MYM en direct :', e.message)));
+  } else await overlayMym(cid, 2).catch(() => {});
 }
 /** Relit le haut de la liste d'une créatrice (nouvelle vente, nouveau fan…). */
 export const refreshInboxTop = (cid) => refreshTop(cid);
