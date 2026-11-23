@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell, BarChart3, Bot, ChevronDown, ChevronRight, Images, Link2, Menu, MessageCircle, Send, Settings, ShieldCheck, Users, UsersRound, Zap, type LucideIcon,
+  Bell, BarChart3, Bot, ChevronDown, ChevronRight, ExternalLink, Images, Link2, Menu, MessageCircle, Send, Settings, ShieldCheck, Users, UsersRound, Zap, type LucideIcon,
 } from "lucide-react";
 import { BloomMark } from "@/components/ui";
 import type { Me, Role } from "@/lib/types";
@@ -57,6 +57,7 @@ const NAV: Entry[] = [
     key: "staff", label: "Employés", icon: ShieldCheck, roles: BOSS,
     children: [{ label: "Gérer les employés", href: "/app/employees" }, { label: "Rôles et accès", href: "/app/roles", roles: MANAGE }],
   },
+  { key: "direct", label: "Accès MYM (Direct)", icon: ExternalLink, href: soon("Accès MYM (Direct)"), roles: BOSS },
   { key: "notifs", label: "Notifications", icon: Bell, href: "/app/notifications" },
 ];
 
