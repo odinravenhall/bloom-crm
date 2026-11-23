@@ -5,7 +5,7 @@ import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
-import { mymChatMessages, mymDirect } from './mymchat.mjs';
+import { mymChatMessages, mymDelete, mymDirect, mymRead, mymSend, mymTyping } from './mymchat.mjs';
 import { pinFan } from './lists.mjs';
 import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
@@ -377,11 +377,33 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const c = inboxChat(x.cid, x.fanId);
       const waitedMs = c?.last && !c.last.fromCreator ? Date.now() - Date.parse(c.last.at) : null;
       const lib = libItemOf(x.cid, b.scriptId);
-      run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at, lib_item) VALUES (?, ?, ?, ?, ?, ?, ?)', x.u.id, x.cid, x.fanId, message, price, Date.now(), lib);
+      const logged = run('INSERT INTO sent_log (user_id, creator_id, fan_id, text, price, at, lib_item) VALUES (?, ?, ?, ?, ?, ?, ?)', x.u.id, x.cid, x.fanId, message, price, Date.now(), lib);
       run('UPDATE fan_meta SET unread = 0 WHERE creator_id = ? AND fan_id = ?', x.cid, x.fanId);
       locks.delete(convId(x.cid, x.fanId));
+      // Créatrice MYM reliée : le message part directement chez MYM (plus par Substy). En cas de refus, rien n'est
+      // renvoyé par un autre chemin (pas de double envoi) : l'erreur de MYM s'affiche et l'envoi est retiré du journal.
+      let mymRefusal = null;
+      if (mymDirect(x.cid)) {
+        try {
+          const mid = await mymSend(x.cid, x.fanId, { message, medias, priceCents: Math.round(price * 100) });
+          if (mid) run('UPDATE sent_log SET message_id = ? WHERE id = ?', mid, Number(logged.lastInsertRowid));
+          patchInboxChat(x.cid, x.fanId, { unread: 0, handoff: false, last: { id: mid || `sent-${Date.now()}`, text: message, at: new Date().toISOString(), fromCreator: true, media: medias.length, readAt: null } });
+          return send(res, 200, { message: { id: mid || `sent-${Date.now()}` }, waitedMs, via: 'mym' });
+        } catch (e) {
+          // Refus net de MYM (4xx : rien n'est parti) : tant que l'envoi direct n'a pas été vérifié sur un vrai message,
+          // on repasse par Substy pour ne pas bloquer les chatteurs. Panne ou délai dépassé : on ne sait pas si le
+          // message est parti, donc on ne renvoie RIEN (pas de double envoi) et on affiche l'erreur.
+          console.warn('[bloom] envoi MYM en direct refusé :', e.status, e.message);
+          if (!(e.status >= 400 && e.status < 500)) {
+            run('DELETE FROM sent_log WHERE id = ?', Number(logged.lastInsertRowid));
+            return send(res, 502, { error: `MYM n’a pas confirmé l’envoi (${e.message}). Vérifie dans la conversation avant de renvoyer.` });
+          }
+          mymRefusal = `${e.status} · ${String(e.message).slice(0, 200)}`;
+          setSetting('mym_send_last_refusal', `${new Date().toISOString()} · ${mymRefusal}`);
+        }
+      }
       const r = await substy.send(x.cid, x.fanId, { message, medias, price: price || undefined, replyId: b.replyToId || null });
-      send(res, 200, { message: { id: String(r?.id || r?.message?.id || r?.messageId || `sent-${Date.now()}`) }, waitedMs });
+      send(res, 200, { message: { id: String(r?.id || r?.message?.id || r?.messageId || `sent-${Date.now()}`) }, waitedMs, via: 'substy', ...(mymRefusal ? { mymRefusal } : {}) });
     }],
     ['POST', /^\/api\/rv\/conversations\/([^/]+)\/action$/, async (req, res, id) => {
       const x = conv(req, res, decodeURIComponent(id));
@@ -400,11 +422,13 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           // Lu aussi chez Substy (et dans la liste de Bloom tout de suite).
           patchInboxChat(x.cid, x.fanId, { unread: 0 });
           // Chez Substy aussi quand la plateforme l'accepte (OnlyFans : « no read receipts »).
-          if (c?.last?.id) substy.markRead(x.cid, x.fanId, c.last.id).catch(() => {});
+          if (mymDirect(x.cid)) mymRead(x.cid, x.fanId, true).catch(() => {});
+          else if (c?.last?.id) substy.markRead(x.cid, x.fanId, c.last.id).catch(() => {});
           return send(res, 200, { ok: true });
         }
         case 'unread':
           setMeta(x.cid, x.fanId, 'unread = 1, seen_id = NULL');
+          if (mymDirect(x.cid)) mymRead(x.cid, x.fanId, false).catch(() => {});
           return send(res, 200, { ok: true });
         case 'lock': {
           const l = lockOf(key);
@@ -419,6 +443,8 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           if (lockOf(key)?.userId === x.u.id) locks.delete(key);
           return send(res, 200, { ok: true });
         case 'typing':
+          // MYM en direct : le fan voit « est en train d'écrire », comme sur le site de MYM.
+          if (mymDirect(x.cid)) mymTyping(x.cid, x.fanId).catch(() => {});
           return send(res, 200, { ok: true });
         case 'nickname': {
           const n = String(b.nickname || '').trim().slice(0, 60) || null;
@@ -449,7 +475,8 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const x = conv(req, res, decodeURIComponent(id));
       if (!x) return;
       try {
-        await substy.unsend(x.cid, x.fanId, decodeURIComponent(mid));
+        if (mymDirect(x.cid)) await mymDelete(x.cid, decodeURIComponent(mid));
+        else await substy.unsend(x.cid, x.fanId, decodeURIComponent(mid));
         send(res, 200, { ok: true });
       } catch (e) {
         send(res, 502, { error: `Suppression refusée : ${e.message}` });

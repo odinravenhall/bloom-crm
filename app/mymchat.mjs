@@ -10,9 +10,12 @@
 //      price: { amount (centimes), currency }, media: [{ id, type, thumbnail_url, url }] } }] }
 //  - compteurs : GET /v1/chats/status_counts → { unread, muted, blocked, pending_requests, to_deliver }
 // L'identifiant d'un fan est le même chez MYM et chez Substy : l'état de l'IA (Substy) se recolle sans table de passage.
-// Relevé mais PAS encore branché (l'envoi passe toujours par Substy) : POST /v1/chats/messages { receiver_id, content,
-// type: "text" } ou { …, type: "private_media", price, attachments: [idsMédias], third_party_consent } ;
-// DELETE /v1/chats/messages/<id>?for=… ; POST /v1/chats/<fan>/ack | nack | typing.
+// Écriture (formats lus dans le code du site le 23/11/2026) :
+//  - envoyer : POST /v1/chats/messages { receiver_id, content, type: "text" } ; avec des médias :
+//    { receiver_id, content, type: "private_media", price (en CENTIMES), attachments: [idsMédias], third_party_consent }
+//  - supprimer : DELETE /v1/chats/messages/<id>?for=everyone (ou « me » : seulement de notre côté)
+//  - lu / non lu : POST /v1/chats/<fan>/ack | nack ; « en train d'écrire » : POST /v1/chats/<fan>/typing.
+// MYM ne connaît pas la « réponse à un message ».
 import { STYX, isLinked, mym } from './mym.mjs';
 
 /** Cette créatrice MYM a un compte relié : on lit sa messagerie chez MYM. */
@@ -79,3 +82,19 @@ export async function mymChatMessages(cid, fanId, { cursor, limit = 30 } = {}) {
   });
   return { views, nextCursor: d?.cursor || null };
 }
+
+/** Envoyer un message (texte seul, ou médias du mym.cloud avec un prix en centimes). Renvoie l'identifiant du message. */
+export async function mymSend(cid, fanId, { message = '', medias = [], priceCents = 0 } = {}) {
+  const body = medias.length
+    ? { receiver_id: String(fanId), content: message, type: 'private_media', price: Math.round(priceCents) || 0, attachments: medias.map(String), third_party_consent: false }
+    : { receiver_id: String(fanId), content: message, type: 'text' };
+  const r = await mym(cid, '/v1/chats/messages', { method: 'POST', base: STYX, body });
+  const m = r?.data ?? r ?? {};
+  return m.id ? String(m.id) : null;
+}
+/** Supprimer un de nos messages, aussi chez le fan. */
+export const mymDelete = (cid, messageId) => mym(cid, `/v1/chats/messages/${encodeURIComponent(messageId)}?for=everyone`, { method: 'DELETE', base: STYX });
+/** Marquer la conversation lue (`true`) ou non lue chez MYM. */
+export const mymRead = (cid, fanId, read) => mym(cid, `/v1/chats/${encodeURIComponent(fanId)}/${read ? 'ack' : 'nack'}`, { method: 'POST', base: STYX, body: {} });
+/** Montrer au fan que la créatrice est en train d'écrire. */
+export const mymTyping = (cid, fanId) => mym(cid, `/v1/chats/${encodeURIComponent(fanId)}/typing`, { method: 'POST', base: STYX });
