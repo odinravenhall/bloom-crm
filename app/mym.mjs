@@ -115,7 +115,8 @@ export function mymRoutes({ userFrom, send, body, creators }) {
     'GET /api/mym/links': (req, res) => {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
-      send(res, 200, { canEdit: seesAll(u), links: mymCreators().filter((c) => canSee({ ...u, pf: null }, c.id)).map((c) => ({ creatorId: c.id, name: c.name, username: c.username, ...linkView(c.id) })) });
+      const nick = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [m.creator_id, m.nickname]));
+      send(res, 200, { canEdit: seesAll(u), links: mymCreators().filter((c) => canSee({ ...u, pf: null }, c.id)).map((c) => ({ creatorId: c.id, name: nick.get(c.id) || c.name, username: c.username, ...linkView(c.id) })) });
     },
     /** Code à usage unique pour relier une modèle (à coller dans l'extension). */
     'POST /api/mym/link-code': async (req, res) => {
