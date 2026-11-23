@@ -14,6 +14,7 @@
 // en « publishing » avant l'appel, et un échec n'est jamais retenté tout seul.
 // Pas encore fait : stories, « passer en privé après N h », import Excel, suivi des listes d'amis.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
 import { API, STYX, isLinked, mym, mymSite } from './mym.mjs';
@@ -40,6 +41,23 @@ const THUMBS = `${process.env.DATA_DIR || '/data'}/mymthumbs`;
 mkdirSync(THUMBS, { recursive: true });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const cloudItem = (m) => ({ id: String(m.id), type: /video/i.test(m.type || '') ? 'video' : /audio/i.test(m.type || m.mime_type || '') ? 'audio' : 'photo', thumb: m.preview || m.url || null, full: m.url || null, duration: Number(m.duration) || null, usedPublic: !!m.used_in_public_post, usedPrivate: !!m.used_in_private_post });
+
+const MYM_MEDIA = /^https:\/\/[a-z0-9.-]+\.mym\.fans\//i;
+/** Télécharge une image de MYM (adresse signée, valable une heure) et la garde sous `key`. Vrai si c'est fait. */
+async function keepImage(key, cid, url) {
+  if (!MYM_MEDIA.test(url || '')) return false;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    const mime = (r.headers.get('content-type') || '').split(';')[0];
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok || !/^image\//.test(mime) || !buf.length || buf.length > 8_000_000) return false;
+    writeFileSync(`${THUMBS}/${key}`, buf);
+    run('INSERT OR REPLACE INTO mym_thumbs (id, creator_id, mime, at) VALUES (?, ?, ?, ?)', key, cid, mime, Date.now());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const FRIENDS_MAX = 12;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -90,7 +108,11 @@ function syncFeed(cid) {
       }
       for (let i = 0; i < ids.length; i++) {
         const r = await mymSite(cid, `/app/api/posts/${ids[i]}`).catch(() => null);
-        if (r?.data) saveDetail(cid, ids[i], r.data, i);
+        if (r?.data) {
+          saveDetail(cid, ids[i], r.data, i);
+          // Vignette gardée par Bloom (l'adresse de MYM expire au bout d'une heure).
+          if (!existsSync(`${THUMBS}/feed-${ids[i]}`)) await keepImage(`feed-${ids[i]}`, cid, r.data.image || r.data.url);
+        }
         st.done = i + 1;
         await sleep(250);
       }
@@ -294,16 +316,56 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       const c = pick(u, res, p.get('creatorId'));
       if (!c) return;
       const id = String(p.get('id') || '');
-      let row = one('SELECT thumb, thumb_exp, pos FROM mym_feed WHERE creator_id = ? AND post_id = ?', c.id, id);
-      if (!row) return send(res, 404, { error: 'Post inconnu' });
-      if (!row.thumb || (row.thumb_exp && row.thumb_exp < Date.now() + 60_000)) {
+      if (!/^\d+$/.test(id)) return send(res, 404, { error: 'Post inconnu' });
+      const key = `feed-${id}`;
+      // Pas encore de copie (post synchronisé avant, ou téléchargement raté) : on relit le post et on la fait.
+      if (!existsSync(`${THUMBS}/${key}`)) {
+        const row = one('SELECT pos FROM mym_feed WHERE creator_id = ? AND post_id = ?', c.id, id);
+        if (!row) return send(res, 404, { error: 'Post inconnu' });
         const r = await mymSite(c.id, `/app/api/posts/${id}`).catch(() => null);
         if (r?.data) saveDetail(c.id, id, r.data, row.pos);
-        row = one('SELECT thumb, thumb_exp FROM mym_feed WHERE creator_id = ? AND post_id = ?', c.id, id);
+        if (!r?.data || !(await keepImage(key, c.id, r.data.image || r.data.url))) return send(res, 404, { error: 'Image indisponible' });
       }
-      if (!row?.thumb || !/^https:\/\/[a-z0-9.-]+\.mym\.fans\//i.test(row.thumb)) return send(res, 404, { error: 'Image indisponible' });
-      res.writeHead(302, { location: row.thumb, 'cache-control': 'private, max-age=600' });
-      res.end();
+      const t = one('SELECT mime FROM mym_thumbs WHERE id = ?', key);
+      res.writeHead(200, { 'content-type': t?.mime || 'image/jpeg', 'cache-control': 'private, max-age=604800' });
+      res.end(readFileSync(`${THUMBS}/${key}`));
+    },
+
+    // Vidéos du mym.cloud : MYM les sert en flux HLS (une liste « .m3u8 » puis des morceaux « .ts »), avec une signature
+    // dans l'adresse, et refuse les autres sites que le sien. Bloom relaie donc la liste et les morceaux : les adresses
+    // de la liste sont réécrites pour repasser par ici, la signature de la liste est reportée sur chaque morceau.
+    'GET /api/mym/hls': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      let url;
+      try {
+        url = new URL(Buffer.from(String(q(req).get('u') || ''), 'base64url').toString('utf8'));
+      } catch {
+        return send(res, 400, { error: 'Adresse invalide' });
+      }
+      if (url.protocol !== 'https:' || !/(^|\.)mym\.fans$/i.test(url.hostname)) return send(res, 400, { error: 'Adresse refusée' });
+      try {
+        const r = await fetch(url, { headers: req.headers.range ? { range: req.headers.range } : {}, signal: AbortSignal.timeout(60_000) });
+        if (!r.ok && r.status !== 206) return send(res, r.status === 403 ? 410 : 502, { error: r.status === 403 ? 'Lien expiré : rouvre le média.' : `MYM ${r.status}` });
+        const type = r.headers.get('content-type') || '';
+        if (/mpegurl/i.test(type) || /\.m3u8$/i.test(url.pathname)) {
+          const wrap = (ref) => {
+            const x = new URL(ref, url);
+            if (!x.search) x.search = url.search;
+            return `/api/mym/hls?u=${Buffer.from(x.toString()).toString('base64url')}`;
+          };
+          const text = (await r.text()).split('\n').map((line) => (line && !line.startsWith('#') ? wrap(line.trim()) : line.replace(/URI="([^"]+)"/g, (_, x) => `URI="${wrap(x)}"`))).join('\n');
+          res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl', 'cache-control': 'no-store' });
+          return res.end(text);
+        }
+        const head = { 'content-type': type || 'video/mp2t', 'cache-control': 'private, max-age=3600' };
+        for (const h of ['content-length', 'content-range', 'accept-ranges']) if (r.headers.get(h)) head[h] = r.headers.get(h);
+        res.writeHead(r.status, head);
+        Readable.fromWeb(r.body).pipe(res);
+      } catch (e) {
+        if (!res.headersSent) send(res, 502, { error: e.message });
+        else res.end();
+      }
     },
 
     // ------------------------------------------------------------ mym.cloud (choix du média à publier)

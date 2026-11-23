@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Cloud, FolderPlus, Image as ImageIcon, Mic, Play, Plus, Search, Upload, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
@@ -172,12 +172,63 @@ export function MymStudio() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" onMouseDown={() => setView(null)}>
           <div className="relative max-h-[90vh] max-w-[90vw]" onMouseDown={(e) => e.stopPropagation()}>
             <button onClick={() => setView(null)} className="absolute -top-9 right-0 text-white"><X className="size-6" /></button>
-            {view.type === "video" && view.full ? <video src={view.full} controls autoPlay className="max-h-[85vh] max-w-[90vw] rounded-md" /> : view.type === "audio" && view.full ? <audio src={view.full} controls autoPlay /> : <img src={view.full || view.thumb || ""} alt="" className="max-h-[85vh] max-w-[90vw] rounded-md" />}
+            {view.type === "video" && view.full ? <HlsVideo key={view.id} src={view.full} poster={view.thumb} /> : view.type === "audio" && view.full ? <audio src={view.full} controls autoPlay /> : <img src={view.full || view.thumb || ""} alt="" className="max-h-[85vh] max-w-[90vw] rounded-md" />}
             <p className="mt-2 text-[12px] text-white/80">{view.name || view.id}</p>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+type HlsLib = { isSupported: () => boolean; new (): { loadSource: (u: string) => void; attachMedia: (v: HTMLVideoElement) => void; destroy: () => void; on: (e: string, f: (e: unknown, d: { fatal?: boolean; details?: string }) => void) => void } };
+let hlsLoading: Promise<HlsLib | null> | null = null;
+/** hls.js (copié dans /public) chargé une seule fois, à la première vidéo. */
+const loadHls = () =>
+  (hlsLoading ??= new Promise((ok) => {
+    const w = window as unknown as { Hls?: HlsLib };
+    if (w.Hls) return ok(w.Hls);
+    const s = document.createElement("script");
+    s.src = "/hls.light.min.js";
+    s.onload = () => ok(w.Hls ?? null);
+    s.onerror = () => ok(null);
+    document.head.appendChild(s);
+  }));
+
+/** Vidéo du mym.cloud : MYM la sert en flux (HLS), relayé par Bloom. */
+function HlsVideo({ src, poster }: { src: string; poster: string | null }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const proxied = /\.m3u8(\?|$)/.test(src) ? `/api/mym/hls?u=${btoa(src).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` : src;
+    if (proxied === src) {
+      v.src = src;
+      return;
+    }
+    let hls: InstanceType<HlsLib> | null = null;
+    let off = false;
+    loadHls().then((Hls) => {
+      if (off) return;
+      if (Hls?.isSupported()) {
+        hls = new Hls();
+        hls.on("hlsError", (_e, d) => d.fatal && setErr("Lecture impossible : le lien de MYM a peut-être expiré. Clique sur « Actualiser » puis rouvre la vidéo."));
+        hls.loadSource(proxied);
+        hls.attachMedia(v);
+      } else if (v.canPlayType("application/vnd.apple.mpegurl")) v.src = proxied;
+      else setErr("Ce navigateur ne sait pas lire cette vidéo.");
+    });
+    return () => {
+      off = true;
+      hls?.destroy();
+    };
+  }, [src]);
+  return (
+    <>
+      <video ref={ref} poster={poster ?? undefined} controls autoPlay playsInline className="max-h-[85vh] max-w-[90vw] rounded-md bg-black" />
+      {err ? <p className="mt-2 text-[12.5px]" style={{ color: "#f06548" }}>{err}</p> : null}
+    </>
   );
 }
 
