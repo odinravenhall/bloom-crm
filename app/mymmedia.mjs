@@ -296,7 +296,7 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       if (!syncing.has(c.id) && (!sync?.synced_at || Date.now() - sync.synced_at > 6 * 3600_000) && !sync?.error) syncFeed(c.id);
       const items = all('SELECT post_id, type, is_public, caption, published_at, likes, views, duration FROM mym_feed WHERE creator_id = ? ORDER BY published_at DESC, pos', c.id).map((p) => ({
         id: p.post_id, type: p.type, isPublic: !!p.is_public, caption: p.caption || '', publishedAt: p.published_at, likes: p.likes, views: p.views, duration: p.duration || null,
-        thumb: `/api/mym/feed/thumb?creatorId=${encodeURIComponent(c.id)}&id=${p.post_id}`,
+        thumb: `/api/mym/feed/thumb?creatorId=${encodeURIComponent(c.id)}&id=${p.post_id}&v=2`,
       }));
       send(res, 200, { items, syncedAt: sync?.synced_at ?? null, error: sync?.error ?? null, syncing: syncing.get(c.id) ?? null });
     },
