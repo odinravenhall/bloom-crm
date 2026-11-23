@@ -22,7 +22,8 @@ import { mymAuthor, mymChatMessages, mymChatPage } from './mymchat.mjs';
 import { inboxChat, inboxFanByUsername } from './chat.mjs';
 
 const DAY = 864e5;
-const KEEP_DAYS = 90;
+// 180 jours : de quoi comparer 90 jours aux 90 précédents.
+const KEEP_DAYS = 180;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_live ADD COLUMN origin TEXT', 'ALTER TABLE rv_live ADD COLUMN origin_by TEXT', 'ALTER TABLE rv_live ADD COLUMN raw TEXT', 'ALTER TABLE rv_live ADD COLUMN attr_at INTEGER']) {
   try {
@@ -32,9 +33,9 @@ for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_li
 db.exec('CREATE INDEX IF NOT EXISTS rv_live_creator_at ON rv_live (creator_id, at)');
 run("UPDATE rv_live SET type = 'payout', gross = 0 WHERE src = 'mym' AND type = 'refund' AND (raw LIKE 'Versement%' OR raw LIKE 'Payout%' OR raw LIKE 'Virement%')");
 // 23/11/2026 : les premières ventes ont été attribuées avant la règle « IA déduite » : on les refait.
-if (!getSetting('mym_attr_fix2')) {
+if (!getSetting('mym_attr_fix3')) {
   run("UPDATE rv_live SET attr_at = NULL, origin = NULL, origin_by = NULL, message_id = NULL WHERE src = 'mym'");
-  setSetting('mym_attr_fix2', '1');
+  setSetting('mym_attr_fix3', '1');
 }
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -151,16 +152,16 @@ async function syncRecent(cid) {
   }
   return fresh;
 }
-/** L'historique (90 jours), repris là où il s'était arrêté : quelques pages à chaque passage. */
+/** L'historique (180 jours), repris là où il s'était arrêté : quelques pages à chaque passage. */
 async function backfill(cid) {
-  if (getSetting(`mym_tx_done:${cid}`)) return;
+  if (getSetting(`mym_tx_done2:${cid}`)) return;
   const n = one("SELECT COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid)?.n || 0;
   let p = Math.max(1, Math.floor(n / 10) - 1);
   for (let i = 0; i < 25; i++, p++) {
     const list = await fetchPage(cid, p);
     save(cid, list);
     if (!list.length || list[list.length - 1].at < Date.now() - KEEP_DAYS * DAY) {
-      setSetting(`mym_tx_done:${cid}`, String(Date.now()));
+      setSetting(`mym_tx_done2:${cid}`, String(Date.now()));
       break;
     }
     await sleep(700);
@@ -188,7 +189,7 @@ async function relink(cid) {
 
 /** Qui a fait la vente : le message acheté (contenu privé) ou le dernier message avant le pourboire (2 h). */
 async function attribute(cid) {
-  const rows = all("SELECT id, type, at, fan_id FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type IN ('ppv', 'tip') AND gross > 0 AND fan_id LIKE '%-%' AND attr_at IS NULL AND at > ? ORDER BY at DESC LIMIT 6", cid, Date.now() - 14 * DAY);
+  const rows = all("SELECT id, type, at, fan_id FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type IN ('ppv', 'tip') AND gross > 0 AND fan_id LIKE '%-%' AND attr_at IS NULL AND at > ? ORDER BY at DESC LIMIT 10", cid, Date.now() - 14 * DAY);
   for (const r of rows) {
     // Vente toute fraîche : on laisse une minute à Substy pour dire si son IA a écrit le message.
     if (Date.now() - r.at < 60_000) continue;
@@ -196,14 +197,22 @@ async function attribute(cid) {
     let by = null;
     let mid = null;
     try {
-      const d = await mymChatMessages(cid, r.fan_id, { limit: 30 });
-      const out = d.views.filter((v) => !v.fromFan);
+      const used = new Set(all('SELECT message_id FROM rv_live WHERE creator_id = ? AND fan_id = ? AND message_id IS NOT NULL', cid, r.fan_id).map((x) => x.message_id));
       let hit;
-      if (r.type === 'ppv') {
-        const used = new Set(all('SELECT message_id FROM rv_live WHERE creator_id = ? AND fan_id = ? AND message_id IS NOT NULL', cid, r.fan_id).map((x) => x.message_id));
-        hit = out.filter((v) => v.price > 0 && v.paid && Date.parse(v.at) <= r.at + 60_000 && !used.has(v.id))[0];
-        mid = hit?.id || null;
-      } else hit = out.filter((v) => Date.parse(v.at) <= r.at && Date.parse(v.at) >= r.at - 2 * 3600_000)[0];
+      let cursor;
+      // Jusqu'à 3 pages de 30 messages, en remontant : on s'arrête dès que le message est trouvé ou qu'on est passé
+      // avant la vente (2 h avant pour un pourboire, 3 jours pour un contenu privé).
+      for (let page = 0; page < 3 && !hit; page++) {
+        const d = await mymChatMessages(cid, r.fan_id, { limit: 30, cursor });
+        const out = d.views.filter((v) => !v.fromFan);
+        if (r.type === 'ppv') hit = out.filter((v) => v.price > 0 && v.paid && Date.parse(v.at) <= r.at + 60_000 && !used.has(v.id))[0];
+        else hit = out.filter((v) => Date.parse(v.at) <= r.at && Date.parse(v.at) >= r.at - 2 * 3600_000)[0];
+        const oldest = d.views.length ? Date.parse(d.views[d.views.length - 1].at) : 0;
+        cursor = d.nextCursor;
+        if (!cursor || !oldest || oldest < r.at - (r.type === 'ppv' ? 3 * DAY : 2 * 3600_000)) break;
+        await sleep(250);
+      }
+      if (r.type === 'ppv') mid = hit?.id || null;
       if (hit) {
         // IA de Substy : déduite (message pas parti de Bloom, IA active sur ce fan), voir mymchat.mjs.
         const a = mymAuthor(cid, r.fan_id, hit, !!inboxChat(cid, r.fan_id)?.ai);
@@ -248,20 +257,20 @@ const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }
 /** Chiffres d'une créatrice sur `days` jours (jour en cours compris), au format de « Compte Creator ». */
 export function mymIncome(cid, days) {
   const from = Date.now() - days * DAY;
-  const rows = all("SELECT at, gross, type, origin, currency FROM rv_live WHERE creator_id = ? AND src = 'mym' AND at >= ?", cid, from - days * DAY);
+  const rows = all("SELECT at, gross, type, origin, attr_at, currency FROM rv_live WHERE creator_id = ? AND src = 'mym' AND at >= ?", cid, from - days * DAY);
   const cur = rows.filter((x) => x.at >= from);
   const sum = (l) => l.reduce((a, x) => a + x.gross, 0) / 100;
   const total = sum(cur);
   const before = sum(rows.filter((x) => x.at < from));
   const since = one("SELECT MIN(at) AS t FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid)?.t || null;
-  const complete = !!getSetting(`mym_tx_done:${cid}`);
+  const complete = !!getSetting(`mym_tx_done2:${cid}`);
   const byDay = new Map();
   for (const x of cur) byDay.set(ymd(x.at), (byDay.get(ymd(x.at)) || 0) + x.gross / 100);
   const part = (f) => Math.round(sum(cur.filter(f)) * 100) / 100;
   return {
     total,
     // Évolution : seulement si l'historique couvre aussi la période d'avant.
-    delta: before > 0 && (complete || (since && since <= from - days * DAY)) ? ((total - before) / before) * 100 : null,
+    delta: before > 0 && since && since <= from - days * DAY + DAY ? ((total - before) / before) * 100 : null,
     series: Array.from({ length: days }, (_, i) => Math.round((byDay.get(ymd(Date.now() - (days - 1 - i) * DAY)) || 0) * 100) / 100),
     currency: cur[0]?.currency || 'EUR',
     newSubs: cur.filter((x) => x.type === 'sub').length,
@@ -271,6 +280,8 @@ export function mymIncome(cid, days) {
     sales: cur.filter((x) => x.gross > 0).length,
     parts: { messages: part((x) => x.type === 'ppv'), tips: part((x) => x.type === 'tip'), subscriptions: part((x) => x.type === 'sub'), posts: part((x) => x.type === 'post' || x.type === 'push') },
     // Part de l'IA de Substy et de l'équipe (ventes dont Bloom a retrouvé le message).
+    // `analysed` : le total des ventes (contenus privés, pourboires) dont Bloom a cherché l'auteur (14 derniers jours).
+    analysed: part((x) => x.attr_at != null && x.gross > 0),
     ai: part((x) => x.origin === 'ai'),
     team: part((x) => x.origin === 'bloom' || x.origin === 'employee'),
     auto: part((x) => x.origin === 'auto' || x.origin === 'script'),
@@ -305,7 +316,7 @@ export function mymIncomeRoutes({ userFrom, send, creators, live = () => ({}) })
         // Journal des messages sur 3 jours, par source (substy / mym) et auteur : pour vérifier la reconnaissance de l'IA.
         const journal = all("SELECT COALESCE(src, 'substy') AS src, from_fan AS fromFan, COALESCE(kind, '-') AS kind, COUNT(*) AS n, SUM(text IS NOT NULL AND text <> '') AS withText FROM msg_log WHERE creator_id = ? AND at > ? GROUP BY 1, 2, 3", cid, Date.now() - 3 * DAY);
         const s = st(cid);
-        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done:${cid}`), ...a, types, titles, substyRows: substy, origins, journal, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
+        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done2:${cid}`), ...a, types, titles, substyRows: substy, origins, journal, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
       });
       send(res, 200, { creators: list, live: live() });
     },

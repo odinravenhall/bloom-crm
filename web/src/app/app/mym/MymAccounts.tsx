@@ -10,10 +10,10 @@ import { AddMymAccount, MymLinkChip, useMymLinks } from "./MymLink";
 
 // MYM → Compte Creator : copie de « Mes Comptes » de MyPulse (ventes MyPulse de chaque modèle MYM, équipe, accès).
 type Acc = {
-  id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null; ai?: number | null; byTeam?: number | null;
+  id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null; ai?: number | null; byTeam?: number | null; analysed?: number | null;
   fans: { active: number; old: number; interested: number; checked: number; payers: number }; team: { leads: number; chatters: number; total: number }; online: { name: string; avatar: string | null }[];
 };
-type Data = { source: "live" | "overview" | "mym"; complete?: boolean; ai?: number; byTeam?: number; since: number | null; days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
+type Data = { source: "live" | "overview" | "mym"; complete?: boolean; ai?: number; byTeam?: number; analysed?: number; since: number | null; days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
 const eur = (v: number) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ | /g, " ")} €`;
 const int = (v: number) => v.toLocaleString("fr-FR").replace(/ | /g, " ");
 
@@ -107,7 +107,7 @@ export function MymAccounts() {
             {d?.source === "mym" ? `Revenus nets lus directement chez MYM${d.complete ? "" : ` · historique en cours de récupération (depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"})`}` : d?.source === "live" ? `Ventes vues par Substy (montants payés par les fans), enregistrées par Bloom depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"}` : mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}
           </p>
           {d?.source === "mym" && T ? (
-            <p className="mt-1 text-[12px]" title="Estimation : vente sur un message qui n’est pas parti de Bloom, pour un fan dont l’IA Substy est active (14 derniers jours)">Dont IA Substy (estimé) <b style={{ color: "var(--mp-head)" }}>{eur(d.ai ?? 0)}</b>{T.revenue > 0 ? ` (${Math.round(((d.ai ?? 0) / T.revenue) * 100)} %)` : ""} · chatteurs dans Bloom <b style={{ color: "var(--mp-head)" }}>{eur(d.byTeam ?? 0)}</b></p>
+            <p className="mt-1 text-[12px]" title="Estimation : vente sur un message qui n’est pas parti de Bloom, pour un fan dont l’IA Substy est active (14 derniers jours)">Dont IA Substy (estimé) <b style={{ color: "var(--mp-head)" }}>{eur(d.ai ?? 0)}</b>{(d.analysed ?? 0) > 0 ? ` (${Math.round(((d.ai ?? 0) / (d.analysed ?? 1)) * 100)} %)` : ""} · chatteurs dans Bloom <b style={{ color: "var(--mp-head)" }}>{eur(d.byTeam ?? 0)}</b> · sur {eur(d.analysed ?? 0)} de contenus privés et pourboires analysés (14 derniers jours)</p>
           ) : null}
           <div className="-mx-5 mt-3">{T ? <Spark data={T.series} w={600} h={56} fill /> : <div className="h-14" />}</div>
         </div>
@@ -156,7 +156,7 @@ export function MymAccounts() {
               </div>
               {a.ai != null ? (
                 <div className="mt-1 flex justify-between text-[12px]">
-                  <span>Dont IA Substy (estimé)</span><b style={{ color: "var(--mp-head)" }}>{eur(a.ai)}{a.total > 0 ? ` · ${Math.round((a.ai / a.total) * 100)} %` : ""}</b>
+                  <span>Dont IA Substy (estimé)</span><b style={{ color: "var(--mp-head)" }} title="Part des contenus privés et pourboires des 14 derniers jours dont Bloom a retrouvé le message">{eur(a.ai)}{(a.analysed ?? 0) > 0 ? ` · ${Math.round((a.ai / (a.analysed ?? 1)) * 100)} %` : ""}</b>
                 </div>
               ) : null}
             </div>
