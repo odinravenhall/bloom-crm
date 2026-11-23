@@ -179,7 +179,7 @@ export async function mymFollowers(cid, tab, { offset = 0, limit = 50, search = 
   const d = await mymSite(cid, `/app/ajax/followers/${TAB_PATH[tab]}?${q}`);
   const html = String(d?.html || '');
   const rows = html
-    .split(/<div[^>]*class="user-card[^"]*"/)
+    .split(/<div[^>]*class="user-card[^"]*"[^>]*>/)
     .slice(1)
     .map((chunk) => {
       const id = /data-fan-id="(\d+)"/.exec(chunk)?.[1] || null;
