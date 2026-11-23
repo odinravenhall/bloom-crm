@@ -10,12 +10,13 @@
 // Ces transactions vont dans `rv_live` (src = 'mym') : tout Bloom lit déjà cette table (Compte Creator, Mes ventes,
 // alertes de vente, dépense des fans). Pour une créatrice reliée, les ventes de Substy n'y entrent plus.
 // Part de l'IA : pour chaque contenu privé acheté ou pourboire récent, Bloom retrouve le message concerné chez MYM et
-// regarde qui l'a envoyé (un chatteur dans Bloom, l'IA de Substy, une automatisation) → colonnes `origin`, `origin_by`.
+// regarde qui l'a envoyé (un chatteur dans Bloom, sinon l'IA de Substy si elle est active sur ce fan : estimation, voir
+// mymchat.mjs) → colonnes `origin`, `origin_by`.
 import './revenue.mjs';
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { isLinked, mymSiteRaw } from './mym.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage } from './mymchat.mjs';
-import { inboxFanByUsername, learnAuthors } from './chat.mjs';
+import { inboxChat, inboxFanByUsername } from './chat.mjs';
 
 const DAY = 864e5;
 const KEEP_DAYS = 90;
@@ -26,10 +27,10 @@ for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_li
   } catch {}
 }
 db.exec('CREATE INDEX IF NOT EXISTS rv_live_creator_at ON rv_live (creator_id, at)');
-// 23/11/2026 : les premières ventes ont été attribuées avant que Bloom sache demander l'auteur à Substy : on les refait.
-if (!getSetting('mym_attr_fix1')) {
+// 23/11/2026 : les premières ventes ont été attribuées avant la règle « IA déduite » : on les refait.
+if (!getSetting('mym_attr_fix2')) {
   run("UPDATE rv_live SET attr_at = NULL, origin = NULL, origin_by = NULL, message_id = NULL WHERE src = 'mym'");
-  setSetting('mym_attr_fix1', '1');
+  setSetting('mym_attr_fix2', '1');
 }
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -198,9 +199,8 @@ async function attribute(cid) {
         mid = hit?.id || null;
       } else hit = out.filter((v) => Date.parse(v.at) <= r.at && Date.parse(v.at) >= r.at - 2 * 3600_000)[0];
       if (hit) {
-        // Substy dit si son IA a écrit ce message (son flux ne l'annonce pas pour MYM).
-        await learnAuthors(cid, r.fan_id).catch(() => {});
-        const a = mymAuthor(cid, r.fan_id, hit);
+        // IA de Substy : déduite (message pas parti de Bloom, IA active sur ce fan), voir mymchat.mjs.
+        const a = mymAuthor(cid, r.fan_id, hit, !!inboxChat(cid, r.fan_id)?.ai);
         origin = a?.kind || null;
         by = a?.name || null;
       }

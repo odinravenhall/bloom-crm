@@ -2,7 +2,7 @@
 // exactement dans le format de Raven, à partir de Substy (OnlyFans / MYM) et de ce que Bloom garde en plus.
 // Une conversation = « <creatorId>~<fanId> ». Les montants sont en centimes (comme Raven).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { learnAuthors, img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
+import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymDelete, mymDirect, mymRead, mymSend, mymTyping } from './mymchat.mjs';
@@ -310,9 +310,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (mymDirect(x.cid)) {
         const d = await mymChatMessages(x.cid, x.fanId, { cursor }).catch((e) => (console.warn('[bloom] messages MYM en direct :', e.message), null));
         if (d) {
-          for (const v of d.views) if (!v.fromFan) v.by = mymAuthor(x.cid, x.fanId, v);
-          // Auteurs pas encore connus : on les demande à Substy sans faire attendre l'affichage (visibles au prochain rechargement).
-          if (!cursor && d.views.some((v) => v.by?.kind === 'creator')) learnAuthors(x.cid, x.fanId).catch(() => {});
+          for (const v of d.views) if (!v.fromFan) v.by = mymAuthor(x.cid, x.fanId, v, !!c?.ai);
           const sentBy = Object.fromEntries(d.views.filter((v) => v.by?.kind === 'bloom').map((v) => [v.id, v.by.name]));
           const data = d.views.map((v) => liveMsg(v, x.fanId, c?.name || 'Fan'));
           data.sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));

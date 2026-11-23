@@ -107,7 +107,7 @@ export function MymAccounts() {
             {d?.source === "mym" ? `Revenus nets lus directement chez MYM${d.complete ? "" : ` · historique en cours de récupération (depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"})`}` : d?.source === "live" ? `Ventes vues par Substy (montants payés par les fans), enregistrées par Bloom depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"}` : mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}
           </p>
           {d?.source === "mym" && T ? (
-            <p className="mt-1 text-[12px]">Dont IA Substy <b style={{ color: "var(--mp-head)" }}>{eur(d.ai ?? 0)}</b>{T.revenue > 0 ? ` (${Math.round(((d.ai ?? 0) / T.revenue) * 100)} %)` : ""} · chatteurs dans Bloom <b style={{ color: "var(--mp-head)" }}>{eur(d.byTeam ?? 0)}</b></p>
+            <p className="mt-1 text-[12px]" title="Estimation : vente sur un message qui n’est pas parti de Bloom, pour un fan dont l’IA Substy est active (14 derniers jours)">Dont IA Substy (estimé) <b style={{ color: "var(--mp-head)" }}>{eur(d.ai ?? 0)}</b>{T.revenue > 0 ? ` (${Math.round(((d.ai ?? 0) / T.revenue) * 100)} %)` : ""} · chatteurs dans Bloom <b style={{ color: "var(--mp-head)" }}>{eur(d.byTeam ?? 0)}</b></p>
           ) : null}
           <div className="-mx-5 mt-3">{T ? <Spark data={T.series} w={600} h={56} fill /> : <div className="h-14" />}</div>
         </div>
@@ -156,7 +156,7 @@ export function MymAccounts() {
               </div>
               {a.ai != null ? (
                 <div className="mt-1 flex justify-between text-[12px]">
-                  <span>Dont IA Substy</span><b style={{ color: "var(--mp-head)" }}>{eur(a.ai)}{a.total > 0 ? ` · ${Math.round((a.ai / a.total) * 100)} %` : ""}</b>
+                  <span>Dont IA Substy (estimé)</span><b style={{ color: "var(--mp-head)" }}>{eur(a.ai)}{a.total > 0 ? ` · ${Math.round((a.ai / a.total) * 100)} %` : ""}</b>
                 </div>
               ) : null}
             </div>

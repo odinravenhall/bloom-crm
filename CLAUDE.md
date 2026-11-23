@@ -231,5 +231,6 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Revenus : `GET /app/income-fetch?page=N` du site (10 transactions par page, montants NETS) → `rv_live` avec `src = 'mym'`
   (relu toutes les 45 s, historique 90 jours repris petit à petit). Les ventes Substy de la même période sont retirées.
 - Part de l'IA : `rv_live.origin` (`ai` / `bloom` / `auto`…) = auteur du message acheté ou du dernier message avant un
-  pourboire. État : `GET /api/mym/income/status` (admins, managers).
+  pourboire (14 derniers jours). ⚠️ Côté MYM, Substy ne dit jamais qu'un message vient de son IA (ni flux, ni liste de
+  messages, ni historique IA) : « IA » est DÉDUIT = message pas parti de Bloom, pas un push, fan dont l'IA est active. État : `GET /api/mym/income/status` (admins, managers).
 - Pas encore fait : la page Accueil / Stats générale rapproche toujours avec MyPulse (`rv_sales`).
