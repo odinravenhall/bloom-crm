@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, CircleDot, Copy, Download, Feather, GitBranch, Image as ImageIcon, Layers, MessageCircle, MoreVertical, Plus, Route, Search, Tag, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, CircleDot, Cloud, Copy, Folder, Lock, Play, Download, Feather, GitBranch, Image as ImageIcon, Layers, MessageCircle, MoreVertical, Plus, Route, Search, Tag, Trash2, Upload, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
-import { useT } from "@/lib/i18n";
 import type { Media } from "@/lib/types";
 import { download } from "@/lib/xlsx";
-import { VaultProPicker } from "@/app/pro/VaultProPicker";
 import { Avatar } from "@/components/ui";
 
 // MYM → Messages → Script : copie de « Scripts (Gestion) » de MyPulse sur la bibliothèque de Bloom (`/api/lib`).
@@ -389,11 +387,103 @@ function Studio({ creatorId, creatorName, group, canEdit, reload, onClose, onCre
   );
 }
 
+const MAX_MEDIAS = 5;
+type CloudFolder = { id: string; name: string; total: number };
+type CloudMedia = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; caption: string; lists: string[] };
+
+/** Choix des médias façon MyPulse : « MYM Cloud » (tout) ou une collection à gauche, la grille à droite. */
+function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; selected: Media[]; onChange: (m: Media[]) => void }) {
+  const [folders, setFolders] = useState<CloudFolder[]>([]);
+  const [folder, setFolder] = useState("");
+  const [type, setType] = useState<"" | "photo" | "video" | "audio">("");
+  const [items, setItems] = useState<CloudMedia[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [fq, setFq] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    api<{ lists: CloudFolder[] }>("GET", `/api/vaultpro/cats?creatorId=${encodeURIComponent(creatorId)}`).then((r) => setFolders(r.lists)).catch(() => {});
+  }, [creatorId]);
+  const load = useCallback(
+    async (more: string | null) => {
+      setBusy(true);
+      const p = new URLSearchParams({ creatorId });
+      if (folder) p.set("listId", folder);
+      if (type) p.set("type", type.toUpperCase());
+      if (more) p.set("cursor", more);
+      try {
+        const r = await api<{ items: CloudMedia[]; nextCursor: string | null }>("GET", `/api/vaultpro/medias?${p}`);
+        setItems((cur) => (more ? [...(cur ?? []), ...r.items] : r.items));
+        setCursor(r.nextCursor);
+      } catch (e) {
+        toast((e as Error).message, "err");
+        setItems((cur) => cur ?? []);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [creatorId, folder, type],
+  );
+  useEffect(() => {
+    setItems(null);
+    setCursor(null);
+    load(null);
+  }, [load]);
+  const toggle = (m: CloudMedia) => {
+    if (selected.some((x) => x.id === m.id)) return onChange(selected.filter((x) => x.id !== m.id));
+    if (selected.length >= MAX_MEDIAS) return toast(`${MAX_MEDIAS} médias au plus par message`, "err");
+    onChange([...selected, { id: m.id, type: m.type, thumb: m.thumb, full: m.full, duration: m.duration }]);
+  };
+  const shown = (items ?? []).filter((m) => !q || `${m.caption} ${m.lists.join(" ")} ${m.id}`.toLowerCase().includes(q.toLowerCase()));
+  const line = { borderColor: "#2a3020" };
+  const fs = { background: "rgba(255,255,255,.04)", borderColor: "#2f3a24", color: "var(--mp-head)" };
+  const row = (on: boolean) => (on ? { background: "rgba(199,255,74,.1)", boxShadow: "inset 3px 0 0 var(--mp-accent)", color: "var(--mp-head)" } : undefined);
+  return (
+    <div className="mt-3 flex flex-col overflow-hidden rounded-xl border md:flex-row" style={line}>
+      <div className="w-full shrink-0 border-b p-2 md:w-[210px] md:border-r md:border-b-0" style={line}>
+        <label className="flex h-8 items-center gap-2 rounded-lg border px-2 text-[12px]" style={fs}><Search className="size-3.5" /><input value={fq} onChange={(e) => setFq(e.target.value)} placeholder="Rechercher une collection" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
+        <button onClick={() => setFolder("")} className="mt-2 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold" style={row(!folder)}><Cloud className="size-4" style={{ color: "var(--mp-accent)" }} /><span className="flex-1">MYM Cloud</span>{selected.length ? <span className="grid size-5 place-items-center rounded-full text-[11px]" style={LIME}>{selected.length}</span> : null}</button>
+        <p className="mt-2 flex justify-between px-2 text-[10.5px] font-bold tracking-wider uppercase" style={{ color: "var(--mp-muted)" }}>Collections<span>{folders.length}</span></p>
+        <div className="no-scrollbar mt-1 max-h-[250px] overflow-y-auto">
+          {folders.filter((f) => !fq || f.name.toLowerCase().includes(fq.toLowerCase())).map((f) => (
+            <button key={f.id} onClick={() => setFolder(f.id)} className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px]" style={row(folder === f.id)}>
+              <Folder className="mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate font-semibold">{f.name}</span><span className="text-[11px]" style={{ color: "var(--mp-muted)" }}>{f.total}</span></span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 p-2">
+        <label className="flex h-8 items-center gap-2 rounded-lg border px-2 text-[12px]" style={fs}><Search className="size-3.5" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un média (description, collection)…" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
+        <div className="mt-2 flex items-center gap-2">
+          <b className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "var(--mp-head)" }}>{folder ? folders.find((f) => f.id === folder)?.name : "MYM Cloud"}</b>
+          <span className="flex rounded-lg border p-0.5 text-[12px] font-semibold" style={line}>
+            {([["", "Tous"], ["photo", "Photos"], ["video", "Vidéos"], ["audio", "Audios"]] as const).map(([k, l]) => <button key={k} onClick={() => setType(k)} className="rounded-md px-2.5 py-1" style={type === k ? LIME : undefined}>{l}</button>)}
+          </span>
+        </div>
+        <div className="no-scrollbar mt-2 grid max-h-[290px] gap-2 overflow-y-auto" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))" }}>
+          {shown.map((m) => {
+            const on = selected.some((x) => x.id === m.id);
+            return (
+              <button key={m.id} onClick={() => toggle(m)} className="relative aspect-square overflow-hidden rounded-lg" style={{ background: "rgba(255,255,255,.06)", outline: on ? "2px solid var(--mp-accent)" : undefined }} title={m.caption || m.lists.join(", ")}>
+                {m.thumb ? <img src={m.thumb} alt="" loading="lazy" className="size-full object-cover" /> : <span className="grid size-full place-items-center text-[11px]">{m.type}</span>}
+                {m.type === "video" ? <Play className="absolute inset-0 m-auto size-6 rounded-full bg-black/45 p-1 text-white" /> : null}
+                <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full border" style={on ? { ...LIME, borderColor: "var(--mp-accent)" } : { borderColor: "#fff9", background: "#0006" }}>{on ? <Check className="size-3" /> : null}</span>
+                {m.duration ? <span className="absolute right-1 bottom-1 rounded bg-black/70 px-1 text-[9.5px] font-semibold text-white">{`${String(Math.floor(m.duration / 60)).padStart(2, "0")}:${String(Math.round(m.duration % 60)).padStart(2, "0")}`}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+        {!items ? <p className="py-8 text-center text-[12.5px]" style={{ color: "var(--mp-muted)" }}>Lecture du MYM Cloud…</p> : null}
+        {items && !shown.length ? <p className="py-8 text-center text-[12.5px]" style={{ color: "var(--mp-muted)" }}>Aucun média ici.</p> : null}
+        {cursor ? <div className="mt-2 text-center"><button disabled={busy} onClick={() => load(cursor)} className="h-8 rounded-lg border px-4 text-[12.5px] disabled:opacity-50" style={line}>{busy ? "Chargement…" : "Charger plus"}</button></div> : null}
+      </div>
+    </div>
+  );
+}
+
 function MessageEditor({ creatorId, creatorName, groupId, item, onClose, onSaved }: { creatorId: string; creatorName: string; groupId: number; item: Item | null; onClose: () => void; onSaved: () => void }) {
-  const { t } = useT();
   const [v, setV] = useState({ name: item?.name ?? "", text: item?.text ?? "", note: item?.note ?? "", paid: (item?.price ?? 0) > 0, price: item?.price ? String(item.price) : "" });
   const [medias, setMedias] = useState<Media[]>(item?.medias ?? []);
-  const [vault, setVault] = useState(false);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
@@ -436,16 +526,18 @@ function MessageEditor({ creatorId, creatorName, groupId, item, onClose, onSaved
               <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Payant : avec au moins un média.</p>
             </div>
             <div className={box} style={bs}>
-              <p className="flex items-center justify-between text-[13.5px] font-semibold" style={{ color: "var(--mp-head)" }}>Médias du vault<button onClick={() => setVault(true)} className="h-8 rounded-full px-3.5 text-[12.5px]" style={LIME}>{medias.length ? "Changer" : "Choisir"}</button></p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {medias.map((m) => (
-                  <span key={m.id} className="relative">
-                    {m.thumb ? <img src={m.thumb} alt="" className="size-16 rounded-lg object-cover" /> : <span className="grid size-16 place-items-center rounded-lg" style={{ background: "rgba(255,255,255,.06)" }}><ImageIcon className="size-5" /></span>}
-                    <button onClick={() => setMedias(medias.filter((x) => x.id !== m.id))} className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-black text-white"><X className="size-3" /></button>
-                  </span>
-                ))}
-                {!medias.length ? <p className="text-[12.5px]" style={{ color: "var(--mp-muted)" }}>Aucun média.</p> : null}
-              </div>
+              <p className="text-[13.5px] font-semibold" style={{ color: "var(--mp-head)" }}>Médias ({MAX_MEDIAS} au plus)</p>
+              {medias.length ? (
+                <div className="mt-2 flex flex-wrap gap-2 rounded-xl border p-2" style={{ borderColor: "var(--mp-accent)", background: "rgba(199,255,74,.06)" }}>
+                  {medias.map((m) => (
+                    <span key={m.id} className="relative">
+                      {m.thumb ? <img src={m.thumb} alt="" className="size-11 rounded-lg object-cover" /> : <span className="grid size-11 place-items-center rounded-lg" style={{ background: "rgba(255,255,255,.06)" }}><ImageIcon className="size-4" /></span>}
+                      <button onClick={() => setMedias(medias.filter((x) => x.id !== m.id))} title="Retirer" className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full text-white" style={{ background: "#f06548" }}><X className="size-2.5" /></button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <CloudPicker creatorId={creatorId} selected={medias} onChange={setMedias} />
             </div>
             <div className={box} style={bs}>
               <p className="text-[12.5px] font-semibold" style={{ color: "var(--mp-head)" }}>Consigne pour l’équipe (facultatif)</p>
@@ -457,7 +549,12 @@ function MessageEditor({ creatorId, creatorName, groupId, item, onClose, onSaved
             <div className="mt-2 rounded-[26px] border p-3" style={{ borderColor: "#2a3020" }}>
               <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: "#1f2a17" }}><span className="grid size-8 place-items-center rounded-full text-[13px] font-bold" style={LIME}>{(creatorName || "?").charAt(0).toUpperCase()}</span><b className="text-[13px]" style={{ color: "var(--mp-head)" }}>{creatorName}</b></div>
               <div className="flex min-h-[260px] flex-col items-end justify-end gap-2 pt-3">
-                {medias.length ? <span className="grid h-24 w-32 place-items-center rounded-2xl text-[12px]" style={{ background: "rgba(255,255,255,.08)" }}>{v.paid ? `🔒 ${v.price || "?"} €` : `📷 ${medias.length}`}</span> : null}
+                {medias.length ? (
+                  <span className="relative block h-56 w-full overflow-hidden rounded-2xl" style={{ background: "rgba(255,255,255,.08)" }}>
+                    {medias[0].thumb ? <img src={medias[0].thumb} alt="" className="size-full object-cover" style={v.paid ? { filter: "blur(14px)", transform: "scale(1.15)" } : undefined} /> : null}
+                    {v.paid ? <span className="absolute inset-0 grid place-content-center justify-items-center gap-2"><Lock className="size-5 text-white" /><span className="rounded-full px-3 py-1 text-[12px] font-bold" style={LIME}>{v.price || "?"} €</span></span> : medias.length > 1 ? <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">+{medias.length - 1}</span> : null}
+                  </span>
+                ) : null}
                 <span className="max-w-[90%] rounded-2xl px-3 py-2 text-[12.5px] whitespace-pre-wrap" style={v.text ? LIME : { border: "1px dashed #3a4047" }}>{v.text || "Ce que le fan lira…"}</span>
               </div>
             </div>
@@ -469,17 +566,6 @@ function MessageEditor({ creatorId, creatorName, groupId, item, onClose, onSaved
         <button onClick={onClose} className="h-10 rounded-xl border px-4 text-[13.5px]" style={{ borderColor: "#2a3020" }}>Annuler</button>
         <button disabled={busy || (!v.text.trim() && !medias.length)} onClick={save} className="h-10 rounded-xl px-5 text-[13.5px] font-semibold disabled:opacity-50" style={LIME}>✓ Enregistrer</button>
       </div>
-      {vault ? (
-        <div className="pro">
-          <VaultProPicker
-            creatorId={creatorId}
-            selected={medias.map((m) => ({ id: m.id, type: /video/i.test(m.type) ? "video" : /audio/i.test(m.type) ? "audio" : "photo", thumbnailUrl: m.thumb ?? undefined, url: m.full ?? undefined }))}
-            onPick={(list) => (setMedias(list.map((m) => ({ id: m.id, type: m.type, thumb: m.thumbnailUrl || m.smallUrl || null, full: m.url || m.largeUrl || m.mediumUrl || null, duration: null }))), setVault(false))}
-            onClose={() => setVault(false)}
-            t={t}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }
