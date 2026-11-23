@@ -15,7 +15,7 @@ import './revenue.mjs';
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { isLinked, mymSiteRaw } from './mym.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage } from './mymchat.mjs';
-import { inboxFanByUsername } from './chat.mjs';
+import { inboxFanByUsername, learnAuthors } from './chat.mjs';
 
 const DAY = 864e5;
 const KEEP_DAYS = 90;
@@ -26,6 +26,11 @@ for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_li
   } catch {}
 }
 db.exec('CREATE INDEX IF NOT EXISTS rv_live_creator_at ON rv_live (creator_id, at)');
+// 23/11/2026 : les premières ventes ont été attribuées avant que Bloom sache demander l'auteur à Substy : on les refait.
+if (!getSetting('mym_attr_fix1')) {
+  run("UPDATE rv_live SET attr_at = NULL, origin = NULL, origin_by = NULL, message_id = NULL WHERE src = 'mym'");
+  setSetting('mym_attr_fix1', '1');
+}
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 const text = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&(#\d+|\w+);/g, (a, e) => (e[0] === '#' ? String.fromCodePoint(Number(e.slice(1))) : ENT[e] ?? a)).replace(/\s+/g, ' ').trim();
@@ -193,6 +198,8 @@ async function attribute(cid) {
         mid = hit?.id || null;
       } else hit = out.filter((v) => Date.parse(v.at) <= r.at && Date.parse(v.at) >= r.at - 2 * 3600_000)[0];
       if (hit) {
+        // Substy dit si son IA a écrit ce message (son flux ne l'annonce pas pour MYM).
+        await learnAuthors(cid, r.fan_id).catch(() => {});
         const a = mymAuthor(cid, r.fan_id, hit);
         origin = a?.kind || null;
         by = a?.name || null;

@@ -146,6 +146,38 @@ function substyShadow(cid, raw) {
   if (!v.fromFan && v.by?.kind === 'creator') confirmSender(cid, fanId);
 }
 
+/**
+ * Créatrice MYM reliée : qui a écrit les derniers messages envoyés à ce fan. Le flux de Substy n'annonce PAS les messages
+ * sortants côté MYM (constaté le 23/11/2026 : des milliers de messages de fans, aucun de la créatrice) ; seule sa liste de
+ * messages dit « écrit par l'IA » / automatisation / employé. On la lit (30 derniers) et on note l'auteur dans le journal :
+ * sur la ligne déjà notée depuis MYM (même texte, même heure), sinon sur une ligne à l'identifiant de Substy.
+ * Au plus une lecture toutes les 20 s par fan.
+ */
+const learned = new Map();
+export async function learnAuthors(cid, fanId) {
+  if (!SUB || !fanId) return;
+  const key = `${cid}:${fanId}`;
+  if (Date.now() - (learned.get(key) || 0) < 20_000) return;
+  learned.set(key, Date.now());
+  if (learned.size > 5000) learned.delete(learned.keys().next().value);
+  const r = await SUB.messages(cid, fanId, { limit: 30 });
+  for (const it of r?.items || []) {
+    if (!it.isSentByCreator) continue;
+    const v = messageView(it, null);
+    if (!v.by || v.by.kind === 'creator') continue;
+    const name = v.by.kind === 'employee' ? v.by.name : null;
+    const row = one('SELECT id, kind FROM msg_log WHERE id = ?', String(v.id)) || twinOf(cid, fanId, false, v.text, Date.parse(v.at) || 0, 'mym');
+    if (!row) logMessage(cid, fanId, v);
+    else if (!row.kind || row.kind === 'creator') run('UPDATE msg_log SET kind = ?, by_name = ? WHERE id = ?', v.by.kind, name, row.id);
+  }
+}
+const learnLater = new Map();
+function learnSoon(cid, fanId) {
+  const key = `${cid}:${fanId}`;
+  if (learnLater.has(key)) return;
+  learnLater.set(key, setTimeout(() => (learnLater.delete(key), learnAuthors(cid, fanId).catch(() => {})), 5000));
+}
+
 // ---------------------------------------------------------------- temps réel MYM (créatrices reliées)
 // MYM n'a pas de flux « poussé » : son propre site relit la liste des conversations toutes les 10 à 12 s. Bloom fait
 // pareil avec le compte relié : toutes les 7 s pour une créatrice que quelqu'un regarde, toutes les 30 s sinon.
@@ -181,6 +213,8 @@ async function mymLiveTick(cid) {
       if (!fresh.length) fresh = [{ id: m.last.id, text: m.last.text, at: m.last.at, fromFan: !m.last.fromCreator, by: null, kind: 'text', medias: [], price: 0, paid: false, tip: false, read: false, reverted: false }];
       for (const v of fresh) {
         v.by = mymAuthor(cid, m.fanId, v);
+        // Message de la créatrice qui ne vient pas de Bloom : on demande à Substy si c'est son IA (5 s après).
+        if (v.by?.kind === 'creator') learnSoon(cid, m.fanId);
         if (!twinOf(cid, m.fanId, v.fromFan, v.text, Date.parse(v.at) || Date.now(), '')) logMessage(cid, m.fanId, v, 'mym');
         st.events++;
         const line = `data: ${JSON.stringify({ creatorId: cid, type: 'new_message', fanId: m.fanId, message: v, via: 'mym' })}\n\n`;
