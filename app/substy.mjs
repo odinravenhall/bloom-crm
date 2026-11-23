@@ -8,6 +8,10 @@ const FAPI = 'https://clerk.substy.ai';
 const CLERK_Q = '__clerk_api_version=2026-11-18&_clerk_js_version=6.46.2';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36';
 
+/** Contrôle local des mots sensibles de l'agence (branché par `sensitive.mjs`). */
+let bannedCheck = () => [];
+export const setBannedCheck = (f) => (bannedCheck = f);
+
 export class SubstyError extends Error {
   constructor(status, message, code = null) {
     super(message);
@@ -159,7 +163,11 @@ export class SubstySession {
    */
   employeesStats({ startDate, endDate, creatorIds } = {}) { return this.call('agency.employees.getEmployeesStats', { startDate, endDate, ...(creatorIds?.length ? { creatorIds } : {}) }); }
   platformDetails(creatorIds) { return this.call('creators.getCreatorPlatformDetails', { creatorIds }); }
-  validate(content) { return this.call('agency.bannedWords.validateContent', { content }); }
+  validate(content) {
+    const hit = bannedCheck(content);
+    if (hit.length) return Promise.resolve({ valid: false, bannedWords: hit });
+    return this.call('agency.bannedWords.validateContent', { content });
+  }
   vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }
   vaultMedias(creatorId, { listId, cursor, limit = 40 } = {}) {
     return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}) });

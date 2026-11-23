@@ -215,7 +215,7 @@ export function smartRoutes({ substy, userFrom, send, body }) {
         for (const m of c.messages)
           if (m.text.trim()) {
             const v = await substy.validate(m.text).catch(() => null);
-            if (v && (v.valid === false || v.isValid === false || v.bannedWords?.length || v.matches?.length)) return send(res, 400, { error: 'Mot interdit dans un message' });
+            if (v && (v.valid === false || v.isValid === false || v.bannedWords?.length || v.matches?.length)) return send(res, 400, { error: `Mot interdit dans un message : ${(v.bannedWords || v.matches || []).map((w) => String(w.word || w)).join(', ')}` });
           }
       const status = b.publish ? 'active' : 'scheduled';
       const vals = [a.trigger, status, JSON.stringify(a.include), JSON.stringify(a.exclude), a.delayMin, Math.max(a.delayMin, a.delayMax), a.once ? 1 : 0, a.startsAt, a.endsAt, a.unsendOnReply ? 1 : 0, JSON.stringify(a.collections)];

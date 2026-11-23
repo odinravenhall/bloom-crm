@@ -687,7 +687,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       if (text.trim()) {
         const v = await substy.validate(text).catch(() => null);
         if (v && (v.valid === false || v.isValid === false || (Array.isArray(v.bannedWords) && v.bannedWords.length) || (Array.isArray(v.matches) && v.matches.length)))
-          return send(res, 400, { error: 'Mot interdit dans le message', details: v });
+          return send(res, 400, { error: `Mot interdit dans le message : ${(v.bannedWords || v.matches || []).map((w) => String(w.word || w)).join(', ')}`, details: v });
       }
       const r = await substy.createMass(cid, { text, price, mediaIds, includedListIds: inc, excludedListIds: exc, includeOnlineFans: !!b.onlineOnly, scheduledAt, autoUnsendAfterSeconds: unsend });
       run('INSERT INTO ai_changes (user_id, creator_id, what, detail, at) VALUES (?, ?, ?, ?, ?)', u.id, cid, 'mass', JSON.stringify({ text: text.slice(0, 200), price, medias: mediaIds.length, inc, exc, scheduledAt: scheduledAt || null }), Date.now());
@@ -864,7 +864,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
         // Mots interdits de l'agence (même contrôle que le site de Substy avant chaque envoi).
         const v = await substy.validate(message).catch(() => null);
         if (v && (v.valid === false || v.isValid === false || (Array.isArray(v.bannedWords) && v.bannedWords.length) || (Array.isArray(v.matches) && v.matches.length)))
-          return send(res, 400, { error: 'Mot interdit dans le message', details: v });
+          return send(res, 400, { error: `Mot interdit dans le message : ${(v.bannedWords || v.matches || []).map((w) => String(w.word || w)).join(', ')}`, details: v });
       }
       // Script de la bibliothèque de Bloom envoyé (pour ses statistiques et l'avancement du fan dans la séquence).
       const lib = libItemOf(String(b.creatorId), b.libItemId);

@@ -114,7 +114,7 @@ export function proRoutes({ substy, userFrom, send, body }) {
       if (!(due > Date.now() + 30_000) || due > Date.now() + MAX_AHEAD) return send(res, 400, { error: 'Heure d’envoi invalide (dans le futur, 30 jours au plus)' });
       if (text.trim()) {
         const v = await substy.validate(text).catch(() => null);
-        if (v && (v.valid === false || v.isValid === false || v.bannedWords?.length || v.matches?.length)) return send(res, 400, { error: 'Mot interdit dans le message' });
+        if (v && (v.valid === false || v.isValid === false || v.bannedWords?.length || v.matches?.length)) return send(res, 400, { error: `Mot interdit dans le message : ${(v.bannedWords || v.matches || []).map((w) => String(w.word || w)).join(', ')}` });
       }
       const r = run('INSERT INTO pro_timed (user_id, creator_id, fan_id, text, medias, price, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', u.id, c.cid, c.fanId, text, JSON.stringify(medias), price, due, Date.now());
       send(res, 200, { id: Number(r.lastInsertRowid), dueAt: due });

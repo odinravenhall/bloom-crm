@@ -54,7 +54,7 @@ const NAV: (Entry | "divider")[] = [
       { label: "Vault Pro", icon: Images, href: "/app/vault" },
       { label: "Scripts", icon: ScrollText, href: "/app/scripts" },
       { label: "Tracking links", icon: Route, href: "/app/tracking" },
-      { label: "Sensitive words", icon: Ban, href: soon("Sensitive words") },
+      { label: "Sensitive words", icon: Ban, href: "/app/sensitive" },
       { label: "AI (Substy)", icon: Bot, href: "/app/ia", roles: MANAGE },
     ],
   },
