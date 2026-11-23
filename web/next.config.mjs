@@ -9,6 +9,8 @@ const nextConfig = {
   // Pas de compression ici : le flux temps réel (/api/live) doit passer sans être retenu.
   compress: false,
   images: { unoptimized: true },
+  // MYM → Importer des médias : les vidéos passent par ici vers l'API (10 Mo par défaut).
+  experimental: { proxyClientMaxBodySize: "500mb" },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${API}/api/:path*` },

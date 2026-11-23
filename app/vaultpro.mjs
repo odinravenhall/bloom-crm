@@ -1,7 +1,13 @@
 // Growth → Vault Pro (OnlyFans, copie d'Infloww).
 // Médias et listes du vault OnlyFans : lus chez Substy (medias.getLists / medias.getMedias).
 // En plus, gardé par Bloom : catégories personnalisées (« Custom »), et pour chaque média : catégorie Bloom, hashtags,
-// notes, prix suggéré, qui l'a modifié. Envoyer un média depuis l'ordinateur n'est pas possible via Substy.
+// notes, prix suggéré, qui l'a modifié.
+// Aussi utilisé par MYM → Médias (Studio, Importer des médias, copie de MyPulse) :
+//  - ranger un média dans des dossiers du vault : `medias.addMediasToList {mediaId, targetListIds}` /
+//    `medias.removeMediasFromList {mediaId, folderIds}` ;
+//  - envoyer un fichier : `medias.initUpload {filename, size, contentType}` → {key, putUrl} ; PUT du fichier sur putUrl ;
+//    `medias.finishUpload {key}`. Le fichier passe par le serveur de Bloom (le navigateur n'a jamais la session Substy).
+//    Relevé le 23/11/2026 sur les erreurs de validation de Substy.
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { mediaView } from './chat.mjs';
@@ -95,6 +101,53 @@ export function vaultProRoutes({ substy, userFrom, send, body }) {
       }));
       const meta = metaOf(cid, items.map((i) => String(i.id)));
       send(res, 200, { items: items.map((i) => withMeta(i, meta.get(String(i.id)))), nextCursor: r?.hasMore ? r.nextCursor : null });
+    },
+    // Ranger des médias dans un dossier du vault (Substy), ou les en retirer.
+    'POST /api/vaultpro/list-media': async (req, res) => {
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      if (!auth(req, res, cid, true)) return;
+      const listId = String(b.listId || '');
+      const ids = (Array.isArray(b.mediaIds) ? b.mediaIds : []).map(String).slice(0, 300);
+      if (!listId || !ids.length) return send(res, 400, { error: 'Choisis des médias et un dossier' });
+      let ok = 0;
+      let err = null;
+      for (const mediaId of ids) {
+        try {
+          if (b.add === false) await substy.call('medias.removeMediasFromList', { creatorId: cid, mediaId, folderIds: [listId] });
+          else await substy.call('medias.addMediasToList', { creatorId: cid, mediaId, targetListIds: [listId] });
+          ok++;
+        } catch (e) {
+          err = e.message;
+        }
+      }
+      if (!ok && err) return send(res, 502, { error: `Substy : ${err}` });
+      send(res, 200, { ok, failed: ids.length - ok });
+    },
+    // Envoyer un fichier dans le vault de la créatrice (corps de la requête = le fichier brut).
+    'POST /api/vaultpro/upload': async (req, res) => {
+      const p = q(req);
+      const cid = String(p.get('creatorId') || '');
+      if (!auth(req, res, cid, true)) return;
+      const name = String(p.get('name') || 'media').replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'media';
+      const type = String(req.headers['content-type'] || p.get('type') || '');
+      const size = Number(req.headers['content-length'] || p.get('size')) || 0;
+      if (!/^(image|video|audio)\//.test(type)) return send(res, 400, { error: 'Photos, vidéos ou audios seulement' });
+      if (!size || size > 500 * 1024 * 1024) return send(res, 400, { error: 'Fichier vide ou trop gros (500 Mo max)' });
+      try {
+        const init = await substy.call('medias.initUpload', { creatorId: cid, filename: name, size, contentType: type });
+        if (!init?.putUrl || !init?.key) throw new Error('Substy n’a pas donné d’adresse d’envoi pour ce fichier');
+        const put = await fetch(init.putUrl, { method: 'PUT', body: req, duplex: 'half', headers: { 'content-type': type, 'content-length': String(size) }, signal: AbortSignal.timeout(15 * 60_000) });
+        if (!put.ok) throw new Error(`envoi refusé (${put.status})`);
+        const fin = await substy.call('medias.finishUpload', { creatorId: cid, key: init.key });
+        const mediaId = fin?.id ?? fin?.mediaId ?? fin?.media?.id ?? null;
+        const listId = String(p.get('listId') || '');
+        if (listId && mediaId) await substy.call('medias.addMediasToList', { creatorId: cid, mediaId: String(mediaId), targetListIds: [listId] }).catch(() => null);
+        send(res, 200, { ok: true, mediaId: mediaId ? String(mediaId) : null, inList: !!(listId && mediaId) });
+      } catch (e) {
+        req.resume();
+        send(res, 502, { error: `Substy : ${e.message}` });
+      }
     },
     // Modifier un ou plusieurs médias (Media details, Batch edit, Add to category).
     'POST /api/vaultpro/meta': async (req, res) => {

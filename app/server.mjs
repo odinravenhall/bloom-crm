@@ -422,7 +422,7 @@ Object.assign(routes, inboxRoutes({ userFrom, send, body, creators: () => state.
 // Messagerie façon Raven CRM : toutes les adresses « /api/rv/… ».
 const rv = rvRoutes({ substy, userFrom, send, body, creators: () => state.creators });
 
-createServer(async (req, res) => {
+Object.assign(createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
   const h = routes[`${req.method} ${path}`];
   try {
@@ -435,7 +435,10 @@ createServer(async (req, res) => {
     if (res.headersSent) return res.end();
     send(res, status, { error: e instanceof SubstyError ? `Substy : ${e.message}` : e.message || 'Erreur serveur' });
   }
-}).listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
+}), { requestTimeout: 0 })
+  // Envois de vidéos (MYM → Importer des médias) : plus que les 5 min par défaut de Node.
+  .setTimeout(0)
+  .listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
   console.log('Bloom CRM (API) prêt');
   startStreams();
   startBot();
