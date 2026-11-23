@@ -6,7 +6,7 @@ import { ArrowRight, BadgeCheck, CircleDollarSign, Info, MessageCircle, Plus, Se
 import { api, toast } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import { Avatar } from "@/components/ui";
-import { MymLinkChip, useMymLinks } from "./MymLink";
+import { AddMymAccount, MymLinkChip, useMymLinks } from "./MymLink";
 
 // MYM → Compte Creator : copie de « Mes Comptes » de MyPulse (ventes MyPulse de chaque modèle MYM, équipe, accès).
 type Acc = {
@@ -49,6 +49,7 @@ export function MymAccounts() {
   const [mode, setMode] = useState<"net" | "gross">("net");
   const [d, setD] = useState<Data | null>(null);
   const [q, setQ] = useState("");
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     setD(null);
     api<Data>("GET", `/api/mym/accounts?days=${days}&mode=${mode}`).then(setD).catch((e) => toast((e as Error).message, "err"));
@@ -73,7 +74,8 @@ export function MymAccounts() {
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/app/employees" className="flex h-11 items-center gap-2 rounded-[14px] border px-4 text-[14px] font-semibold" style={{ borderColor: "var(--mp-line)", color: "var(--mp-head)", background: "rgba(0,0,0,.25)" }}><UsersRound className="size-4" /> Accès globaux</Link>
-            <span title="Les comptes MYM s’ajoutent dans Substy (et MyPulse pour les chiffres)" className="flex h-11 cursor-not-allowed items-center gap-2 rounded-[14px] px-5 text-[14.5px] font-semibold opacity-60" style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}><Plus className="size-4" /> Ajouter un compte</span>
+            {mymLinks.canEdit ? <button onClick={() => setAdding(true)} className="flex h-11 items-center gap-2 rounded-[14px] px-5 text-[14.5px] font-semibold" style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}><Plus className="size-4" /> Ajouter un compte</button> : null}
+            {adding ? <AddMymAccount links={mymLinks.links} onClose={() => setAdding(false)} /> : null}
           </div>
         </div>
       </div>

@@ -41,6 +41,28 @@ export function MymLinkChip({ state, canEdit, onChange }: { state: MymLinkState 
   );
 }
 
+/** « Ajouter un compte » : choisir une modèle MYM pas encore reliée, puis la relier. Elle apparaît dans Bloom ensuite. */
+export function AddMymAccount({ links, onClose }: { links: MymLinkState[]; onClose: () => void }) {
+  const free = links.filter((l) => !l.linked);
+  const [pick, setPick] = useState<MymLinkState | null>(null);
+  // Après une liaison : on recharge pour que la modèle apparaisse partout.
+  if (pick) return <LinkModal state={pick} onClose={() => window.location.reload()} />;
+  return (
+    <div className="mp-font fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+      <div className="w-full max-w-[440px] overflow-hidden rounded-lg" style={{ background: "#262a2f", color: "var(--mp-text)" }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 className="flex items-center justify-between px-4 py-3.5 text-[15px] font-semibold" style={{ background: "#2b3a4a", color: "var(--mp-head)" }}>Ajouter un compte MYM<button onClick={onClose}><X className="size-4" /></button></h3>
+        <div className="px-4 py-4 text-[13px]">
+          <p style={{ color: "var(--mp-muted)" }}>Une modèle MYM n’apparaît dans Bloom qu’une fois son compte relié. Choisis la modèle à relier :</p>
+          <div className="mt-3 space-y-1.5">
+            {free.map((l) => <button key={l.creatorId} onClick={() => setPick(l)} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left font-semibold" style={{ background: "#2f343a", color: "var(--mp-head)" }}><Link2 className="size-4" style={{ color: "var(--mp-accent)" }} />{l.name}</button>)}
+            {!free.length ? <p className="py-6 text-center" style={{ color: "var(--mp-muted)" }}>Toutes les modèles MYM connues sont déjà reliées. Une nouvelle modèle doit d’abord exister chez Substy.</p> : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => void }) {
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [busy, setBusy] = useState(false);

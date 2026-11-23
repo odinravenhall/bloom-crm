@@ -3,7 +3,7 @@ import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { onMessageAlert } from './alerts.mjs';
 import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
-import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView } from './team.mjs';
+import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 
 export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -461,7 +461,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     'GET /api/creators': async (req, res) => {
       const u = auth(req, res);
       if (!u) return;
-      const list = ((await substy.creators()) || []).map(creatorOf);
+      // Les modèles MYM dont le compte n'est pas relié à Bloom ne sont pas affichées.
+      const list = ((await substy.creators()) || []).map(creatorOf).filter((c) => !mymHidden(c.id));
       const allowed = creatorsOf(u);
       send(res, 200, allowed === null ? list : list.filter((c) => allowed.has(String(c.id))));
     },

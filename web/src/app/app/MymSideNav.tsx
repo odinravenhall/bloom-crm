@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell, BarChart3, Bot, ChevronDown, ChevronRight, CircleHelp, Images, Link2, Menu, MessageCircle, Send, Settings, ShieldCheck, Sparkles, Users, UsersRound, Zap, type LucideIcon,
+  Bell, BarChart3, Bot, ChevronDown, ChevronRight, Images, Link2, Menu, MessageCircle, Send, Settings, ShieldCheck, Users, UsersRound, Zap, type LucideIcon,
 } from "lucide-react";
 import { BloomMark } from "@/components/ui";
 import type { Me, Role } from "@/lib/types";
@@ -45,10 +45,9 @@ const NAV: Entry[] = [
     key: "mass", label: "Envois groupés", icon: Send, roles: CHAT,
     children: [{ label: "Push (MYM officiel)", href: soon("Push (MYM officiel)") }, { label: "MoDs (MYM officiel)", href: soon("MoDs (MYM officiel)") }, { label: "Mass DM", href: "/app/envoi" }],
   },
-  { key: "sfs", label: "SFS Club", icon: Sparkles, href: soon("SFS Club"), roles: BOSS, badge: "Bêta" },
   {
     key: "stats", label: "Stats", icon: BarChart3, roles: BOSS,
-    children: [{ label: "Statistiques Globales", href: "/app/stats" }, { label: "Analytique", href: soon("Analytique") }, { label: "Transactions", href: soon("Transactions") }, { label: "Liens de suivi", href: soon("Liens de suivi") }, { label: "Classement des agences", href: soon("Classement des agences") }],
+    children: [{ label: "Statistiques Globales", href: "/app/stats" }, { label: "Analytique", href: soon("Analytique") }, { label: "Transactions", href: soon("Transactions") }, { label: "Liens de suivi", href: soon("Liens de suivi") }],
   },
   {
     key: "team", label: "Pilotage d’équipe", icon: UsersRound, roles: BOSS,
@@ -59,7 +58,6 @@ const NAV: Entry[] = [
     children: [{ label: "Gérer les employés", href: "/app/employees" }, { label: "Rôles et accès", href: "/app/roles", roles: MANAGE }],
   },
   { key: "notifs", label: "Notifications", icon: Bell, href: "/app/notifications" },
-  { key: "help", label: "Aide & Support", icon: CircleHelp, href: soon("Aide & Support") },
 ];
 
 const same = (path: string, href: string) => {

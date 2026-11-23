@@ -49,9 +49,24 @@ export const platformOfCreator = (id) => PLATFORM.get(String(id)) || null;
  * u.pf : plateforme choisie en haut du menu (OnlyFans ou MYM). Les créatrices de l'autre plateforme sont alors
  * invisibles (messagerie, chiffres, scripts, vault…), sauf sur les pages communes (IA, équipe) où u.pf est vide.
  */
+// Une modèle MYM n'existe dans Bloom que si son compte MYM a été relié à la main (MYM → Compte Creator → « Ajouter un
+// compte »). Les autres modèles MYM de Substy restent cachées partout (demande de l'agence, 23/11/2026).
+let linkedHit = { at: 0, set: new Set() };
+function mymLinkedSet() {
+  if (Date.now() - linkedHit.at < 5000) return linkedHit.set;
+  let set = new Set();
+  try {
+    set = new Set(all('SELECT creator_id FROM mym_links').map((r) => String(r.creator_id)));
+  } catch {}
+  linkedHit = { at: Date.now(), set };
+  return set;
+}
+export const mymHidden = (creatorId) => PLATFORM.get(String(creatorId || '')) === 'mym' && !mymLinkedSet().has(String(creatorId));
 export const canSee = (u, creatorId) => {
   const s = creatorsOf(u);
   if (!(s === null || s.has(String(creatorId || '')))) return false;
+  // `unlinkedToo` : seulement pour la fenêtre qui sert à relier un compte.
+  if (!u?.unlinkedToo && mymHidden(creatorId)) return false;
   const p = u?.pf && PLATFORM.get(String(creatorId || ''));
   return !p || p === u.pf;
 };
