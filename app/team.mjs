@@ -80,7 +80,19 @@ export function setAccess(userId, { all: allC, creators }) {
 // ---------------------------------------------------------------- présence
 const presence = new Map(); // userId -> { at, creatorId, fanId, name, avatar }
 const ONLINE_MS = 45_000;
+// Temps de travail par jour (Mes ventes) : « actif » = Bloom ouvert sur la messagerie / le chatting, « idle » = ouvert
+// ailleurs. Compté entre deux signes de vie rapprochés (une page fermée ne compte plus).
+db.exec('CREATE TABLE IF NOT EXISTS work_log (user_id INTEGER NOT NULL, day TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 0, idle INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))');
+const CHAT_PAGE = /^\/(app\/(messagerie|mym\/(chatting|switchboard))|pro)(\/|$)/;
 export function ping(u, { creatorId, fanId, page }) {
+  try {
+    const prev = presence.get(u.id);
+    const gap = prev ? Date.now() - prev.at : 0;
+    if (gap > 0 && gap < 90_000) {
+      const col = fanId || CHAT_PAGE.test(String(page || '')) ? 'active' : 'idle';
+      run(`INSERT INTO work_log (user_id, day, ${col}) VALUES (?, ?, ?) ON CONFLICT (user_id, day) DO UPDATE SET ${col} = ${col} + excluded.${col}`, u.id, parisDay(Date.now()), gap);
+    }
+  } catch {}
   presence.set(u.id, { at: Date.now(), creatorId: creatorId ? String(creatorId) : null, fanId: fanId ? String(fanId) : null, page: page ? String(page).slice(0, 40) : null, name: u.name, avatar: u.avatar || null });
 }
 /** Personnes en ligne sur une créatrice (et le fan qu'elles ont ouvert). */

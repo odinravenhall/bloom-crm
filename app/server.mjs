@@ -30,6 +30,8 @@ import { mymAccountRoutes } from './mymaccounts.mjs';
 import { mymFanRoutes } from './mymfans.mjs';
 import { mymRoutes } from './mym.mjs';
 import { mymMediaRoutes } from './mymmedia.mjs';
+import { mymVoucherRoutes } from './mymvouchers.mjs';
+import { mySalesRoutes } from './mysales.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -414,6 +416,8 @@ Object.assign(routes, mymAccountRoutes({ substy, userFrom, send, creators: () =>
 Object.assign(routes, mymFanRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymMediaRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, mymVoucherRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });

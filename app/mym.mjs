@@ -160,6 +160,38 @@ export async function mymSite(cid, path) {
   return data;
 }
 
+/**
+ * Appel « brut » au site des créatrices (pages HTML et formulaires, ex. les bons de réduction) : renvoie le statut, le
+ * texte, l'adresse de redirection et les cookies posés par MYM (à renvoyer avec le formulaire : le jeton du formulaire
+ * est lié à la session de la page). `form` (URLSearchParams) = envoi du formulaire en POST. Jamais de redirection suivie.
+ */
+export async function mymSiteRaw(cid, path, { form, cookies = '' } = {}) {
+  await accessOf(cid);
+  const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);
+  const access = open(l.access);
+  const idTok = l.id_token ? open(l.id_token) : null;
+  const claims = JSON.parse(Buffer.from(access.split('.')[1], 'base64url').toString('utf8'));
+  const user = encodeURIComponent(claims.username || claims.sub);
+  const pre = `CognitoIdentityServiceProvider.${l.client_id}`;
+  const cookie = [`${pre}.LastAuthUser=${user}`, `${pre}.${user}.accessToken=${access}`, ...(idTok ? [`${pre}.${user}.idToken=${idTok}`] : []), 'amplify-signin-with-hostedUI=false', ...(cookies ? [cookies] : [])].join('; ');
+  const r = await fetch(`https://creators.mym.fans${path}`, {
+    method: form ? 'POST' : 'GET',
+    headers: {
+      cookie,
+      accept: 'text/html,application/xhtml+xml',
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36',
+      ...(form ? { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://creators.mym.fans', referer: `https://creators.mym.fans${path}` } : {}),
+    },
+    body: form ? form.toString() : undefined,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(30_000),
+  });
+  const location = r.headers.get('location') || null;
+  if (r.status >= 300 && r.status < 400 && /login|connexion|signin/i.test(location || '')) throw new MymError(401, 'MYM renvoie vers la page de connexion (session refusée par le site)');
+  const set = (r.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).filter(Boolean);
+  return { status: r.status, text: await r.text(), location, cookies: [cookies, ...set].filter(Boolean).join('; ') };
+}
+
 // ---------------------------------------------------------------- abonnés / anciens / intéressés (site MYM)
 const followCache = new Map();
 /** Compteurs MYM (abonnés actifs, anciens, intéressés, bloqués), gardés 2 min. */
