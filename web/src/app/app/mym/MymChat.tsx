@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Clock, Flame, History, Mail, MessageCircle, Minus, Pin, Plus, Reply, Search, Settings, SlidersHorizontal, UserRound, UsersRound, Zap } from "lucide-react";
+import { Bot, Clock, X, Flame, History, Mail, MessageCircle, Minus, Pin, Plus, Reply, Search, Settings, SlidersHorizontal, UserRound, UsersRound, Zap } from "lucide-react";
 import { api, toast } from "@/rv/lib/client";
 import { debounce, onLive } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
@@ -63,6 +63,21 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
   const [held, setHeld] = useState<Conv | null>(null);
   const [panel, setPanel] = useState(true);
   const [settings, setSettings] = useState(false);
+  // « New Tab » (comme Infloww) : les fans gardés en onglets en haut. Ouvrir un onglet épingle le fan et coupe Substy
+  // sur lui ; fermer l'onglet le désépingle et Substy reprend.
+  const [tabs, setTabs] = useState<string[]>(() => stored<string[]>("tabs", []));
+  const [tabInfo, setTabInfo] = useState<Record<string, Conv>>({});
+  useEffect(() => keep("tabs", tabs), [tabs]);
+  useEffect(() => {
+    if (!tabs.length) return;
+    const refresh = () =>
+      Promise.all(tabs.map((id) => api<{ conversation: Conv }>("GET", `/api/conversations/${id}`).then((d) => [id, d.conversation] as const).catch(() => null))).then((r) => setTabInfo(Object.fromEntries(r.filter(Boolean) as [string, Conv][])));
+    refresh();
+    const later = debounce(refresh, 500);
+    const off = onLive("conv", (d) => !!d.id && tabs.includes(d.id) && later());
+    const t = setInterval(() => document.visibilityState === "visible" && refresh(), pollMs(30_000));
+    return () => (off(), clearInterval(t));
+  }, [tabs]);
   const seq = useRef(0);
   const byId = useMemo(() => Object.fromEntries(models.map((m) => [m.id, m])), [models]);
   setModelCurrencies(models);
@@ -102,17 +117,35 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
     setHeld(c);
     setCurrentId(c.id);
   };
-  const togglePin = async (c: Conv) => {
+  /** Épingle (ou désépingle) le fan chez Bloom : épinglé = Substy coupé sur lui. Renvoie vrai si c'est fait. */
+  const setPin = async (c: Conv, pin: boolean) => {
     try {
-      const r = await api<{ pinned: boolean; ai?: boolean }>("POST", `/api/conversations/${c.id}/action`, { action: "pin", pin: !c.pinned });
+      const r = await api<{ pinned: boolean; ai?: boolean }>("POST", `/api/conversations/${c.id}/action`, { action: "pin", pin });
       if (typeof r.ai === "boolean") window.dispatchEvent(new CustomEvent(AI_EVENT, { detail: { id: c.id, on: r.ai } }));
-      toast(r.pinned ? (r.ai === false ? "Épinglé : Substy est coupé sur ce fan, à toi de jouer" : "Épinglé pour toute l’équipe") : r.ai ? "Désépinglé : Substy reprend le fan" : "Désépinglé");
+      toast(r.pinned ? (r.ai === false ? "Onglet ouvert : fan épinglé, Substy est coupé sur lui" : "Onglet ouvert : fan épinglé") : r.ai ? "Onglet fermé : Substy reprend le fan" : "Onglet fermé : fan désépinglé");
       setHeld((h) => (h && h.id === c.id ? { ...h, pinned: r.pinned } : h));
+      load();
+      return true;
     } catch (e) {
       toast((e as Error).message, "err");
+      load();
+      return false;
     }
-    load();
   };
+  const addTab = async (c: Conv) => {
+    if (!tabs.includes(c.id)) {
+      if (!c.pinned && !(await setPin(c, true))) return;
+      setTabs((t) => (t.includes(c.id) ? t : [...t, c.id].slice(-10)));
+      setTabInfo((i) => ({ ...i, [c.id]: { ...c, pinned: true } }));
+    }
+    open(c);
+  };
+  const closeTab = async (id: string) => {
+    const c = tabInfo[id] ?? items.find((x) => x.id === id) ?? (held?.id === id ? held : null);
+    setTabs((t) => t.filter((x) => x !== id));
+    if (c) await setPin(c, false);
+  };
+  const toggleTab = (c: Conv) => (tabs.includes(c.id) ? closeTab(c.id) : addTab(c));
   const toggleUnread = async (c: Conv) => {
     try {
       await api("POST", `/api/conversations/${c.id}/action`, { action: c.fresh ? "read" : "unread" });
@@ -176,7 +209,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
             const who = c.ai && !c.handoff ? "Substy IA" : c.lock?.name || c.pinnedBy?.name || null;
             const isNew = !!c.subscribedAt && Date.now() - Date.parse(c.subscribedAt) < 3 * 864e5;
             return (
-              <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? togglePin(c) : open(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
+              <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? addTab(c) : open(c))} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), addTab(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
                 <span className="relative shrink-0">
                   <Avatar src={c.memberAvatar} name={c.nickname || c.memberName || "?"} size="size-9" />
                   {c.pinned ? <Pin className="absolute -top-1 -left-1 size-3.5 rounded-full p-0.5 text-white" style={{ background: "#f06548" }} /> : null}
@@ -207,7 +240,24 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
 
       {/* Conversation (celle de la messagerie de Bloom pour l'instant) */}
       <section className={`flex min-h-0 min-w-0 flex-1 flex-col ${current ? "" : "hidden md:flex"}`}>
-        <p className="shrink-0 py-1 text-center text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Astuce : <b style={{ color: "var(--mp-head)" }}>Ctrl+clic</b> pour épingler un fan</p>
+        <p className="shrink-0 py-1 text-center text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Astuce : <b style={{ color: "var(--mp-head)" }}>Ctrl+clic</b> pour ouvrir un fan dans un onglet (il est épinglé et Substy est coupé sur lui)</p>
+        {tabs.length ? (
+          <div className="no-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1.5" style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
+            {tabs.map((id) => {
+              const t = tabInfo[id];
+              const on = id === currentId;
+              return (
+                <span key={id} className="flex shrink-0 items-center gap-1.5 rounded-md py-1 pr-1 pl-1.5 text-[12.5px]" style={{ background: on ? "rgba(64,81,137,.45)" : "var(--mp-card-2)" }}>
+                  <button disabled={!t} onClick={() => t && open(t)} className="flex items-center gap-1.5">
+                    <span className="relative"><Avatar src={t?.memberAvatar} name={t?.nickname || t?.memberName || "?"} size="size-6" />{t?.fresh && !on ? <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background: "#2f6bff" }} /> : null}</span>
+                    <span className="max-w-28 truncate" style={{ color: "var(--mp-head)", fontWeight: on || t?.fresh ? 600 : 400 }}>{t?.nickname || t?.memberName || "…"}</span>
+                  </button>
+                  <button onClick={() => closeTab(id)} title="Fermer l’onglet : le fan est désépinglé et Substy le reprend" className="grid size-5 place-items-center rounded" style={{ color: "var(--mp-muted)" }}><X className="size-3" /></button>
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
         {current ? (
           <Chat
             key={current.id}
@@ -224,7 +274,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
               const n = items.slice(i + 1).find((c) => c.needsReply) ?? items.find((c) => c.needsReply && c.id !== current.id);
               if (n) open(n);
             }}
-            actions={{ pinned: current.pinned, onPin: () => togglePin(current), inTabs: false, onTab: () => {}, fresh: current.fresh, onReadToggle: () => toggleUnread(current), panelOpen: panel, onPanel: () => setPanel(!panel) }}
+            actions={{ pinned: current.pinned, onPin: () => toggleTab(current), inTabs: tabs.includes(current.id), onTab: () => toggleTab(current), fresh: current.fresh, onReadToggle: () => toggleUnread(current), panelOpen: panel, onPanel: () => setPanel(!panel) }}
           />
         ) : (
           <div className="grid flex-1 place-items-center text-center"><div><MessageCircle className="mx-auto size-8" style={{ color: "var(--mp-muted)" }} /><p className="mt-2 text-[13px]" style={{ color: "var(--mp-muted)" }}>Choisis une conversation</p></div></div>
@@ -232,7 +282,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
       </section>
       {current && panel ? (
         <aside className="no-scrollbar hidden w-[290px] shrink-0 overflow-y-auto border-l lg:block" style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
-          <MymFanPanel key={current.id} conv={current} model={byId[current.modelId]} onChanged={load} onPin={() => togglePin(current)} />
+          <MymFanPanel key={current.id} conv={current} model={byId[current.modelId]} onChanged={load} onPin={() => toggleTab(current)} />
         </aside>
       ) : null}
     </div>
