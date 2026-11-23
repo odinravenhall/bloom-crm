@@ -58,7 +58,8 @@ export function vaultProRoutes({ substy, userFrom, send, body }) {
       if (!auth(req, res, cid)) return;
       const r = await substy.vaultLists(cid).catch(() => null);
       send(res, 200, {
-        lists: (r?.lists || []).map((l) => ({ id: String(l.id), name: l.name, photos: l.photosCount || 0, videos: l.videosCount || 0, audios: l.audiosCount || 0 })),
+        // Attention : pour MYM, Substy range tout dans photosCount (vidéos comprises) → `total` est le seul chiffre sûr.
+        lists: (r?.lists || []).map((l) => ({ id: String(l.id), name: l.name, photos: l.photosCount || 0, videos: l.videosCount || 0, audios: l.audiosCount || 0, total: (l.photosCount || 0) + (l.videosCount || 0) + (l.audiosCount || 0) })),
         custom: cats(cid),
       });
     },
@@ -91,7 +92,8 @@ export function vaultProRoutes({ substy, userFrom, send, body }) {
         const rows = all('SELECT * FROM vault_meta WHERE creator_id = ? AND cat_id = ? ORDER BY updated_at DESC', cid, cat);
         return send(res, 200, { items: rows.map((r) => withMeta(J(r.snapshot, { id: r.media_id }), r)), nextCursor: null });
       }
-      const r = await substy.vaultMedias(cid, { listId: p.get('listId') || undefined, cursor: p.get('cursor') || undefined, limit: 60 });
+      const type = ['PHOTO', 'VIDEO', 'AUDIO'].includes(String(p.get('type') || '').toUpperCase()) ? String(p.get('type')).toUpperCase() : undefined;
+      const r = await substy.vaultMedias(cid, { listId: p.get('listId') || undefined, cursor: p.get('cursor') || undefined, limit: 60, type });
       const raw = r?.medias || [];
       const items = raw.map((m) => ({
         ...mediaView(m),

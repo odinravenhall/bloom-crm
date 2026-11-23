@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui";
 
 // MYM → Médias → Studio : copie de « Votre Studio » de MyPulse. Le vault de la modèle chez Substy (ses dossiers =
 // collections), et en plus nos collections Bloom. Ranger des médias dans un dossier se fait chez Substy.
-type Folder = { id: string; name: string; photos: number; videos: number; audios: number };
+type Folder = { id: string; name: string; photos: number; videos: number; audios: number; total: number };
 type Custom = { id: number; name: string; count: number; photos: number; videos: number; audios: number };
 type M = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; createdAt: string | null; caption: string; lists: string[]; catId: number | null };
 type Sel = { kind: "all" } | { kind: "list"; id: string } | { kind: "cat"; id: number };
@@ -44,6 +44,7 @@ export function MymStudio() {
       const p = new URLSearchParams({ creatorId });
       if (sel.kind === "list") p.set("listId", sel.id);
       if (sel.kind === "cat") p.set("cat", String(sel.id));
+      if (type && sel.kind !== "cat") p.set("type", type.toUpperCase());
       if (more && cursor) p.set("cursor", cursor);
       try {
         const r = await api<{ items: M[]; nextCursor: string | null }>("GET", `/api/vaultpro/medias?${p}`);
@@ -55,7 +56,7 @@ export function MymStudio() {
         setBusy(false);
       }
     },
-    [creatorId, sel, cursor],
+    [creatorId, sel, cursor, type],
   );
   useEffect(() => {
     setSel({ kind: "all" });
@@ -66,9 +67,9 @@ export function MymStudio() {
     setCursor(null);
     setPicked(new Set());
     loadMedias(false);
-  }, [creatorId, sel]); // eslint-disable-line react-hooks/exhaustive-deps
-  const total = folders.reduce((a, f) => a + f.photos + f.videos + f.audios, 0);
-  const shown = useMemo(() => (items ?? []).filter((m) => (!type || m.type === type) && (!q || `${m.caption} ${m.id} ${m.lists.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [items, type, q]);
+  }, [creatorId, sel, type]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = folders.reduce((a, f) => a + f.total, 0);
+  const shown = useMemo(() => (items ?? []).filter((m) => (!type || sel.kind !== "cat" || m.type === type) && (!q || `${m.caption} ${m.id} ${m.lists.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [items, type, q, sel]);
   const title = sel.kind === "all" ? "Bibliothèque" : sel.kind === "list" ? folders.find((f) => f.id === sel.id)?.name : custom.find((c) => c.id === sel.id)?.name;
   const newCollection = async () => {
     const name = prompt("Nom de la nouvelle collection (gardée par Bloom)");
@@ -80,11 +81,17 @@ export function MymStudio() {
       toast((e as Error).message, "err");
     }
   };
-  const Folder = ({ on, name, counts, onClick }: { on: boolean; name: string; counts: [number, number, number]; onClick: () => void }) => (
+  const Folder = ({ on, name, counts, onClick }: { on: boolean; name: string; counts: [number, number, number] | number; onClick: () => void }) => (
     <button onClick={onClick} className="w-full rounded-md px-3 py-2 text-left" style={on ? { background: "rgba(64,81,137,.35)", boxShadow: "inset 3px 0 0 #405189" } : undefined}>
       <p className="truncate text-[12.5px] font-semibold uppercase" style={{ color: "var(--mp-head)" }}>{name}</p>
       <p className="mt-0.5 flex gap-2.5 text-[11px]" style={{ color: "var(--mp-muted)" }}>
-        <span className="flex items-center gap-1"><ImageIcon className="size-3" />{counts[0]}</span><span className="flex items-center gap-1"><Video className="size-3" />{counts[1]}</span>{counts[2] ? <span className="flex items-center gap-1"><Mic className="size-3" />{counts[2]}</span> : null}
+        {typeof counts === "number" ? (
+          <span className="flex items-center gap-1"><ImageIcon className="size-3" /><Video className="size-3" />{counts} média(s)</span>
+        ) : (
+          <>
+            <span className="flex items-center gap-1"><ImageIcon className="size-3" />{counts[0]}</span><span className="flex items-center gap-1"><Video className="size-3" />{counts[1]}</span>{counts[2] ? <span className="flex items-center gap-1"><Mic className="size-3" />{counts[2]}</span> : null}
+          </>
+        )}
       </p>
     </button>
   );
@@ -115,7 +122,7 @@ export function MymStudio() {
               </button>
               <p className="mt-3 px-3 text-[10.5px] font-semibold tracking-wider uppercase" style={{ color: "var(--mp-muted)" }}>Collections</p>
               {folders.filter((f) => !fq || f.name.toLowerCase().includes(fq.toLowerCase())).map((f) => (
-                <Folder key={f.id} on={sel.kind === "list" && sel.id === f.id} name={f.name} counts={[f.photos, f.videos, f.audios]} onClick={() => setSel({ kind: "list", id: f.id })} />
+                <Folder key={f.id} on={sel.kind === "list" && sel.id === f.id} name={f.name} counts={f.total} onClick={() => setSel({ kind: "list", id: f.id })} />
               ))}
               {custom.length ? <p className="mt-3 px-3 text-[10.5px] font-semibold tracking-wider uppercase" style={{ color: "var(--mp-muted)" }}>Collections Bloom</p> : null}
               {custom.filter((c) => !fq || c.name.toLowerCase().includes(fq.toLowerCase())).map((c) => (

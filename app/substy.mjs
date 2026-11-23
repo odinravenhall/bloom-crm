@@ -169,8 +169,9 @@ export class SubstySession {
     return this.call('agency.bannedWords.validateContent', { content });
   }
   vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }
-  vaultMedias(creatorId, { listId, cursor, limit = 40 } = {}) {
-    return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}) });
+  /** `type` : 'PHOTO' | 'VIDEO' | 'AUDIO' (filtre fait par Substy, vérifié le 23/11/2026). */
+  vaultMedias(creatorId, { listId, cursor, limit = 40, type } = {}) {
+    return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}), ...(type ? { type } : {}) });
   }
   /** Image / vidéo via le relais de Substy (chemins « /api/creators/<id>/medias/… » fournis par leur API). */
   async media(path) {
