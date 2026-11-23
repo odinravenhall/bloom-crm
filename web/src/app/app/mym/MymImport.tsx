@@ -6,8 +6,8 @@ import { api, toast } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import { Avatar } from "@/components/ui";
 
-// MYM → Médias → Importer des médias : copie de MyPulse. Les fichiers partent dans le vault de la modèle chez Substy
-// (en passant par Bloom), rangés dans la collection choisie.
+// MYM → Médias → Importer des médias : copie de MyPulse. Les fichiers partent directement dans le mym.cloud de la
+// modèle (compte MYM relié, en passant par Bloom), rangés dans la collection choisie.
 type Folder = { id: string; name: string };
 type Job = { file: File; state: "wait" | "send" | "ok" | "err"; error?: string };
 const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" };
@@ -23,7 +23,7 @@ export function MymImport() {
   useEffect(() => {
     if (!creatorId) return;
     setListId("");
-    api<{ lists: Folder[] }>("GET", `/api/vaultpro/cats?creatorId=${encodeURIComponent(creatorId)}`).then((r) => setFolders(r.lists)).catch(() => setFolders([]));
+    api<{ collections: Folder[] }>("GET", `/api/mym/cloud/collections?creatorId=${encodeURIComponent(creatorId)}`).then((r) => setFolders(r.collections)).catch((e) => (setFolders([]), toast((e as Error).message, "err")));
   }, [creatorId]);
   const send = async () => {
     if (!creatorId || !jobs.length) return;
@@ -33,8 +33,8 @@ export function MymImport() {
       setJobs((j) => j.map((x, k) => (k === i ? { ...x, state: "send" } : x)));
       const f = jobs[i].file;
       try {
-        const p = new URLSearchParams({ creatorId, name: f.name, size: String(f.size), ...(listId ? { listId } : {}) });
-        const r = await fetch(`/api/vaultpro/upload?${p}`, { method: "POST", body: f, headers: { "content-type": f.type || "application/octet-stream" } });
+        const p = new URLSearchParams({ creatorId, name: f.name, ...(listId ? { collectionId: listId } : {}) });
+        const r = await fetch(`/api/mym/cloud/upload?${p}`, { method: "POST", body: f, headers: { "content-type": f.type || "application/octet-stream" } });
         const b = (await r.json().catch(() => ({}))) as { error?: string };
         if (!r.ok) throw new Error(b.error || `Erreur ${r.status}`);
         setJobs((j) => j.map((x, k) => (k === i ? { ...x, state: "ok" } : x)));
@@ -71,9 +71,9 @@ export function MymImport() {
           <div className="mt-1.5 flex items-center gap-3 rounded-md px-3 py-2" style={fieldSt}>
             <button disabled={busy} onClick={() => input.current?.click()} className="rounded px-3 py-1.5" style={{ background: "#3a4047" }}>Sélect. fichiers</button>
             <span style={{ color: "var(--mp-muted)" }}>{jobs.length ? `${jobs.length} fichier(s) choisi(s)` : "Aucun fichier choisi"}</span>
-            <input ref={input} type="file" multiple accept="image/*,video/*,audio/*" hidden onChange={(e) => setJobs([...(e.target.files ?? [])].map((file) => ({ file, state: "wait" as const })))} />
+            <input ref={input} type="file" multiple accept="image/*,video/*" hidden onChange={(e) => setJobs([...(e.target.files ?? [])].map((file) => ({ file, state: "wait" as const })))} />
           </div>
-          <p className="mt-1 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Photos, vidéos et audios acceptés (500 Mo max par fichier). Garde la page ouverte pendant l’envoi.</p>
+          <p className="mt-1 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Photos et vidéos, moins de 100 Mo par fichier. Les fichiers vont directement dans le mym.cloud. Garde la page ouverte pendant l’envoi.</p>
           {jobs.length ? (
             <div className="mt-3 space-y-1">
               {jobs.map((j, i) => (

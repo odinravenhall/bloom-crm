@@ -16,7 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
-import { STYX, isLinked, mym, mymSite } from './mym.mjs';
+import { API, STYX, isLinked, mym, mymSite } from './mym.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_feed (
@@ -348,10 +348,80 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
         const page = Math.max(1, Number(cursor) || 1);
         const qs = new URLSearchParams({ perPage: '30', status: 'ready' });
         if (type) qs.set('type', type);
+        const search = String(p.get('search') || '').trim().slice(0, 80);
+        if (search) qs.set('search', search);
         if (page > 1) qs.set('offset', Buffer.from(JSON.stringify({ page, perPage: 30 })).toString('base64'));
         const d = await mym(c.id, `/v1/cloud?${qs}`, { base: STYX });
         send(res, 200, { items: (d?.data || []).map(cloudItem), nextCursor: page < (Number(d?.meta?.total_pages) || 1) ? String(page + 1) : null });
       } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    // Écriture dans le mym.cloud (formats lus dans le code du site le 23/11/2026, PAS encore vérifiés sur un vrai envoi) :
+    //  - créer une collection : POST /v1/cloud/collections { name }
+    //  - ranger des médias : POST /v1/cloud/collections/<id>/medias { medias: [ids] }
+    //  - importer un fichier (moins de 100 Mo = une seule partie) : POST api.mym.fans/medias/upload
+    //    { size, extension, in_cloud: true, nb_parts: 1, media_type: "library" } → { id, urls: [adresse], upload_id } ;
+    //    PUT du fichier sur l'adresse ; puis PATCH /medias/<id>/multipart/<upload_id> { status: "completed" }.
+    'POST /api/mym/cloud/collections': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const c = pick(u, res, b.creatorId);
+      if (!c) return;
+      const name = String(b.name || '').trim().slice(0, 60);
+      if (!name) return send(res, 400, { error: 'Donne un nom à la collection' });
+      try {
+        const r = await mym(c.id, '/v1/cloud/collections', { method: 'POST', base: STYX, body: { name } });
+        send(res, 200, { ok: true, id: r?.id ?? r?.data?.id ?? r?.collection?.id ?? null });
+      } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    'POST /api/mym/cloud/collections/add': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const c = pick(u, res, b.creatorId);
+      if (!c) return;
+      const col = String(b.collectionId || '');
+      const ids = (Array.isArray(b.mediaIds) ? b.mediaIds : []).map(String).filter((x) => UUID.test(x)).slice(0, 200);
+      if (!UUID.test(col) || !ids.length) return send(res, 400, { error: 'Choisis des médias et une collection' });
+      try {
+        await mym(c.id, `/v1/cloud/collections/${col}/medias`, { method: 'POST', base: STYX, body: { medias: ids } });
+        send(res, 200, { ok: ids.length });
+      } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    /** Importer un fichier dans le mym.cloud (corps de la requête = le fichier brut). */
+    'POST /api/mym/cloud/upload': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const p = q(req);
+      const c = pick(u, res, p.get('creatorId'));
+      if (!c) return req.resume();
+      const mime = String(req.headers['content-type'] || '').split(';')[0];
+      const size = Number(req.headers['content-length']) || 0;
+      const fail = (code, error) => (req.resume(), send(res, code, { error }));
+      if (!/^(image|video)\//.test(mime)) return fail(400, 'Photos et vidéos seulement pour l’instant (les vocaux ont un autre circuit chez MYM).');
+      if (!size || size >= 100 * 1024 * 1024) return fail(400, 'Fichier vide ou trop gros (moins de 100 Mo pour l’instant).');
+      const name = String(p.get('name') || '').toLowerCase();
+      const extension = mime === 'video/quicktime' || name.endsWith('.mov') ? 'mov' : /m4v/.test(mime) || name.endsWith('.m4v') ? 'm4v' : mime.split('/')[1] || '';
+      try {
+        const r = await mym(c.id, '/medias/upload', { method: 'POST', base: API, body: { size, extension, in_cloud: true, nb_parts: 1, media_type: 'library' } });
+        const x = r?.data ?? r ?? {};
+        const url = x.urls?.[0] || x.url;
+        if (!x.id || !url) throw new Error('MYM n’a pas donné d’adresse d’envoi pour ce fichier');
+        const put = await fetch(url, { method: 'PUT', body: req, duplex: 'half', headers: { 'content-type': mime, 'content-length': String(size) }, signal: AbortSignal.timeout(15 * 60_000) });
+        if (!put.ok) throw new Error(`envoi refusé par MYM (${put.status})`);
+        if (x.upload_id) await mym(c.id, `/medias/${x.id}/multipart/${x.upload_id}`, { method: 'PATCH', base: API, body: { status: 'completed' } });
+        const col = String(p.get('collectionId') || '');
+        let inCollection = false;
+        if (UUID.test(col)) inCollection = await mym(c.id, `/v1/cloud/collections/${col}/medias`, { method: 'POST', base: STYX, body: { medias: [String(x.id)] } }).then(() => true).catch(() => false);
+        send(res, 200, { ok: true, mediaId: String(x.id), inCollection });
+      } catch (e) {
+        req.resume();
         send(res, 502, { error: e.message });
       }
     },
