@@ -5,9 +5,9 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, ArrowLeftRight, Ban, Bot, CalendarDays, CalendarPlus, ChartArea, ChartColumn, ChevronDown, CircleArrowDown, Clock, Contact, ContactRound,
-  Feather, Gift, Images, LayoutGrid, ListFilter, Menu, MessageCirclePlus, MessagesSquare, Route, ScrollText, SlidersHorizontal, SquareArrowOutUpRight,
-  SquareUser, Telescope, UserPlus, UserRound, type LucideIcon,
+  Activity, Ban, Bot, ChartArea, ChartColumn, ChevronDown, Clock, Contact, ContactRound,
+  Feather, Images, LayoutGrid, ListFilter, Menu, MessageCirclePlus, MessagesSquare, Route, ScrollText, SlidersHorizontal, SquareArrowOutUpRight,
+  SquareUser, UserPlus, UserRound, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/fmt";
@@ -53,23 +53,9 @@ const NAV: (Entry | "divider")[] = [
       { label: "Auto-follow", icon: UserPlus, href: "/app/autofollow" },
       { label: "Vault Pro", icon: Images, href: "/app/vault" },
       { label: "Scripts", icon: ScrollText, href: "/app/scripts" },
-      { label: "Profile promotion", icon: Gift, href: soon("Profile promotion") },
-      { label: "Free trial links", icon: CalendarPlus, href: soon("Free trial links") },
-      { label: "Tracking links", icon: Route, href: soon("Tracking links") },
+      { label: "Tracking links", icon: Route, href: "/app/tracking" },
       { label: "Sensitive words", icon: Ban, href: soon("Sensitive words") },
       { label: "AI (Substy)", icon: Bot, href: "/app/ia", roles: MANAGE },
-    ],
-  },
-  {
-    key: "s4s",
-    label: "Share for Share",
-    icon: ArrowLeftRight,
-    roles: BOSS,
-    children: [
-      { label: "Discover creators", icon: Telescope, href: soon("Discover creators") },
-      { label: "Requests", icon: CircleArrowDown, href: soon("Requests") },
-      { label: "S4S schedule", icon: CalendarDays, href: soon("S4S schedule") },
-      { label: "S4S settings", icon: SlidersHorizontal, href: soon("S4S settings") },
     ],
   },
   "divider",
