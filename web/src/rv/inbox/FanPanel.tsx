@@ -331,7 +331,7 @@ function FanSheet({ conv, fan, onChanged }: { conv: Conv; fan: FanResp | null; o
 // ------------------------------------------------------------------ Fiche modèle
 
 /** Fiche modèle : un seul texte collé par un admin (la fiche de l'agence), affiché en rubriques lisibles, avec une recherche. */
-function ModelSheet({ modelId, name }: { modelId: string; name?: string }) {
+export function ModelSheet({ modelId, name }: { modelId: string; name?: string }) {
   const [r, setR] = useState<{ profile: ProfileData; updated: { at: number; by: string | null } | null; canEdit: boolean } | null>(null);
   const [edit, setEdit] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -453,7 +453,7 @@ function ModelSheet({ modelId, name }: { modelId: string; name?: string }) {
 
 // ------------------------------------------------------------------ Stats + timeline PPV
 
-function FanStats({ conv, stats }: { conv: Conv; stats: Stats | null | undefined }) {
+export function FanStats({ conv, stats }: { conv: Conv; stats: Stats | null | undefined }) {
   const [h, setH] = useState<History | null>(null);
   const [err, setErr] = useState<string | null>(null);
 

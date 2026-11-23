@@ -22,6 +22,13 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS mym_fan_meta (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, age TEXT, gender TEXT, source TEXT, notes TEXT, updated_by TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (creator_id, fan_id));
 `);
 
+// Fiche fan du Chatting (façon MyPulse) : langue du fan et date de promesse d'achat, en plus de l'âge / genre / provenance.
+for (const col of ['lang TEXT', 'promise TEXT']) {
+  try {
+    db.exec(`ALTER TABLE mym_fan_meta ADD COLUMN ${col}`);
+  } catch {}
+}
+
 const STALE = 12 * 3600_000;
 const J = (s, d) => {
   try {
@@ -178,6 +185,46 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       });
     },
     /** « Modifier » un fan : surnom (Substy), groupes (listes Substy), âge / genre / source / notes (Bloom). */
+    /** Fiche d'un fan dans le Chatting : âge, genre, provenance, langue, promesse d'achat, et ses groupes. */
+    'GET /api/mym/fan': (req, res) => {
+      const p = new URL(req.url, 'http://x').searchParams;
+      const cid = String(p.get('creatorId') || '');
+      const fanId = String(p.get('fanId') || '');
+      if (!auth(req, res, cid)) return;
+      const m = one('SELECT age, gender, source, lang, promise FROM mym_fan_meta WHERE creator_id = ? AND fan_id = ?', cid, fanId) || {};
+      send(res, 200, {
+        meta: { age: m.age || '', gender: m.gender || '', source: m.source || '', lang: m.lang || '', promise: m.promise || '' },
+        groups: mymGroups(cid).map((g) => ({ id: g.id, name: g.name, color: g.color, kind: g.kind, member: g.members.has(fanId) })),
+        sources: SOURCES,
+      });
+    },
+    /** Modifier un champ de la fiche (les autres restent), ou mettre / retirer le fan d'un groupe manuel. */
+    'POST /api/mym/fan': async (req, res) => {
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      const fanId = String(b.fanId || '');
+      const u = auth(req, res, cid, true);
+      if (!u || !fanId) return;
+      const x = b.patch || {};
+      const cur = one('SELECT age, gender, source, lang, promise FROM mym_fan_meta WHERE creator_id = ? AND fan_id = ?', cid, fanId) || {};
+      const next = {
+        age: 'age' in x ? String(x.age ?? '').slice(0, 10) || null : cur.age ?? null,
+        gender: 'gender' in x ? (['Masculin', 'Féminin'].includes(x.gender) ? x.gender : null) : cur.gender ?? null,
+        source: 'source' in x ? (SOURCES.includes(x.source) ? x.source : null) : cur.source ?? null,
+        lang: 'lang' in x ? String(x.lang ?? '').slice(0, 30) || null : cur.lang ?? null,
+        promise: 'promise' in x ? (/^\d{4}-\d{2}-\d{2}$/.test(String(x.promise)) ? String(x.promise) : null) : cur.promise ?? null,
+      };
+      run('INSERT OR IGNORE INTO mym_fan_meta (creator_id, fan_id, updated_at) VALUES (?, ?, ?)', cid, fanId, Date.now());
+      run('UPDATE mym_fan_meta SET age = ?, gender = ?, source = ?, lang = ?, promise = ?, updated_by = ?, updated_at = ? WHERE creator_id = ? AND fan_id = ?', next.age, next.gender, next.source, next.lang, next.promise, u.name, Date.now(), cid, fanId);
+      if (b.group) {
+        const g = one("SELECT id FROM fan_lists WHERE id = ? AND creator_id = ? AND kind = 'manual'", Number(b.group.id), cid);
+        if (!g) return send(res, 400, { error: 'Seuls les groupes manuels se règlent à la main.' });
+        if (b.group.on) run('INSERT OR IGNORE INTO fan_list_members (list_id, fan_id, added_at, added_by) VALUES (?, ?, ?, ?)', g.id, fanId, Date.now(), u.name || null);
+        else run('DELETE FROM fan_list_members WHERE list_id = ? AND fan_id = ?', g.id, fanId);
+        forgetFans(cid);
+      }
+      send(res, 200, { ok: true });
+    },
     'POST /api/mym/fans/edit': async (req, res) => {
       const b = await body(req);
       const cid = String(b.creatorId || '');

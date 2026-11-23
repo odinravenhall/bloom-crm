@@ -9,7 +9,7 @@ import { money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import { Avatar } from "@/rv/components/ui";
 import { Toaster } from "@/rv/components/Toaster";
 import { Chat } from "@/rv/inbox/Chat";
-import { FanPanel } from "@/rv/inbox/FanPanel";
+import { MymFanPanel } from "./MymFanPanel";
 import { AI_EVENT } from "@/rv/inbox/SubstyCard";
 import type { Conv, Model, QueueResp } from "@/rv/inbox/types";
 
@@ -232,7 +232,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
       </section>
       {current && panel ? (
         <aside className="no-scrollbar hidden w-[290px] shrink-0 overflow-y-auto border-l lg:block" style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
-          <FanPanel key={current.id} conv={current} model={byId[current.modelId]} onChanged={load} admin={me.admin} onErased={() => (setCurrentId(null), load())} />
+          <MymFanPanel key={current.id} conv={current} model={byId[current.modelId]} onChanged={load} onPin={() => togglePin(current)} />
         </aside>
       ) : null}
     </div>
