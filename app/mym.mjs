@@ -23,9 +23,11 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS mym_link_codes (code TEXT PRIMARY KEY, creator_id TEXT NOT NULL, created_by TEXT, expires_at INTEGER NOT NULL, used_at INTEGER);
 `);
-try {
-  db.exec('ALTER TABLE mym_links ADD COLUMN device_key TEXT');
-} catch {}
+for (const c of ['device_key TEXT', 'id_token TEXT']) {
+  try {
+    db.exec(`ALTER TABLE mym_links ADD COLUMN ${c}`);
+  } catch {}
+}
 
 const REGION = 'eu-west-3';
 // Groupe d'utilisateurs et application Cognito du site des créatrices MYM (publics, dans le site).
@@ -81,7 +83,7 @@ async function cognitoRefresh(clientId, refreshToken, deviceKey) {
     const why = String(b.__type || '').includes('NotAuthorized') ? 'La session MYM a expiré ou a été fermée : il faut relier le compte à nouveau.' : `Connexion MYM refusée (${b.__type || r.status})`;
     throw new MymError(401, why);
   }
-  return { access: b.AuthenticationResult.AccessToken, expiresIn: Number(b.AuthenticationResult.ExpiresIn) || 3600, refresh: b.AuthenticationResult.RefreshToken || null };
+  return { access: b.AuthenticationResult.AccessToken, id: b.AuthenticationResult.IdToken || null, expiresIn: Number(b.AuthenticationResult.ExpiresIn) || 3600, refresh: b.AuthenticationResult.RefreshToken || null };
 }
 
 const pending = new Map();
@@ -94,7 +96,7 @@ async function accessOf(cid) {
   const p = (async () => {
     try {
       const t = await cognitoRefresh(l.client_id, open(l.refresh), l.device_key || undefined);
-      run('UPDATE mym_links SET access = ?, access_exp = ?, refresh = COALESCE(?, refresh), checked_at = ?, error = NULL WHERE creator_id = ?', seal(t.access), Date.now() + t.expiresIn * 1000, t.refresh ? seal(t.refresh) : null, Date.now(), cid);
+      run('UPDATE mym_links SET access = ?, id_token = COALESCE(?, id_token), access_exp = ?, refresh = COALESCE(?, refresh), checked_at = ?, error = NULL WHERE creator_id = ?', seal(t.access), t.id ? seal(t.id) : null, Date.now() + t.expiresIn * 1000, t.refresh ? seal(t.refresh) : null, Date.now(), cid);
       return t.access;
     } catch (e) {
       run('UPDATE mym_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
@@ -131,6 +133,33 @@ export async function mym(cid, path, { method = 'GET', body, base = API, headers
   if (!r.ok) throw new MymError(r.status, `MYM ${r.status} : ${data?.message || data?.error || String(text).slice(0, 120)}`);
   return data;
 }
+/**
+ * Appel à une adresse du site des créatrices (creators.mym.fans, ex. « /app/ajax/followers/counts »), qui lit la session
+ * dans les cookies Cognito comme le navigateur : Bloom les recompose avec la session reliée.
+ */
+export async function mymSite(cid, path) {
+  await accessOf(cid);
+  const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);
+  const access = open(l.access);
+  const idTok = l.id_token ? open(l.id_token) : null;
+  const claims = JSON.parse(Buffer.from(access.split('.')[1], 'base64url').toString('utf8'));
+  const user = encodeURIComponent(claims.username || claims.sub);
+  const pre = `CognitoIdentityServiceProvider.${l.client_id}`;
+  const cookie = [`${pre}.LastAuthUser=${user}`, `${pre}.${user}.accessToken=${access}`, ...(idTok ? [`${pre}.${user}.idToken=${idTok}`] : []), 'amplify-signin-with-hostedUI=false'].join('; ');
+  const r = await fetch(`https://creators.mym.fans${path}`, {
+    headers: { cookie, accept: 'application/json', 'x-requested-with': 'XMLHttpRequest', 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36' },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(30_000),
+  });
+  const text = await r.text();
+  let data = text;
+  try {
+    data = JSON.parse(text);
+  } catch {}
+  if (r.status >= 300) throw new MymError(r.status, r.status >= 300 && r.status < 400 ? 'MYM renvoie vers la page de connexion (session refusée par le site)' : `MYM ${r.status}`);
+  return data;
+}
+
 export const isLinked = (cid) => !!one('SELECT 1 AS x FROM mym_links WHERE creator_id = ?', String(cid));
 
 /** Vérifie le compte (profil MYM créatrice) puis enregistre la liaison. */
@@ -291,6 +320,23 @@ export function mymRoutes({ userFrom, send, body, creators }) {
         send(res, 200, { ok: true, ...linkView(cid) });
       } catch (e) {
         send(res, 200, { ok: false, error: e.message, ...linkView(cid) });
+      }
+    },
+    /** Essai (admins) : lecture d'une adresse MYM autorisée, pour vérifier ce que Bloom peut lire. Renvoie la forme, pas les données. */
+    'GET /api/mym/probe': async (req, res) => {
+      const u = userFrom(req);
+      if (!u || u.role !== 'admin') return send(res, 403, { error: 'Admins seulement' });
+      const p = new URL(req.url, 'http://x').searchParams;
+      const cid = String(p.get('creatorId') || '');
+      const ALLOWED = { counts: '/app/ajax/followers/counts', active: '/app/ajax/followers/active_subscriptions?offset=0&limit=5&search=&sort=', calendar: '/v1/posts/calendar', me: '/creators/me' };
+      const what = String(p.get('what') || 'counts');
+      if (!ALLOWED[what]) return send(res, 400, { error: 'Adresse non autorisée' });
+      const shape = (o) => (o && typeof o === 'object' ? (Array.isArray(o) ? `array:${o.length}` : Object.keys(o).slice(0, 20)) : typeof o === 'string' ? `text:${o.length}` : typeof o);
+      try {
+        const d = what === 'calendar' ? await mym(cid, ALLOWED[what], { base: STYX }) : what === 'me' ? await mym(cid, ALLOWED[what]) : await mymSite(cid, ALLOWED[what]);
+        send(res, 200, { ok: true, shape: shape(d), total: d?.total ?? d?.countActiveSubscriptions ?? null });
+      } catch (e) {
+        send(res, 200, { ok: false, status: e.status || null, error: e.message });
       }
     },
     'POST /api/mym/unlink': async (req, res) => {
