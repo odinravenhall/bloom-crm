@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Copy, Download, Link2, RefreshCw, Unlink, X, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Download, Eye, EyeOff, KeyRound, Link2, Mail, RefreshCw, ShieldCheck, Unlink, X, XCircle } from "lucide-react";
 import { api, toast } from "@/lib/api";
 
 // Liaison directe Bloom ↔ compte MYM d'une modèle (sans MyPulse) : état + bouton « Relier à MYM ».
@@ -81,6 +81,7 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
     await api("POST", "/api/mym/unlink", { creatorId: state.creatorId }).catch(() => {});
     onClose();
   };
+  const [mode, setMode] = useState<"login" | "ext">("login");
   const step = "mt-3 flex gap-3";
   const num = "grid size-6 shrink-0 place-items-center rounded-full text-[12px] font-bold";
   return (
@@ -99,6 +100,13 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
               </div>
             </div>
           ) : null}
+          <div className="mb-3 flex overflow-hidden rounded-md border text-[12px]" style={{ borderColor: "#3a4047" }}>
+            {([["login", "Email + mot de passe"], ["ext", "Extension Chrome"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setMode(k)} className="flex-1 py-2 font-semibold" style={mode === k ? { background: "var(--mp-accent)", color: "var(--mp-on-accent)" } : undefined}>{l}</button>
+            ))}
+          </div>
+          {mode === "login" ? <LoginForm state={state} onDone={(username) => (setCur({ ...cur, linked: true, ok: true, error: null, username, checkedAt: Date.now() }), toast(`${state.name} est reliée à MYM ✓`))} /> : null}
+          {mode === "ext" ? (<>
           <p style={{ color: "var(--mp-muted)" }}>Bloom se branche directement au compte MYM de la modèle (comme MyPulse). Le mot de passe n’est jamais lu : seule la session est gardée, chiffrée, et renouvelée toute seule.</p>
           <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>1</span><div>Une seule fois par ordinateur : installe l’extension. <a href="/bloom-relier-mym.zip" download className="inline-flex items-center gap-1 font-semibold underline" style={{ color: "var(--mp-accent)" }}><Download className="size-3.5" />Télécharger</a><p className="text-[12px]" style={{ color: "var(--mp-muted)" }}>Dézippe, ouvre chrome://extensions, active « Mode développeur », puis « Charger l’extension non empaquetée » et choisis le dossier « bloom-relier-mym ».</p></div></div>
           <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>2</span><div>Dans ce Chrome, connecte-toi à <b>creators.mym.fans</b> avec le compte de {state.name}.</div></div>
@@ -114,8 +122,75 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
               <button onClick={newCode} className="mt-2 block h-9 rounded-md px-4 font-semibold" style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>{cur.linked ? "Relier à nouveau (nouveau code)" : "Créer le code"}</button>
             )}
           </div></div>
+          </>) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** « Authentification MYM Creator » : email + mot de passe (comme MyPulse), puis le code de validation si MYM en envoie un. */
+function LoginForm({ state, onDone }: { state: MymLinkState; onDone: (username: string | null) => void }) {
+  const [v, setV] = useState({ email: "", password: "", c1: false, c2: false });
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [mfa, setMfa] = useState<{ loginId: string; kind: string; destination: string | null } | null>(null);
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState("");
+  const field = "mt-1.5 flex h-11 items-center gap-2 rounded-md border px-3";
+  const st = { background: "#1f2327", borderColor: "#3a4047" };
+  const submit = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api<{ ok?: boolean; username?: string | null; needCode?: boolean; loginId?: string; kind?: string; destination?: string | null }>("POST", "/api/mym/login", { creatorId: state.creatorId, email: v.email, password: v.password, confirmCreator: v.c1, confirmOwner: v.c2 });
+      setV((x) => ({ ...x, password: "" }));
+      if (r.needCode && r.loginId) setMfa({ loginId: r.loginId, kind: r.kind || "", destination: r.destination ?? null });
+      else onDone(r.username ?? null);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sendCode = async () => {
+    if (!mfa) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api<{ username?: string | null }>("POST", "/api/mym/login/code", { loginId: mfa.loginId, code });
+      setMfa(null);
+      onDone(r.username ?? null);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (mfa)
+    return (
+      <div>
+        <p className="font-semibold" style={{ color: "var(--mp-head)" }}>Code de validation MYM</p>
+        <p className="mt-1 text-[12px]" style={{ color: "var(--mp-muted)" }}>{mfa.kind === "SOFTWARE_TOKEN_MFA" ? "Entre le code de l’application d’authentification de la modèle." : `MYM vient d’envoyer un code${mfa.destination ? ` à ${mfa.destination}` : ""}.`}</p>
+        <div className={field} style={st}><ShieldCheck className="size-4" style={{ color: "var(--mp-muted)" }} /><input autoFocus value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" placeholder="123456" className="min-w-0 flex-1 bg-transparent text-[16px] tracking-[3px] outline-none" style={{ color: "var(--mp-head)" }} /></div>
+        {err ? <p className="mt-2 text-[12px]" style={{ color: "var(--mp-down)" }}>{err}</p> : null}
+        <button disabled={busy || !code.trim()} onClick={sendCode} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl font-semibold disabled:opacity-50" style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}><ShieldCheck className="size-4" /> Valider</button>
+      </div>
+    );
+  return (
+    <div>
+      <p className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]" style={{ borderColor: "#6b5a1f", background: "rgba(247,184,75,.08)", color: "#f7b84b" }}>Réservé au propriétaire du compte ou à l’agence sous contrat. Le mot de passe sert une seule fois pour ouvrir la session : Bloom ne l’enregistre pas.</p>
+      <p className="mt-3 font-semibold" style={{ color: "var(--mp-head)" }}>Email de connexion MYM Creator</p>
+      <div className={field} style={st}><Mail className="size-4" style={{ color: "var(--mp-muted)" }} /><input value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} type="email" autoComplete="off" placeholder="email@mym.fans" className="min-w-0 flex-1 bg-transparent outline-none" style={{ color: "var(--mp-head)" }} /></div>
+      <p className="mt-3 font-semibold" style={{ color: "var(--mp-head)" }}>Mot de passe MYM Creator</p>
+      <div className={field} style={st}><KeyRound className="size-4" style={{ color: "var(--mp-muted)" }} /><input value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} type={show ? "text" : "password"} autoComplete="new-password" placeholder="Votre mot de passe secret" className="min-w-0 flex-1 bg-transparent outline-none" style={{ color: "var(--mp-head)" }} /><button onClick={() => setShow(!show)} type="button">{show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div>
+      <p className="mt-2 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Connexion via Google sur MYM ? Il faut d’abord créer un mot de passe MYM (sur MYM), ou utiliser l’extension.</p>
+      <div className="mt-3 space-y-2 rounded-md p-3 text-[12px]" style={{ background: "#1f2327" }}>
+        <label className="flex items-start gap-2"><input type="checkbox" checked={v.c1} onChange={(e) => setV({ ...v, c1: e.target.checked })} className="mt-0.5" /> Je confirme qu’il s’agit bien des identifiants <b>MYM CREATOR</b> (et non d’un compte fan).</label>
+        <label className="flex items-start gap-2"><input type="checkbox" checked={v.c2} onChange={(e) => setV({ ...v, c2: e.target.checked })} className="mt-0.5" /> Je certifie être le <b>propriétaire</b> ou l’<b>agence dûment mandatée</b> pour ce compte.</label>
+      </div>
+      {err ? <p className="mt-2 text-[12px]" style={{ color: "var(--mp-down)" }}>{err}</p> : null}
+      <button disabled={busy || !v.email || !v.password || !v.c1 || !v.c2} onClick={submit} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl font-semibold disabled:opacity-50" style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}><ShieldCheck className="size-4" /> {busy ? "Connexion à MYM…" : "Relier le compte"}</button>
     </div>
   );
 }

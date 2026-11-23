@@ -196,7 +196,11 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Connexion MYM = AWS Cognito (eu-west-3) : jeton d'accès 1 h + jeton de renouvellement. API du site : `https://api.mym.fans`
   (`/creators/me`, médias, playlists) et `https://styx.mym.fans` (`/v1/posts`, `/v1/posts/calendar`, `/v2/pushes`, chats),
   en-tête `Authorization: Bearer <jeton d'accès>`.
-- Relier une modèle : MYM → Compte Creator → « Relier à MYM » (admins / managers) → code à usage unique (15 min) collé
+- Relier une modèle (admins / managers), MYM → Compte Creator → « Relier à MYM » :
+  - email + mot de passe MYM Creator (comme MyPulse) : connexion SRP de Cognito (`app/cognito-srp.mjs`, groupe
+    `eu-west-3_RGbsNDpNd`), code de validation demandé si MYM en envoie un ; 5 essais max / 15 min ; le mot de passe n'est
+    JAMAIS enregistré ni écrit dans les journaux ;
+  - ou extension :
   dans l'extension « Bloom – Relier MYM » (`web/public/bloom-relier-mym.zip`, source dans `extension-mym/`), dans le
   Chrome où l'on est connecté à creators.mym.fans. Le jeton de renouvellement est gardé chiffré (`mym_links`).
 - Toujours passer par `mym(creatorId, chemin, { base: API | STYX })` : renouvellement automatique, erreurs lisibles.
