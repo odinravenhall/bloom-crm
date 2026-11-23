@@ -682,3 +682,11 @@ html[data-theme="light"] {
   --mp-text: #495057; --mp-head: #212529; --mp-muted: #878a99; --mp-accent: #a3e635; --mp-on-accent: #12160c;
 }
 .mp-font { font-family: var(--font-poppins, Poppins), "Inter", system-ui, sans-serif; }
+
+/* Chatting MYM : la conversation aux couleurs de MyPulse (fond gris-bleu, bulles sombres, date en pastille). */
+.mp-chat { background: #212529; color: #ced4da; }
+.mp-chat .bg-bubble-me, .mp-chat .bg-bubble-fan { background: #2a3040; background-image: none; color: #f1f6e8; border-radius: 12px; box-shadow: none; }
+.mp-chat .bg-bubble-fan { background: #32383e; }
+.mp-chat .bg-bubble-me .text-muted, .mp-chat .bg-bubble-me [class*="text-muted"] { color: #878a99; }
+.mp-chat .chat-day { width: fit-content; margin: 14px auto; padding: 3px 14px; border: 1px solid #3a4047; border-radius: 999px; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: #878a99; }
+.mp-chat .chat-day::first-letter { text-transform: uppercase; }

@@ -459,8 +459,64 @@ export function Chat({
   let lastDay = "";
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className={cn("relative flex min-h-0 flex-1 flex-col", mp && "mp-chat mp-font")}>
       {/* En-tête */}
+      {mp ? (
+        <header className="flex items-center gap-2.5 border-b border-[#2f343a] bg-[#212529] px-3 py-2">
+          <button onClick={onBack} className="rounded-lg p-1.5 text-[#878a99] md:hidden">
+            <ArrowLeft className="size-5" />
+          </button>
+          <span className="relative shrink-0">
+            <Avatar src={conv.memberAvatar} name={nick || conv.memberName || "?"} size="size-8" />
+            <span className={cn("absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-[#212529]", fanOnline ? "bg-emerald-400" : "bg-zinc-600")} />
+          </span>
+          {renaming !== null ? (
+            <form
+              className="flex items-center gap-1.5"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const r = await api<{ nickname: string | null }>("POST", `/api/conversations/${conv.id}/action`, { action: "nickname", nickname: renaming });
+                  setNick(r.nickname);
+                  toast(r.nickname ? `Renommé « ${r.nickname} »` : "Surnom retiré");
+                  onSent();
+                } catch (err) {
+                  toast((err as Error).message, "err");
+                }
+                setRenaming(null);
+              }}
+            >
+              <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setRenaming(null)} placeholder={conv.memberName ?? "Surnom"} maxLength={60} className="h-8 w-44 rounded-md border border-[#405189] bg-[#1a1d21] px-2 text-sm text-[#f1f6e8] outline-none" />
+              <button className="grid size-8 place-items-center rounded-md bg-[#405189] text-white"><Check className="size-4" /></button>
+            </form>
+          ) : (
+            <p className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[15px] font-medium text-[#f1f6e8]">{nick || conv.memberName || "Fan"}</span>
+              <button onClick={() => setRenaming(nick ?? "")} title="Renommer le fan (dans Bloom)" className="text-[#878a99] hover:text-white"><Pencil className="size-3.5" /></button>
+            </p>
+          )}
+          {fanTyping ? <span className="hidden text-xs font-medium text-[#6f86d6] sm:inline">écrit…</span> : fanOnline ? <span className="hidden items-center gap-1 text-xs font-medium text-[#3cd188] sm:flex"><span className="size-1.5 rounded-full bg-[#3cd188]" /> En ligne</span> : conv.lastSeenAt ? <span className="hidden text-xs text-[#878a99] sm:inline" title="Dernier message du fan">a écrit {ago(conv.lastSeenAt)}</span> : null}
+          <button onClick={toggleAi} title={ai ? "L’IA Substy mène cette conversation : cliquer pour la couper et répondre à la main" : "IA Substy coupée sur ce fan : cliquer pour la rallumer"} className={cn("hidden h-6 items-center gap-1 rounded-full border px-2 text-[11.5px] font-medium sm:flex", ai ? "border-[#0ab39c]/60 bg-[#0ab39c]/10 text-[#0ab39c]" : "border-[#3a4047] text-[#878a99]")}>
+            <Bot className="size-3.5" /> {ai ? "IA pilote" : "IA coupée"}
+          </button>
+          {lockedBy ? <span className="hidden items-center gap-1 rounded-full bg-[#299cdb]/15 px-2 py-0.5 text-[11px] text-[#299cdb] sm:flex"><Lock className="size-3" /> {lockedBy} est dessus</span> : null}
+          {waiting !== null ? <span className="hidden rounded-full bg-[#f7b84b]/15 px-2 py-0.5 text-[11px] font-medium text-[#f7b84b] tabular-nums lg:inline">attend {durSec(waiting)}</span> : null}
+          <span className="flex-1" />
+          <div className="flex shrink-0 items-center gap-1.5">
+            {(
+              [
+                [actions.inTabs, actions.onTab, actions.inTabs ? "Fermer l’onglet : le fan est désépinglé et Substy le reprend" : "New Tab : garder ce fan en onglet (épinglé, Substy coupé)", actions.inTabs ? <PinOff key="i" className="size-4" /> : <PanelTop key="i" className="size-4" />],
+                [false, actions.onReadToggle, actions.fresh ? "Marquer comme lu" : "Marquer comme non lu", actions.fresh ? <CheckCheck key="i" className="size-4" /> : <MailWarning key="i" className="size-4" />],
+                [actions.panelOpen, actions.onPanel, actions.panelOpen ? "Masquer la fiche du fan" : "Afficher la fiche du fan", actions.panelOpen ? <PanelRightClose key="i" className="size-4" /> : <PanelRightOpen key="i" className="size-4" />],
+              ] as [boolean, () => void, string, React.ReactNode][]
+            ).map(([on, fn, title, icon]) => (
+              <button key={title} onClick={fn} title={title} className={cn("grid size-8 place-items-center rounded-full border", on ? "border-[#405189] bg-[#405189]/30 text-white" : "border-[#3a4047] text-[#ced4da] hover:text-white")}>
+                {icon}
+              </button>
+            ))}
+          </div>
+        </header>
+      ) : (
       <header className="flex items-center gap-2 border-b bg-panel px-2.5 py-2.5 backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
         <button onClick={onBack} className="rounded-lg p-1.5 text-muted hover:bg-card-2 hover:text-fg md:hidden">
           <ArrowLeft className="size-5" />
@@ -534,14 +590,6 @@ export function Chat({
             <span className="hidden sm:inline"> dépensés</span>
           </p>
         </div>
-        {mp ? (
-          <>
-            {fanOnline ? <span className="hidden items-center gap-1 text-xs font-semibold text-emerald-300 sm:flex"><span className="size-2 rounded-full bg-emerald-400" /> En ligne</span> : null}
-            <button onClick={toggleAi} title={ai ? "L’IA Substy mène cette conversation : cliquer pour la couper et répondre à la main" : "IA Substy coupée sur ce fan : cliquer pour la rallumer"} className={cn("hidden h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold sm:flex", ai ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300" : "border-line text-muted")}>
-              <Bot className="size-3.5" /> {ai ? "IA pilote" : "IA coupée"}
-            </button>
-          </>
-        ) : null}
         {lockedBy ? (
           <Pill tone="info" className="hidden sm:inline-flex">
             <Lock className="size-3" /> {lockedBy} est dessus
@@ -572,6 +620,7 @@ export function Chat({
           </ActBtn>
         </div>
       </header>
+      )}
 
       {/* Messages */}
       <div
@@ -591,7 +640,7 @@ export function Chat({
         {!msgs && !error ? <Loader2 className="m-auto size-6 animate-spin text-muted" /> : null}
         {all.map((it) => {
           const d = new Date(it.message.createdAt).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-          const sep = d !== lastDay ? ((lastDay = d), <p className="my-3 text-center text-[11px] font-semibold tracking-wide text-muted uppercase">{d}</p>) : null;
+          const sep = d !== lastDay ? ((lastDay = d), <p className="chat-day my-3 text-center text-[11px] font-semibold tracking-wide text-muted uppercase">{d}</p>) : null;
           return (
             <div key={it.message.id} className="contents">
               {sep}
@@ -639,12 +688,12 @@ export function Chat({
       </div>
 
       {mp && ai ? (
-        <p className="flex items-center gap-2 border-y border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
-          <Bot className="size-4 shrink-0" /> Substy s’occupe de cette conversation : si tu écris, coupe d’abord l’IA (bouton « IA pilote ») ou épingle le fan pour la reprendre.
+        <p className="flex items-center gap-2 border-y border-[#f06548]/50 bg-[#f06548]/15 px-4 py-2 text-[12.5px] text-[#f06548]">
+          <Bot className="size-4 shrink-0" /> Substy s’occupe de cette conversation : pour écrire, coupe d’abord l’IA (bouton « IA pilote ») ou ouvre le fan dans un onglet.
         </p>
       ) : null}
       {/* Composeur */}
-      <div className="border-t bg-panel-strong p-3 backdrop-blur md:px-6">
+      <div className={mp ? "border-t border-[#2f343a] bg-[#212529] p-2.5" : "border-t bg-panel-strong p-3 backdrop-blur md:px-6"}>
         {replyTo ? (
           <div className="pop mb-2 flex items-center gap-3 rounded-xl border border-primary/30 bg-card-2/70 px-3 py-2">
             <Reply className="size-4 shrink-0 text-primary-soft" />
@@ -720,34 +769,36 @@ export function Chat({
         {/* Zone de saisie façon Infloww : bandeau haut (emojis + Scripts), grande zone d'écriture, bas (Vault + Envoyer). */}
         {mp ? (
           <div>
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mb-2.5 flex flex-wrap items-center gap-2">
               <span className="relative">
-                <button type="button" onClick={() => setEmo(!emo)} title="Emoji" className={cn("grid size-8 place-items-center rounded-full border border-line hover:text-fg", emo ? "text-fg" : "text-muted")}>
+                <button type="button" onClick={() => setEmo(!emo)} title="Emoji" className={cn("grid size-8 place-items-center rounded-lg border border-[#3a4047]", emo ? "text-white" : "text-[#ced4da] hover:text-white")}>
                   <Smile className="size-4" />
                 </button>
                 {emo ? (
-                  <div className="absolute bottom-10 left-0 z-20 flex w-64 flex-wrap gap-0.5 rounded-xl border bg-card p-2 shadow-2xl">
+                  <div className="absolute bottom-10 left-0 z-20 flex w-64 flex-wrap gap-0.5 rounded-lg border border-[#3a4047] bg-[#262a2f] p-2 shadow-2xl">
                     {quickEmojis.map((e, i) => (
-                      <button key={`${e}-${i}`} type="button" onClick={() => insertEmoji(e)} className="grid size-8 place-items-center rounded-md text-lg leading-none hover:bg-card-2">{e}</button>
+                      <button key={`${e}-${i}`} type="button" onClick={() => insertEmoji(e)} className="grid size-8 place-items-center rounded-md text-lg leading-none hover:bg-white/10">{e}</button>
                     ))}
                   </div>
                 ) : null}
               </span>
               {voice.enabled && mic.supported ? (
-                <button type="button" onClick={toggleMic} title={mic.listening ? "Arrêter la dictée" : "Audio et voix : dicter le message"} className={cn("grid size-8 place-items-center rounded-full border border-line", mic.listening ? "bg-rose-500/20 text-rose-300" : "text-muted hover:text-fg")}>
+                <button type="button" onClick={toggleMic} title={mic.listening ? "Arrêter la dictée" : "Audio et voix : dicter le message"} className={cn("grid size-8 place-items-center rounded-lg border border-[#3a4047]", mic.listening ? "bg-rose-500/20 text-rose-300" : "text-[#ced4da] hover:text-white")}>
                   {mic.listening ? <span className="pulse-dot size-2 rounded-full bg-rose-400" /> : <Mic className="size-4" />}
                 </button>
               ) : null}
-              <button onClick={() => setPanel(panel === "vault" ? null : "vault")} title="Ajouter des médias (vault / PPV)" className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 font-semibold", panel === "vault" ? "text-fg" : "text-muted hover:text-fg")}>
+              <button onClick={() => setPanel(panel === "vault" ? null : "vault")} title="Ajouter des médias" className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium border-[#5b626b] text-[#f1f6e8]", panel === "vault" && "bg-white/10")}>
                 <ImageIcon className="size-4" /> Médias
               </button>
               <span className="flex-1" />
-              <button onClick={() => setPanel(panel === "scripts" ? null : "scripts")} title="Scripts et séquences" className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 font-semibold", panel === "scripts" ? "text-fg" : "text-muted hover:text-fg")}>
+              <button type="button" disabled title="Note interne à l’équipe, jamais envoyée au fan — bientôt" className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium cursor-not-allowed border-[#f7b84b]/70 text-[#f7b84b] opacity-50">Note équipe</button>
+              <button type="button" disabled title="Programmer l’envoi de ce message — bientôt" className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium cursor-not-allowed border-[#5b626b] text-[#ced4da] opacity-50">Programmer</button>
+              <button onClick={() => setPanel(panel === "scripts" ? null : "scripts")} title="Scripts et séquences" className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium border-[#5b626b] text-[#ced4da]", panel === "scripts" && "bg-white/10 text-white")}>
                 <FileText className="size-4" /> Script
-                {lib ? <span className="rounded bg-card-2 px-1 text-[10px] opacity-70" title="Scripts déjà envoyés à ce fan">{lib.scripts.filter((x) => x.usedWithFan).length}/{lib.scripts.length}</span> : null}
+                {lib ? <span className="rounded bg-[#2a2f34] px-1.5 text-[10.5px] text-[#878a99]" title="Scripts déjà envoyés à ce fan">{lib.scripts.filter((x) => x.usedWithFan).length}/{lib.scripts.length}</span> : null}
               </button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <textarea
                 ref={ta}
                 data-chat-input
@@ -763,10 +814,10 @@ export function Chat({
                   }
                 }}
                 placeholder="Écrivez votre message…"
-                className="scroll-thin h-24 min-w-0 flex-1 resize-none rounded-md border border-input bg-card-2/70 px-3 py-2.5 text-sm outline-none placeholder:text-muted/60 focus:border-primary"
+                className="scroll-thin h-[68px] min-w-0 flex-1 resize-none rounded-md bg-[#262d3d] px-3.5 py-3 text-[13.5px] text-[#f1f6e8] outline-none placeholder:text-[#878a99]"
               />
-              <div className="flex w-24 shrink-0 flex-col gap-1.5">
-                <button onClick={trySend} disabled={sending || (!text.trim() && !medias.length)} title="Envoyer (Entrée)" className="grid flex-1 place-items-center rounded-md bg-[#405189] text-xs font-bold tracking-wide text-white disabled:opacity-40">
+              <div className="flex w-[92px] shrink-0 flex-col gap-1.5">
+                <button onClick={trySend} disabled={sending || (!text.trim() && !medias.length)} title="Envoyer (Entrée)" className="grid h-9 place-items-center rounded-md bg-[#3d5fc4] text-[12px] font-semibold tracking-wide text-white disabled:opacity-60">
                   {sending ? <Loader2 className="size-4 animate-spin" /> : review ? "CONFIRMER" : dict ? "RELIRE" : "ENVOYER"}
                 </button>
                 <button
@@ -779,7 +830,7 @@ export function Chat({
                     setScriptId(null);
                     clearDraft(draftKey);
                   }}
-                  className="h-8 rounded-md border border-line text-[11px] font-semibold text-muted hover:text-fg"
+                  className="h-6 rounded-md border border-[#5b626b] text-[10.5px] font-medium text-[#ced4da] hover:text-white"
                 >
                   SUPPR.
                 </button>
