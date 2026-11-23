@@ -19,6 +19,7 @@ import type { Conv, Model, QueueResp } from "@/rv/inbox/types";
 type Me = { id: number; name: string; admin: boolean };
 type Boot = { me: Me; models: Model[] };
 type Totals = QueueResp["totals"] & { ai?: number; noai?: number };
+type Row = QueueResp["items"][number] & { aiEver?: boolean; sub?: boolean; groups?: { name: string; color: string | null }[] };
 type Tab = "all" | "noai" | "handoff" | "ai" | "online" | "unread" | "reply" | "pinned";
 const BLUE = "#405189";
 const SORTS = [["newest", "Les plus récentes d’abord"], ["oldest", "Celles qui attendent depuis le plus longtemps"], ["spent", "Les plus gros acheteurs d’abord"]] as const;
@@ -104,7 +105,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
   }, [load]);
 
   // MyPulse ne montre que les comptes MYM : on écarte une conversation d'une autre plateforme si elle arrivait là.
-  const items = useMemo(() => (data?.items ?? []).filter((c) => byId[c.modelId]), [data, byId]);
+  const items = useMemo(() => ((data?.items ?? []) as Row[]).filter((c) => byId[c.modelId]), [data, byId]);
   const fromList = items.find((c) => c.id === currentId) ?? null;
   useEffect(() => {
     if (fromList) setHeld(fromList);
@@ -208,26 +209,34 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
             const on = c.id === currentId;
             const who = c.ai && !c.handoff ? "Substy IA" : c.lock?.name || c.pinnedBy?.name || null;
             const isNew = !!c.subscribedAt && Date.now() - Date.parse(c.subscribedAt) < 3 * 864e5;
+            const online = !!c.lastSeenAt && Date.now() - Date.parse(c.lastSeenAt) < 10 * 60_000;
             return (
               <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? addTab(c) : open(c))} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), addTab(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
-                <span className="relative shrink-0">
-                  <Avatar src={c.memberAvatar} name={c.nickname || c.memberName || "?"} size="size-9" />
-                  {c.pinned ? <Pin className="absolute -top-1 -left-1 size-3.5 rounded-full p-0.5 text-white" style={{ background: "#f06548" }} /> : null}
+                <span className="flex shrink-0 flex-col items-center gap-1">
+                  <span className="relative">
+                    <Avatar src={c.memberAvatar} name={c.nickname || c.memberName || "?"} size="size-9" />
+                    {online ? <span className="absolute right-0 bottom-0 size-2.5 rounded-full border-2" style={{ background: "#3cd188", borderColor: "var(--mp-card)" }} title="En ligne : le fan vient d’écrire" /> : null}
+                    {c.pinned ? <Pin className="absolute -top-1 -left-1 size-3.5 rounded-full p-0.5 text-white" style={{ background: "#f06548" }} /> : null}
+                  </span>
+                  {c.sub ? <span className="rounded border px-1 text-[9.5px] leading-[15px] font-semibold" style={{ borderColor: "#0ab39c88", color: "#0ab39c", background: "#0ab39c14" }} title="Fan abonné">Abo</span> : null}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
+                    {c.aiEver ? <span title="Substy est intervenu dans cette conversation" className="shrink-0" style={{ color: "#f0734a" }}><Bot className="size-3.5" /></span> : null}
                     <span className="min-w-0 flex-1 truncate text-[13px] font-semibold" style={{ color: "var(--mp-head)" }}>{c.nickname || c.memberName || "Fan"}</span>
                     {who ? <span className="flex max-w-[90px] shrink-0 items-center gap-1 truncate rounded px-1.5 text-[10px] font-bold" style={{ background: "#3a4047", color: "#e9ecef" }} title={c.ai && !c.handoff ? "Conversation menée par l’IA Substy" : `Prise par ${who}`}>{c.ai && !c.handoff ? <Bot className="size-3" /> : <UserRound className="size-3" />}<span className="truncate">{who}</span></span> : null}
                     <span className="shrink-0 text-[10.5px]" style={{ color: "var(--mp-muted)" }}>{hm(c.lastMessageAt)}</span>
                   </span>
+                  {c.nickname && c.memberName && c.nickname !== c.memberName ? <span className="block truncate text-[10.5px]" style={{ color: "var(--mp-muted)" }}>@{c.memberName}</span> : null}
                   <span className="mt-0.5 flex items-center gap-1.5">
+                    {c.totalSpent > 0 ? <span className="shrink-0 text-[11.5px] font-bold" style={{ color: "#3cd188" }}>{money(c.totalSpent)}</span> : null}
                     <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: c.fresh ? "var(--mp-head)" : "var(--mp-muted)", fontWeight: c.fresh ? 600 : 400 }}>{c.lastFromFan ? "" : "Vous : "}{c.preview}</span>
                     {c.fresh ? <span className="size-2 shrink-0 rounded-full" style={{ background: "#2f6bff" }} /> : null}
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-1 text-[9.5px] font-bold">
-                    {isNew ? <span className="rounded px-1.5 py-0.5" style={{ background: "#c7ff4a", color: "#12160c" }}>Nouveau</span> : null}
+                    {isNew ? <span className="rounded px-1.5 py-0.5" style={{ background: "linear-gradient(90deg, #3cd188, #f7b84b)", color: "#12160c" }}>Nouveau</span> : null}
                     {c.handoff ? <span className="rounded px-1.5 py-0.5" style={{ background: "rgba(167,139,250,.2)", color: "#a78bfa" }}>À reprendre</span> : null}
-                    {c.totalSpent > 0 ? <span className="rounded px-1.5 py-0.5" style={{ background: "rgba(247,184,75,.15)", color: "#f7b84b" }}>{money(c.totalSpent, 0)}</span> : null}
+                    {(c.groups ?? []).map((g) => <span key={g.name} className="max-w-[130px] truncate rounded px-1.5 py-0.5 uppercase" style={{ background: g.color ? `${g.color}33` : "rgba(64,81,137,.45)", color: g.color || "#8ea2e6" }} title={`Groupe : ${g.name}`}>{g.name}</span>)}
                     {c.box ? <span className="rounded px-1.5 py-0.5" style={{ background: "rgba(47,107,255,.2)", color: "#6ea0ff" }}>Inbox {c.box}</span> : null}
                     {!model && models.length > 1 ? <span className="rounded px-1.5 py-0.5" style={{ background: "var(--mp-card-2)", color: "var(--mp-muted)" }}>{byId[c.modelId]?.displayName}</span> : null}
                   </span>

@@ -6,9 +6,9 @@ import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, pla
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { pinFan } from './lists.mjs';
-import { listMembers, listsOfCreator } from './fanlists.mjs';
+import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
-import { canChat, canSee, isBoss } from './team.mjs';
+import { canChat, canSee, isBoss, platformOfCreator } from './team.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS seq_progress (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, sequence_id INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, PRIMARY KEY (creator_id, fan_id, sequence_id));
@@ -149,6 +149,38 @@ function libOf(cid, fanId) {
 
 db.exec('CREATE TABLE IF NOT EXISTS box_log (creator_id TEXT NOT NULL, at INTEGER NOT NULL, who TEXT, old_count INTEGER NOT NULL, new_count INTEGER NOT NULL)');
 
+// Chatting MYM (façon MyPulse) : ce qu'on affiche en plus sur chaque ligne de la liste, gardé 30 s par créatrice.
+//  - aiEver : Substy est intervenu au moins une fois dans la conversation (message de l'IA vu par Bloom) ;
+//  - sub    : le fan est abonné ; groups : les groupes de Bloom dont il fait partie.
+const mymExtra = new Map();
+function mymExtrasOf(cid) {
+  const hit = mymExtra.get(cid);
+  if (hit && Date.now() - hit.at < 30_000) return hit.v;
+  const v = {
+    ai: new Set(all("SELECT DISTINCT fan_id FROM msg_log WHERE creator_id = ? AND from_fan = 0 AND kind = 'ai' AND fan_id IS NOT NULL", cid).map((r) => r.fan_id)),
+    status: new Map(all('SELECT fan_id, status FROM mym_fans WHERE creator_id = ? AND status IS NOT NULL', cid).map((r) => [r.fan_id, r.status])),
+    groups: mymGroups(cid),
+  };
+  mymExtra.set(cid, { at: Date.now(), v });
+  return v;
+}
+function mymRow(cid, c) {
+  if (platformOfCreator(cid) !== 'mym') return {};
+  let x;
+  try {
+    x = mymExtrasOf(cid);
+  } catch {
+    return {};
+  }
+  const st = x.status.get(c.fanId);
+  const gone = /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || '');
+  return {
+    aiEver: x.ai.has(c.fanId) || (!!c.ai && !!c.last?.fromCreator),
+    sub: st ? /^active$/i.test(st) : !!c.since && !gone,
+    groups: x.groups.filter((g) => g.members.has(c.fanId)).slice(0, 3).map((g) => ({ name: g.name, color: g.color || null })),
+  };
+}
+
 export function rvRoutes({ substy, userFrom, send, body, creators }) {
   const me = (req, res) => {
     const u = userFrom(req);
@@ -224,6 +256,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const lim = p.get('limit') === 'all' ? keep.length : Math.min(Number(p.get('limit')) || 300, 20000);
       const items = keep.slice(0, lim).map((r) =>
         convOf(r.cid, r.c, r.m, {
+          ...mymRow(r.cid, r.c),
           box: r.boxIdx != null ? r.boxIdx + 1 : null,
           relance: r.relCand && rel.has(r.c.last.id) ? { ppv: cents(rel.get(r.c.last.id).price), step: rel.get(r.c.last.id).script, at: iso(rel.get(r.c.last.id).at) } : undefined,
         }),
