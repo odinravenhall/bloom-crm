@@ -344,19 +344,19 @@ export function staffRoutes({ userFrom, send, body, creators }) {
     },
 
     // ------------------------------------------------ notifications système
-    'GET /api/notifs': (req, res) => {
+    'GET /api/sysnotifs': (req, res) => {
       const u = auth(req, res);
       if (!u) return;
       const items = all('SELECT id, kind, title, body, at, read_at FROM sys_notifs WHERE user_id = ? AND at > ? ORDER BY at DESC LIMIT 100', u.id, Date.now() - 30 * 864e5);
       send(res, 200, { items: items.map((n) => ({ id: n.id, kind: n.kind, title: n.title, body: n.body, at: n.at, read: !!n.read_at })), unread: items.filter((n) => !n.read_at).length });
     },
-    'POST /api/notifs/read': async (req, res) => {
+    'POST /api/sysnotifs/read': async (req, res) => {
       const u = auth(req, res);
       if (!u) return;
       run('UPDATE sys_notifs SET read_at = ? WHERE user_id = ? AND read_at IS NULL', Date.now(), u.id);
       send(res, 200, { ok: true });
     },
-    'POST /api/notifs/clear': async (req, res) => {
+    'POST /api/sysnotifs/clear': async (req, res) => {
       const u = auth(req, res);
       if (!u) return;
       run('DELETE FROM sys_notifs WHERE user_id = ?', u.id);

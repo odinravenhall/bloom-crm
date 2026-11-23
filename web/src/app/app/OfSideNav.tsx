@@ -106,7 +106,7 @@ export function OfSideNav({ me, narrow, onToggle }: { me: Me; narrow: boolean; o
   const [notifs, setNotifs] = useState(0);
   useEffect(() => {
     const load = () =>
-      api<{ unread: number }>("GET", "/api/notifs")
+      api<{ unread: number }>("GET", "/api/sysnotifs")
         .then((r) => setNotifs(r.unread))
         .catch(() => {});
     load();

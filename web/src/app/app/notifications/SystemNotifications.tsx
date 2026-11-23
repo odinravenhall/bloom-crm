@@ -26,15 +26,15 @@ export function SystemNotifications() {
   const router = useRouter();
   const [items, setItems] = useState<N[] | null>(null);
   useEffect(() => {
-    api<{ items: N[] }>("GET", "/api/notifs")
+    api<{ items: N[] }>("GET", "/api/sysnotifs")
       .then((r) => {
         setItems(r.items);
-        if (r.items.some((n) => !n.read)) api("POST", "/api/notifs/read").catch(() => {});
+        if (r.items.some((n) => !n.read)) api("POST", "/api/sysnotifs/read").catch(() => {});
       })
       .catch((e) => toast((e as Error).message, "err"));
   }, []);
   const clear = async () => {
-    await api("POST", "/api/notifs/clear").catch(() => {});
+    await api("POST", "/api/sysnotifs/clear").catch(() => {});
     setItems([]);
   };
   return (
