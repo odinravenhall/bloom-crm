@@ -19,6 +19,7 @@
 //  - lu / non lu : POST /v1/chats/<fan>/ack | nack ; « en train d'écrire » : POST /v1/chats/<fan>/typing.
 // MYM ne connaît pas la « réponse à un message ».
 import { STYX, isLinked, mym } from './mym.mjs';
+import { all, one } from './store.mjs';
 
 /** Cette créatrice MYM a un compte relié : on lit sa messagerie chez MYM. */
 export const mymDirect = (cid) => isLinked(String(cid));
@@ -100,3 +101,32 @@ export const mymDelete = (cid, messageId) => mym(cid, `/v1/chats/messages/${enco
 export const mymRead = (cid, fanId, read) => mym(cid, `/v1/chats/${encodeURIComponent(fanId)}/${read ? 'ack' : 'nack'}`, { method: 'POST', base: STYX, body: {} });
 /** Montrer au fan que la créatrice est en train d'écrire. */
 export const mymTyping = (cid, fanId) => mym(cid, `/v1/chats/${encodeURIComponent(fanId)}/typing`, { method: 'POST', base: STYX });
+
+// ---------------------------------------------------------------- qui a écrit un message
+// MYM ne dit pas qui a écrit (chatteur, IA, automatisation). Bloom le sait par son journal d'envois (`sent_log`), et
+// pour l'IA par Substy : les messages que Substy voit passer sont notés dans `msg_log` avec SES identifiants (différents
+// de ceux de MYM). On retrouve donc le « jumeau » d'un message par le fan, le texte et l'heure (à 2 min près).
+const same = (a, b) => String(a || '').trim() === String(b || '').trim();
+/** Le même message noté par l'autre source (`src` : 'mym' = noté depuis MYM, '' = noté depuis Substy). */
+export function twinOf(cid, fanId, fromFan, text, at, src) {
+  const rows = all("SELECT id, kind, by_name, text, at FROM msg_log WHERE creator_id = ? AND fan_id = ? AND from_fan = ? AND at BETWEEN ? AND ? AND COALESCE(src, '') = ?", String(cid), String(fanId), fromFan ? 1 : 0, at - 120_000, at + 120_000, src);
+  const t = String(text || '').trim();
+  return rows.filter((r) => (t ? same(r.text, t) : !String(r.text || '').trim() && Math.abs(r.at - at) < 20_000)).sort((a, b) => Math.abs(a.at - at) - Math.abs(b.at - at))[0] || null;
+}
+/** L'auteur d'un message de la créatrice lu chez MYM : { kind, name } (null pour un message du fan). */
+export function mymAuthor(cid, fanId, v) {
+  if (v.fromFan) return null;
+  const at = Date.parse(v.at) || 0;
+  const mine = all('SELECT s.text, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND (s.message_id = ? OR s.at BETWEEN ? AND ?)', String(cid), String(fanId), String(v.id), at - 90_000, at + 90_000)
+    .find((l) => l.message_id === String(v.id) || (!l.message_id && same(l.text, v.text)));
+  if (mine) return { kind: 'bloom', name: mine.name };
+  const own = one('SELECT kind, by_name FROM msg_log WHERE id = ?', String(v.id));
+  const k = own?.kind && own.kind !== 'creator' ? own : twinOf(cid, fanId, false, v.text, at, '') || own;
+  return k?.kind === 'ai' ? { kind: 'ai', name: 'IA' }
+    : k?.kind === 'auto' ? { kind: 'auto', name: 'Automatisation' }
+    : k?.kind === 'script' ? { kind: 'script', name: 'Script' }
+    : k?.kind === 'employee' ? { kind: 'employee', name: k.by_name || 'Employé' }
+    : k?.kind === 'bloom' ? { kind: 'bloom', name: k.by_name || 'Bloom' }
+    : v.kind === 'push' ? { kind: 'auto', name: 'Push' }
+    : { kind: 'creator', name: 'Créatrice' };
+}

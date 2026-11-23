@@ -1,4 +1,5 @@
-// MYM → « Compte Creator » (copie de « Mes Comptes » de MyPulse). Tout vient de SUBSTY (Bloom doit pouvoir se passer
+// MYM → « Compte Creator » (copie de « Mes Comptes » de MyPulse). Compte relié : revenus lus chez MYM en direct
+// (mymincome.mjs). Sinon tout vient de SUBSTY (Bloom doit pouvoir se passer
 // de MyPulse) : chiffre d'affaires et courbe par jour = `revenue.overview` de Substy (net ou brut), abonnés / anciens /
 // intéressés = fans MYM relus chez Substy (mymfans.mjs), équipe et présence = Bloom.
 import { all } from './store.mjs';
@@ -6,6 +7,7 @@ import { canSee, onCreator, seesAll } from './team.mjs';
 import { PERMS } from './staff.mjs';
 import { tabOf } from './mymfans.mjs';
 import { isLinked, mymFollowerCounts } from './mym.mjs';
+import { mymIncome, mymIncomeOn } from './mymincome.mjs';
 
 const DAY = 864e5;
 const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t));
@@ -13,6 +15,8 @@ const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }
 export function mymAccountRoutes({ substy, userFrom, send, creators }) {
   const cache = new Map();
   const revenueOf = async (cid, days, mode) => {
+    // Compte relié : revenus lus chez MYM en direct (nets), avec la part de l'IA de Substy.
+    if (mymIncomeOn(cid)) return mymIncome(cid, days);
     const key = `${cid}|${days}|${mode}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < 5 * 60_000) return hit.v;
@@ -79,6 +83,10 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
             source: rev.source || null,
             since: rev.since || null,
             sales: rev.sales ?? null,
+            complete: rev.complete ?? null,
+            ai: rev.ai ?? null,
+            byTeam: rev.team ?? null,
+            auto: rev.auto ?? null,
             fans: { ...counts, checked: fans.length, payers: fans.filter((f) => f.gross > 0).length, direct },
             team: { leads: team.filter((x) => ['admin', 'manager', 'lead'].includes(x.role)).length, chatters: team.filter((x) => x.role === 'chatter').length, total: team.length },
             online: onCreator(c.id).map((o) => ({ name: o.name, avatar: o.avatar })),
@@ -107,7 +115,10 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
           accounts: list.length,
           online: new Set(list.flatMap((c) => c.online.map((o) => o.name))).size,
         },
-        source: list.some((c) => c.source === 'live') ? 'live' : 'overview',
+        source: list.some((c) => c.source === 'mym') ? 'mym' : list.some((c) => c.source === 'live') ? 'live' : 'overview',
+        complete: list.filter((c) => c.source === 'mym').every((c) => c.complete),
+        ai: Math.round(list.reduce((a, c) => a + (c.ai || 0), 0) * 100) / 100,
+        byTeam: Math.round(list.reduce((a, c) => a + (c.byTeam || 0), 0) * 100) / 100,
         since: list.map((c) => c.since).filter(Boolean).sort()[0] || null,
         accounts: list,
       });

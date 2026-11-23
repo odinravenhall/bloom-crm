@@ -5,7 +5,7 @@ import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { img, inboxChat, inboxChats, mediaView, messageView, patchInboxChat, plain } from './chat.mjs';
 import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
-import { mymChatMessages, mymDelete, mymDirect, mymRead, mymSend, mymTyping } from './mymchat.mjs';
+import { mymAuthor, mymChatMessages, mymDelete, mymDirect, mymRead, mymSend, mymTyping } from './mymchat.mjs';
 import { pinFan } from './lists.mjs';
 import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
@@ -310,23 +310,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (mymDirect(x.cid)) {
         const d = await mymChatMessages(x.cid, x.fanId, { cursor }).catch((e) => (console.warn('[bloom] messages MYM en direct :', e.message), null));
         if (d) {
-          const logs = all('SELECT s.text, s.at, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? ORDER BY s.at DESC LIMIT 200', x.cid, x.fanId);
-          const ids = d.views.filter((v) => !v.fromFan).map((v) => v.id);
-          const kinds = ids.length ? new Map(all(`SELECT id, kind, by_name FROM msg_log WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids).map((r) => [r.id, r])) : new Map();
-          for (const v of d.views) {
-            if (v.fromFan) continue;
-            const at = Date.parse(v.at);
-            const mine = logs.find((l) => l.message_id === v.id || (l.text.trim() === v.text.trim() && Math.abs(l.at - at) < 90000));
-            const k = kinds.get(v.id);
-            v.by = mine ? { kind: 'bloom', name: mine.name }
-              : k?.kind === 'ai' ? { kind: 'ai', name: 'IA' }
-              : k?.kind === 'auto' ? { kind: 'auto', name: 'Automatisation' }
-              : k?.kind === 'script' ? { kind: 'script', name: 'Script' }
-              : k?.kind === 'employee' ? { kind: 'employee', name: k.by_name || 'Employé' }
-              : k?.kind === 'bloom' ? { kind: 'bloom', name: k.by_name || 'Bloom' }
-              : v.kind === 'push' ? { kind: 'auto', name: 'Push' }
-              : { kind: 'creator', name: 'Créatrice' };
-          }
+          for (const v of d.views) if (!v.fromFan) v.by = mymAuthor(x.cid, x.fanId, v);
           const sentBy = Object.fromEntries(d.views.filter((v) => v.by?.kind === 'bloom').map((v) => [v.id, v.by.name]));
           const data = d.views.map((v) => liveMsg(v, x.fanId, c?.name || 'Fan'));
           data.sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));

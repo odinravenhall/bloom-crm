@@ -165,7 +165,7 @@ export async function mymSite(cid, path) {
  * texte, l'adresse de redirection et les cookies posés par MYM (à renvoyer avec le formulaire : le jeton du formulaire
  * est lié à la session de la page). `form` (URLSearchParams) = envoi du formulaire en POST. Jamais de redirection suivie.
  */
-export async function mymSiteRaw(cid, path, { form, cookies = '' } = {}) {
+export async function mymSiteRaw(cid, path, { form, cookies = '', xhr = false } = {}) {
   await accessOf(cid);
   const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);
   const access = open(l.access);
@@ -179,6 +179,7 @@ export async function mymSiteRaw(cid, path, { form, cookies = '' } = {}) {
     headers: {
       cookie,
       accept: 'text/html,application/xhtml+xml',
+      ...(xhr ? { 'x-requested-with': 'XMLHttpRequest' } : {}),
       'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36',
       ...(form ? { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://creators.mym.fans', referer: `https://creators.mym.fans${path}` } : {}),
     },

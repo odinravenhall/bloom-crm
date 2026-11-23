@@ -98,7 +98,7 @@ export function MymSales() {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Une vente t’est attribuée quand le fan achète un message payant que tu as envoyé depuis Bloom, ou laisse un pourboire dans les 2 h après ton dernier message. Montants bruts. Le temps actif et idle est relevé depuis le 23/11/2026.</p>
+      <p className="mt-3 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Une vente t’est attribuée quand le fan achète un message payant que tu as envoyé depuis Bloom, ou laisse un pourboire dans les 2 h après ton dernier message. Montants nets, tels que MYM les crédite à la créatrice (lus chez MYM en direct). Le temps actif et idle est relevé depuis le 23/11/2026.</p>
     </div>
   );
 }

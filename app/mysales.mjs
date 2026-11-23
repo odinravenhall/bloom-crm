@@ -2,7 +2,8 @@
 //  - Une vente lui est attribuée quand le fan achète un message payant qu'ELLE a envoyé depuis Bloom
 //    (`sent_log.message_id` = `rv_live.message_id`), ou laisse un pourboire dans les 2 h qui suivent un de ses messages
 //    (et que personne d'autre de l'équipe ne lui a écrit entre-temps).
-//  - Montants BRUTS tels que Substy les annonce en direct (`rv_live`), dans la monnaie de la créatrice.
+//  - Créatrice MYM reliée : ventes lues chez MYM en direct (mymincome.mjs → `rv_live`, src = 'mym'), montants NETS ;
+//    le message acheté est retrouvé chez MYM (`rv_live.message_id`). Sinon : montants bruts annoncés par Substy.
 //  - Temps actif / idle : relevé par Bloom depuis le 23/11/2026 (`work_log`, nourri par le signe de vie des pages).
 import { all } from './store.mjs';
 import { canSee } from './team.mjs';

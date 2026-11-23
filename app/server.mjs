@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { all, checkPassword, getSetting, hashPassword, one, open, run, seal, setSetting } from './store.mjs';
 import { SubstySession, SubstyError } from './substy.mjs';
-import { broadcast, chatRoutes, setCreatorPics, warmInbox } from './chat.mjs';
+import { broadcast, chatRoutes, mymLiveState, setCreatorPics, warmInbox } from './chat.mjs';
 import { libraryRoutes } from './library.mjs';
 import { inboxRoutes } from './inbox.mjs';
 import { rvRoutes } from './rvapi.mjs';
@@ -32,6 +32,7 @@ import { mymRoutes } from './mym.mjs';
 import { mymMediaRoutes } from './mymmedia.mjs';
 import { mymVoucherRoutes } from './mymvouchers.mjs';
 import { mySalesRoutes } from './mysales.mjs';
+import { mymIncomeRoutes, startMymIncome } from './mymincome.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -418,6 +419,7 @@ Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.cr
 Object.assign(routes, mymMediaRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymVoucherRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.creators || [] }));
+Object.assign(routes, mymIncomeRoutes({ userFrom, send, creators: () => state.creators || [], live: mymLiveState }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
@@ -458,6 +460,7 @@ Object.assign(createServer(async (req, res) => {
   }
   startRevenue();
   startAlerts(substy);
+  startMymIncome(() => state.creators || []);
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);

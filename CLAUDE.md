@@ -220,3 +220,16 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   ⚠️ Format de publication lu dans le code du site, pas encore vérifié sur un vrai post. Jamais de deuxième essai tout seul.
 - Pas encore fait : stories, « passer en privé après N h » (format d'édition d'un post à relever sur une vraie
   modification), import Excel, suivi des listes d'amis.
+
+## MYM en direct : temps réel et revenus (23/11/2026) — `app/chat.mjs`, `app/mymincome.mjs`
+
+- Temps réel : MYM n'a pas de flux poussé (son site relit `/v1/chats` toutes les 10-12 s). Bloom relit la première page
+  des conversations de chaque compte relié (7 s si quelqu'un regarde, 30 s sinon) et prévient les navigateurs. Pour ces
+  créatrices, les messages annoncés par Substy ne vont plus aux navigateurs : ils servent seulement à savoir si l'IA a écrit.
+- Les identifiants de MESSAGES de MYM et de Substy sont différents (contrairement aux médias) : on retrouve le « jumeau »
+  par fan + texte + heure (`twinOf`, `mymAuthor` dans `mymchat.mjs` ; `msg_log.src = 'mym'` pour ce qui est noté depuis MYM).
+- Revenus : `GET /app/income-fetch?page=N` du site (10 transactions par page, montants NETS) → `rv_live` avec `src = 'mym'`
+  (relu toutes les 45 s, historique 90 jours repris petit à petit). Les ventes Substy de la même période sont retirées.
+- Part de l'IA : `rv_live.origin` (`ai` / `bloom` / `auto`…) = auteur du message acheté ou du dernier message avant un
+  pourboire. État : `GET /api/mym/income/status` (admins, managers).
+- Pas encore fait : la page Accueil / Stats générale rapproche toujours avec MyPulse (`rv_sales`).

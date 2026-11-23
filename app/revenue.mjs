@@ -495,10 +495,16 @@ export function recordLive(list) {
   const now = Date.now();
   const ins = db.prepare(`INSERT OR IGNORE INTO rv_live (id, creator_id, type, at, gross, currency, fan_id, fan_name, message_id, matched, first_seen)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`);
+  let mymOn = new Set();
+  try {
+    mymOn = new Set(all("SELECT l.creator_id AS id FROM mym_links l JOIN settings s ON s.key = 'mym_tx_on:' || l.creator_id").map((r) => String(r.id)));
+  } catch {}
   tx(() => {
     for (const s of list || []) {
       const at = Date.parse(s.createdAt || s.at);
       if (!at || !s.creatorId) continue;
+      // Créatrice MYM reliée : ses ventes sont lues chez MYM en direct (mymincome.mjs), plus chez Substy.
+      if (mymOn.has(String(s.creatorId))) continue;
       const { gross, currency } = parsePrice(s.price);
       ins.run(String(s.id), String(s.creatorId), s.type || null, at, gross, currency, s.userId ? String(s.userId) : s.fanId || null, s.userName ?? s.fan ?? null, s.messageId ? String(s.messageId) : null, now);
     }
@@ -701,7 +707,7 @@ export function revenue({ from, to, creators }) {
   }
   for (const l of live) {
     const day = parisDay(l.at);
-    const net = Math.round(l.gross * netRatio(l.account, l.platform));
+    const net = Math.round(l.gross * (l.src === 'mym' ? 1 : netRatio(l.account, l.platform)));
     const eur = toEur(net, l.currency, day);
     const c = cr(acc.get(l.account));
     c.provisional += eur;
@@ -740,7 +746,7 @@ export function revenue({ from, to, creators }) {
       creatorId: acc.get(l.account),
       at: new Date(l.at).toISOString(),
       type: /tip/i.test(l.type || '') ? 'tip' : /post/i.test(l.type || '') ? 'post' : 'ppv',
-      net: Math.round(l.gross * netRatio(l.account, l.platform)),
+      net: Math.round(l.gross * (l.src === 'mym' ? 1 : netRatio(l.account, l.platform))),
       gross: l.gross,
       currency: l.currency,
       fan: l.fan_name,

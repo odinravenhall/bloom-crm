@@ -10,10 +10,10 @@ import { AddMymAccount, MymLinkChip, useMymLinks } from "./MymLink";
 
 // MYM → Compte Creator : copie de « Mes Comptes » de MyPulse (ventes MyPulse de chaque modèle MYM, équipe, accès).
 type Acc = {
-  id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null;
+  id: string; name: string; handle: string | null; avatar: string | null; total: number; delta: number | null; series: number[]; newSubs: number; error: string | null; ai?: number | null; byTeam?: number | null;
   fans: { active: number; old: number; interested: number; checked: number; payers: number }; team: { leads: number; chatters: number; total: number }; online: { name: string; avatar: string | null }[];
 };
-type Data = { source: "live" | "overview"; since: number | null; days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
+type Data = { source: "live" | "overview" | "mym"; complete?: boolean; ai?: number; byTeam?: number; since: number | null; days: number; mode: "net" | "gross"; role: string; perms: string[]; totals: { revenue: number; delta: number | null; perDay: number; series: number[]; active: number; old: number; interested: number; checked: number; newSubs: number; accounts: number; online: number }; accounts: Acc[] };
 const eur = (v: number) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ | /g, " ")} €`;
 const int = (v: number) => v.toLocaleString("fr-FR").replace(/ | /g, " ");
 
@@ -89,7 +89,7 @@ export function MymAccounts() {
           ))}
         </div>
         <span className="flex-1" />
-        <div className="flex rounded-lg p-1" style={{ ...card, display: d?.source === "live" ? "none" : undefined }}>
+        <div className="flex rounded-lg p-1" style={{ ...card, display: d?.source === "live" || d?.source === "mym" ? "none" : undefined }}>
           {(["net", "gross"] as const).map((m) => (
             <button key={m} onClick={() => setMode(m)} className="rounded-md px-3 py-1 text-[13px] font-medium" style={mode === m ? { background: "var(--mp-accent)", color: "var(--mp-on-accent)" } : undefined}>{m === "net" ? "Net" : "Brut"}</button>
           ))}
@@ -99,13 +99,16 @@ export function MymAccounts() {
       {/* Chiffres */}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
         <div className="relative overflow-hidden rounded-2xl p-5 pb-0" style={{ background: "radial-gradient(90% 120% at 90% 0%, rgba(199,255,74,.14), transparent 60%), #1c2018", border: "1px solid rgba(199,255,74,.25)" }}>
-          <p className="flex items-center gap-2 text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-accent)" }}><CircleDollarSign className="size-4" /> Chiffre d’affaires · {days} derniers jours <span title="Chiffres de Substy pour les comptes MYM"><Info className="size-3.5 opacity-70" /></span></p>
+          <p className="flex items-center gap-2 text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--mp-accent)" }}><CircleDollarSign className="size-4" /> Chiffre d’affaires · {days} derniers jours <span title={d?.source === "mym" ? "Revenus lus directement chez MYM (compte relié)" : "Chiffres de Substy pour les comptes MYM"}><Info className="size-3.5 opacity-70" /></span></p>
           <p className="mt-2 text-[38px] leading-none font-bold" style={{ color: "var(--mp-accent)" }}>{T ? eur(T.revenue) : "…"}</p>
           <p className="mt-3 flex items-center gap-2 text-[12px]"><Delta v={T?.delta ?? null} /> vs les {days} jours précédents</p>
           <p className="mt-2 text-[12px]">Moyenne / jour <b style={{ color: "var(--mp-head)" }}>{T ? eur(T.perDay) : "…"}</b></p>
           <p className="mt-1 text-[11.5px]" style={{ color: "var(--mp-muted)" }}>
-            {d?.source === "live" ? `Ventes vues par Substy (montants payés par les fans), enregistrées par Bloom depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"}` : mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}
+            {d?.source === "mym" ? `Revenus nets lus directement chez MYM${d.complete ? "" : ` · historique en cours de récupération (depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"})`}` : d?.source === "live" ? `Ventes vues par Substy (montants payés par les fans), enregistrées par Bloom depuis le ${d.since ? new Date(d.since).toLocaleDateString("fr-FR") : "…"}` : mode === "net" ? "Montants nets (après la part de MYM)" : "Montants bruts (payés par les fans)"}
           </p>
+          {d?.source === "mym" && T ? (
+            <p className="mt-1 text-[12px]">Dont IA Substy <b style={{ color: "var(--mp-head)" }}>{eur(d.ai ?? 0)}</b>{T.revenue > 0 ? ` (${Math.round(((d.ai ?? 0) / T.revenue) * 100)} %)` : ""} · chatteurs dans Bloom <b style={{ color: "var(--mp-head)" }}>{eur(d.byTeam ?? 0)}</b></p>
+          ) : null}
           <div className="-mx-5 mt-3">{T ? <Spark data={T.series} w={600} h={56} fill /> : <div className="h-14" />}</div>
         </div>
         <Kpi icon={<span className="text-[11px] font-black">m</span>} label="MYM" value={T ? eur(T.revenue) : "…"} foot={<><Delta v={T?.delta ?? null} /> Comptes : {T?.accounts ?? 0}</>} />
@@ -151,6 +154,11 @@ export function MymAccounts() {
               <div className="mt-2 flex justify-between border-t pt-2 text-[12px]" style={{ borderColor: "var(--mp-line)" }}>
                 <span>Nouveaux abonnés</span><b style={{ color: "var(--mp-head)" }}>{int(a.newSubs)}</b>
               </div>
+              {a.ai != null ? (
+                <div className="mt-1 flex justify-between text-[12px]">
+                  <span>Dont IA Substy</span><b style={{ color: "var(--mp-head)" }}>{eur(a.ai)}{a.total > 0 ? ` · ${Math.round((a.ai / a.total) * 100)} %` : ""}</b>
+                </div>
+              ) : null}
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-2">
               {([[int(a.fans.active), "Abonnés", "/app/mym/abonnes"], [int(a.fans.old), "Anciens", "/app/mym/anciens"], [int(a.fans.interested), "Intéressés", "/app/mym/interesses"]] as const).map(([v, l, href]) => (

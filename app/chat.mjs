@@ -3,7 +3,7 @@ import { all, getSetting, one, run, setSetting } from './store.mjs';
 import { onMessageAlert } from './alerts.mjs';
 import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
-import { mymChatPage, mymDirect } from './mymchat.mjs';
+import { mymAuthor, mymChatMessages, mymChatPage, mymDirect, twinOf } from './mymchat.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 
 export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
@@ -117,6 +117,9 @@ const clients = new Map(); // réponse SSE -> personne connectée
 export function broadcast(creatorId, type, data) {
   if (type === 'ping' || type === 'connected' || data?.type === 'connection_ready') return;
   const kind = data?.type || type;
+  // Créatrice MYM reliée : les messages arrivent de MYM en direct (plus bas). Ce que Substy annonce ne sert plus qu'à
+  // savoir si c'est son IA qui a écrit ; rien n'est envoyé aux navigateurs depuis Substy.
+  if (kind === 'new_message' && data?.data && mymDirect(creatorId)) return void substyShadow(creatorId, data.data);
   const payload = { creatorId, type: kind };
   if (kind === 'new_message' && data?.data) {
     payload.fanId = data.data.fanId != null ? String(data.data.fanId) : null;
@@ -130,6 +133,74 @@ export function broadcast(creatorId, type, data) {
   const line = `data: ${JSON.stringify(payload)}\n\n`;
   for (const [c, u] of clients) if (canSee(u, creatorId)) c.write(line);
 }
+
+function substyShadow(cid, raw) {
+  const fanId = raw.fanId != null ? String(raw.fanId) : null;
+  const v = messageView(raw, bloomSenderOf(raw, false));
+  const twin = fanId ? twinOf(cid, fanId, v.fromFan, v.text, Date.parse(v.at) || Date.now(), 'mym') : null;
+  // Déjà noté depuis MYM : on complète seulement l'auteur ; sinon on le note (identifiant de Substy).
+  if (twin) {
+    if (v.by && v.by.kind !== 'creator') run('UPDATE msg_log SET kind = ?, by_name = ? WHERE id = ?', v.by.kind, v.by.kind === 'bloom' || v.by.kind === 'employee' ? v.by.name : null, twin.id);
+  } else logMessage(cid, fanId, v);
+  onMessageAlert(cid, fanId, v);
+  if (!v.fromFan && v.by?.kind === 'creator') confirmSender(cid, fanId);
+}
+
+// ---------------------------------------------------------------- temps réel MYM (créatrices reliées)
+// MYM n'a pas de flux « poussé » : son propre site relit la liste des conversations toutes les 10 à 12 s. Bloom fait
+// pareil avec le compte relié : toutes les 7 s pour une créatrice que quelqu'un regarde, toutes les 30 s sinon.
+// Une conversation dont le dernier message a changé → on lit ses derniers messages et on prévient les navigateurs.
+const mymLive = new Map(); // cid -> { busy, primed, at, ok, err }
+const mymLiveOf = (cid) => mymLive.get(cid) || (mymLive.set(cid, { busy: false, primed: false, at: 0, ok: 0, err: null, events: 0 }), mymLive.get(cid));
+export const mymLiveState = () => Object.fromEntries([...mymLive].map(([cid, s]) => [cid, { live: !!s.ok && Date.now() - s.ok < 90_000, lastOk: s.ok || null, error: s.err, events: s.events }]));
+async function mymLiveTick(cid) {
+  const st = mymLiveOf(cid);
+  if (st.busy) return;
+  st.busy = true;
+  st.at = Date.now();
+  try {
+    const b = inboxOf(cid);
+    const r = await mymChatPage(cid);
+    const changed = [];
+    for (const m of r.items) {
+      const old = b.map.get(m.fanId);
+      // Nouveau dernier message (et pas un plus ancien remonté parce que le dernier a été supprimé).
+      if (st.primed && m.last && m.last.id !== old?.last?.id && !(old?.last?.at && Date.parse(old.last.at) > Date.parse(m.last.at))) changed.push([m, old?.last || null]);
+      const base = old ? strip(old) : { name: m.username || 'Fan', avatar: null, ai: false, handoff: false, spent: 0, paid: 0, subscribed: m.sub ? 'active' : null, since: null };
+      put(b, { ...base, ...m, name: base.name || m.username || 'Fan', mym: true });
+    }
+    st.primed = true;
+    st.ok = Date.now();
+    st.err = null;
+    for (const [m, prev] of changed.slice(0, 10)) {
+      const d = await mymChatMessages(cid, m.fanId, { limit: 10 }).catch(() => null);
+      // Messages plus récents que le dernier connu (du plus ancien au plus récent) ; à défaut, le dernier seulement.
+      const since = prev?.at ? Date.parse(prev.at) : Infinity;
+      let fresh = (d?.views || []).filter((v) => v.id !== prev?.id && Date.parse(v.at) > since).reverse();
+      if (!fresh.length) fresh = (d?.views || []).slice(0, 1);
+      if (!fresh.length) fresh = [{ id: m.last.id, text: m.last.text, at: m.last.at, fromFan: !m.last.fromCreator, by: null, kind: 'text', medias: [], price: 0, paid: false, tip: false, read: false, reverted: false }];
+      for (const v of fresh) {
+        v.by = mymAuthor(cid, m.fanId, v);
+        if (!twinOf(cid, m.fanId, v.fromFan, v.text, Date.parse(v.at) || Date.now(), '')) logMessage(cid, m.fanId, v, 'mym');
+        st.events++;
+        const line = `data: ${JSON.stringify({ creatorId: cid, type: 'new_message', fanId: m.fanId, message: v, via: 'mym' })}\n\n`;
+        for (const [c, u] of clients) if (canSee(u, cid)) c.write(line);
+      }
+    }
+  } catch (e) {
+    st.err = e.message;
+  } finally {
+    st.busy = false;
+  }
+}
+setInterval(() => {
+  const watched = (cid) => [...clients.values()].some((u) => canSee(u, cid));
+  for (const cid of INBOX.keys()) {
+    if (!mymDirect(cid)) continue;
+    const st = mymLiveOf(cid);
+    if (Date.now() - st.at >= (watched(cid) ? 7_000 : 30_000)) mymLiveTick(cid);
+  }
+}, 1_000);
 
 /**
  * Qui a vraiment envoyé les derniers messages d'une conversation : le direct de Substy n'indique pas « IA » (ni
@@ -337,11 +408,15 @@ function onLiveMessage(cid, fanId, m) {
 
 /** Journal des messages vus en temps réel (un message n'est compté qu'une fois). */
 let pruned = 0;
-function logMessage(creatorId, fanId, m) {
+try {
+  run('ALTER TABLE msg_log ADD COLUMN src TEXT');
+} catch {}
+function logMessage(creatorId, fanId, m, src = null) {
   try {
     run('INSERT OR IGNORE INTO msg_log (id, creator_id, fan_id, at, from_fan, kind, price, tip, medias, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       String(m.id), creatorId, fanId ? String(fanId) : null, Date.parse(m.at) || Date.now(), m.fromFan ? 1 : 0, m.fromFan ? 'fan' : m.by?.kind || null, m.price || 0, m.tip ? 1 : 0, m.medias.length,
       m.by?.kind === 'bloom' || m.by?.kind === 'employee' ? m.by.name : null);
+    if (src) run('UPDATE msg_log SET src = ? WHERE id = ? AND src IS NULL', src, String(m.id));
     // Texte, temps de réponse… pour « Messages envoyés ».
     enrichMessage(creatorId, fanId, m);
     if (Date.now() - pruned > 3600_000) {
@@ -369,12 +444,12 @@ function periodStats(since) {
 }
 
 /** Qui, dans Bloom, a envoyé ce message (même fan, même texte, envoyé dans la minute). */
-function bloomSenderOf(m) {
+function bloomSenderOf(m, link = true) {
   if (!m?.isSentByCreator) return null;
   const at = Date.parse(m.createdAt || '') || Date.now();
   const r = all('SELECT s.id, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND s.text = ? AND ABS(s.at - ?) < 90000 ORDER BY s.at DESC LIMIT 1', m.creatorId, m.fanId, plain(m.text), at);
   // On garde l'identifiant du message : sert aux statistiques des scripts (achat du PPV envoyé).
-  if (r[0] && !r[0].message_id && m.id != null) run('UPDATE sent_log SET message_id = ? WHERE id = ?', String(m.id), r[0].id);
+  if (link && r[0] && !r[0].message_id && m.id != null) run('UPDATE sent_log SET message_id = ? WHERE id = ?', String(m.id), r[0].id);
   return r[0]?.name || null;
 }
 
