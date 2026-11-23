@@ -190,3 +190,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 3. Écriture : envoi texte / PPV instantané, IA on/off, lu / non lu.
 4. Équipe : comptes chatteurs, droits par créatrice, puis tout ce qui marche déjà dans Raven (planning, pointage…).
 5. Mise en ligne : sous-domaine `bloom.ravencrm.xyz`, déploiement automatique depuis GitHub.
+
+## MYM en direct (sans MyPulse) — `app/mym.mjs`, extension `extension-mym/`
+
+- Connexion MYM = AWS Cognito (eu-west-3) : jeton d'accès 1 h + jeton de renouvellement. API du site : `https://api.mym.fans`
+  (`/creators/me`, médias, playlists) et `https://styx.mym.fans` (`/v1/posts`, `/v1/posts/calendar`, `/v2/pushes`, chats),
+  en-tête `Authorization: Bearer <jeton d'accès>`.
+- Relier une modèle : MYM → Compte Creator → « Relier à MYM » (admins / managers) → code à usage unique (15 min) collé
+  dans l'extension « Bloom – Relier MYM » (`web/public/bloom-relier-mym.zip`, source dans `extension-mym/`), dans le
+  Chrome où l'on est connecté à creators.mym.fans. Le jeton de renouvellement est gardé chiffré (`mym_links`).
+- Toujours passer par `mym(creatorId, chemin, { base: API | STYX })` : renouvellement automatique, erreurs lisibles.
+- Ne jamais contourner une protection de MYM (captcha, double authentification) : on agit seulement comme le site.

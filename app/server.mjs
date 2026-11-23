@@ -28,6 +28,7 @@ import { sensitiveRoutes } from './sensitive.mjs';
 import { aiScriptRoutes } from './aiscripts.mjs';
 import { mymAccountRoutes } from './mymaccounts.mjs';
 import { mymFanRoutes } from './mymfans.mjs';
+import { mymRoutes } from './mym.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -133,7 +134,7 @@ function userFrom(req) {
   // Plateforme choisie en haut du menu (cookie « bloom_pf » : OnlyFans par défaut). Voient toute l'agence : l'Accueil
   // (« pf=all » dans l'adresse) et les pages communes (IA, équipe, réglages).
   const pf = /(?:^|;\s*)bloom_pf=(of|mym)(?:;|$)/.exec(req.headers.cookie || '')?.[1] || 'of';
-  const common = /[?&]pf=all(&|$)/.test(req.url || '') || /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|staff|sysnotifs|ai-scripts|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
+  const common = /[?&]pf=all(&|$)/.test(req.url || '') || /^\/api\/(ai-config|ailog|chat-setup|relance|creators|team|staff|sysnotifs|ai-scripts|mym\/link|revenue\/map|integrations|status|discord|setup|state)(\/|\?|$)/.test(req.url || '');
   return { ...u, pf: common ? null : pf };
 }
 function login(res, userId) {
@@ -410,6 +411,7 @@ Object.assign(routes, sensitiveRoutes({ userFrom, send, body }));
 Object.assign(routes, aiScriptRoutes({ substy, userFrom, send, body }));
 Object.assign(routes, mymAccountRoutes({ substy, userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymFanRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });

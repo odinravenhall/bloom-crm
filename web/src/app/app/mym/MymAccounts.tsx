@@ -6,6 +6,7 @@ import { ArrowRight, BadgeCheck, CircleDollarSign, Info, MessageCircle, Plus, Se
 import { api, toast } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import { Avatar } from "@/components/ui";
+import { MymLinkChip, useMymLinks } from "./MymLink";
 
 // MYM → Compte Creator : copie de « Mes Comptes » de MyPulse (ventes MyPulse de chaque modèle MYM, équipe, accès).
 type Acc = {
@@ -43,6 +44,7 @@ const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" 
 
 export function MymAccounts() {
   const { setCreator } = useCreators();
+  const mymLinks = useMymLinks();
   const [days, setDays] = useState(90);
   const [mode, setMode] = useState<"net" | "gross">("net");
   const [d, setD] = useState<Data | null>(null);
@@ -131,6 +133,7 @@ export function MymAccounts() {
                 <p className="truncate text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>{a.name}</p>
                 <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--mp-muted)" }}>MYM{a.handle ? <span>@{a.handle}</span> : null}{a.error ? <span style={{ color: "var(--mp-down)" }}>chiffres indisponibles</span> : null}</p>
               </div>
+              <span className="ml-auto"><MymLinkChip state={mymLinks.links.find((l) => l.creatorId === a.id)} canEdit={mymLinks.canEdit} onChange={mymLinks.load} /></span>
             </div>
             <div className="mt-3 rounded-xl p-3.5" style={{ background: "var(--mp-card-2)" }}>
               <div className="flex items-start justify-between gap-3">
