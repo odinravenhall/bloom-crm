@@ -205,3 +205,18 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   Chrome où l'on est connecté à creators.mym.fans. Le jeton de renouvellement est gardé chiffré (`mym_links`).
 - Toujours passer par `mym(creatorId, chemin, { base: API | STYX })` : renouvellement automatique, erreurs lisibles.
 - Ne jamais contourner une protection de MYM (captcha, double authentification) : on agit seulement comme le site.
+
+## MYM → Médias : Planification, Feed, Liste d'amis — `app/mymmedia.mjs` (23/11/2026)
+
+- Pages `/app/mym/planification`, `/app/mym/feed`, `/app/mym/amis` (copies de MyPulse), seulement pour les comptes reliés.
+- Liste d'amis (styx, lu ET écrit en direct) : `GET /v1/creators/me/friends`, `POST { username }`,
+  `DELETE /v1/creators/me/friends/<pseudo>`, `PUT { usernames }` pour l'ordre. 12 amies au plus. Écriture : admins / managers.
+- Feed (site) : `/app/ajax/profile/feed?page=N` (HTML, 21 posts par page) puis `/app/api/posts/<id>` pour chaque post
+  (likes, vues, public / privé). Gardé dans `mym_feed`, relu avec « Actualiser » ou après 6 h. Vignettes = adresses signées
+  de MYM (1 h) : `/api/mym/feed/thumb` renvoie vers une adresse fraîche.
+- Planification : Bloom garde les lignes (`mym_plan`) et publie lui-même à l'heure (toutes les 20 s) avec
+  `POST /v1/posts { medias: [idCloud], caption, private, playlists: [], thirdPartyConsent: false }` (styx) ; média choisi
+  dans le mym.cloud (`GET /v1/cloud?perPage&status=ready&type=photo|video&offset=<base64 {"page","perPage"}>`).
+  ⚠️ Format de publication lu dans le code du site, pas encore vérifié sur un vrai post. Jamais de deuxième essai tout seul.
+- Pas encore fait : stories, « passer en privé après N h » (format d'édition d'un post à relever sur une vraie
+  modification), import Excel, suivi des listes d'amis.

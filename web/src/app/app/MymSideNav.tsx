@@ -30,7 +30,7 @@ const NAV: Entry[] = [
   },
   {
     key: "medias", label: "Médias", icon: Images, roles: CHAT,
-    children: [{ label: "Planification", href: soon("Planification") }, { label: "Feed", href: soon("Feed") }, { label: "Liste d'amis", href: soon("Liste d'amis") }, { label: "Studio", href: "/app/mym/studio" }, { label: "Importer des médias", href: "/app/mym/importer" }],
+    children: [{ label: "Planification", href: "/app/mym/planification" }, { label: "Feed", href: "/app/mym/feed" }, { label: "Liste d'amis", href: "/app/mym/amis" }, { label: "Studio", href: "/app/mym/studio" }, { label: "Importer des médias", href: "/app/mym/importer" }],
   },
   {
     key: "auto", label: "Automatisation", icon: Zap, roles: BOSS,
