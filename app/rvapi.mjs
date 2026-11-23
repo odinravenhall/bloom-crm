@@ -147,6 +147,8 @@ function libOf(cid, fanId) {
   return { scripts, sequences, progress };
 }
 
+db.exec('CREATE TABLE IF NOT EXISTS box_log (creator_id TEXT NOT NULL, at INTEGER NOT NULL, who TEXT, old_count INTEGER NOT NULL, new_count INTEGER NOT NULL)');
+
 export function rvRoutes({ substy, userFrom, send, body, creators }) {
   const me = (req, res) => {
     const u = userFrom(req);
@@ -202,7 +204,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const u = me(req, res);
       if (!u) return;
       const p = new URL(req.url, 'http://x').searchParams;
-      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply', handoff: 'manual' }[p.get('tab')] || 'reply';
+      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply', handoff: 'manual', noai: 'noai', ai: 'ai', unread: 'unread' }[p.get('tab')] || 'reply';
       const w = Number(p.get('window'));
       const hidden = hiddenOf(u);
       const model = p.get('model') || '';
@@ -247,7 +249,7 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         // « À reprendre » (fans sans IA qui attendent) par créatrice : pour l'Accueil.
         handoffCounts: manualPerCreator,
         allReply,
-        totals: { reply: counts.reply, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active, handoff: counts.manual },
+        totals: { reply: counts.reply, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active, handoff: counts.manual, ai: counts.ai, noai: counts.noai },
         boxes: bx,
         hidden,
       });
@@ -574,12 +576,21 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       for (const b of balanced(list, count).values()) (per[b].reply++, per[b].fans++);
       send(res, 200, { boxes: per });
     }],
+    ['GET', /^\/api\/rv\/models\/([^/]+)\/boxes\/log$/, async (req, res, mid) => {
+      const u = me(req, res);
+      if (!u) return;
+      if (!canSee(u, mid)) return send(res, 403, { error: 'Pas ta créatrice' });
+      send(res, 200, { log: all('SELECT at, who, old_count AS was, new_count AS now FROM box_log WHERE creator_id = ? ORDER BY at DESC LIMIT 30', mid) });
+    }],
     ['PUT', /^\/api\/rv\/models\/([^/]+)\/boxes$/, async (req, res, mid) => {
       const u = me(req, res);
       if (!u) return;
       if (!isBoss(u) || !canSee(u, mid)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
       const b = await body(req);
       const count = b.enabled ? Math.min(20, Math.max(2, Number(b.count) || 2)) : 0;
+      // Historique des changements (Chatting MYM → Paramètres du chat).
+      const before = one('SELECT count FROM creator_boxes WHERE creator_id = ?', mid)?.count || 0;
+      if (before !== count) run('INSERT INTO box_log (creator_id, at, who, old_count, new_count) VALUES (?, ?, ?, ?, ?)', mid, Date.now(), u.name, before, count);
       run('INSERT INTO creator_boxes (creator_id, count, names, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(creator_id) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at', mid, count, '[]', Date.now());
       send(res, 200, { ok: true });
     }],

@@ -39,7 +39,7 @@ const NAV: Entry[] = [
   { key: "ai", label: "IA Substy", icon: Bot, href: "/app/ia", roles: MANAGE },
   {
     key: "messages", label: "Messages", icon: MessageCircle, roles: CHAT,
-    children: [{ label: "Chatting", href: "/app/messagerie" }, { label: "Switchboard", href: soon("Switchboard") }, { label: "Mes ventes", href: soon("Mes ventes") }, { label: "Script", href: "/app/scripts" }, { label: "Bon de réduction", href: soon("Bon de réduction") }],
+    children: [{ label: "Chatting", href: "/app/mym/chatting" }, { label: "Switchboard", href: soon("Switchboard") }, { label: "Mes ventes", href: soon("Mes ventes") }, { label: "Script", href: "/app/scripts" }, { label: "Bon de réduction", href: soon("Bon de réduction") }],
   },
   {
     key: "mass", label: "Envois groupés", icon: Send, roles: CHAT,
