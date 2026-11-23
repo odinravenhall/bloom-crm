@@ -61,6 +61,7 @@ export function mymFansOf(cid) {
 export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
   // Relecture douce des fans MYM chez Substy.
   let busy = false;
+  let turn = 0;
   const mymIds = () => creators().filter((c) => /mym/i.test(c.platform || '')).map((c) => c.id);
   setInterval(async () => {
     if (busy) return;
@@ -69,7 +70,10 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       // D'abord un fan jamais relu (toutes créatrices MYM), sinon celui relu il y a le plus longtemps (plus de 12 h).
       let next = null;
       let oldest = null;
-      for (const cid of mymIds()) {
+      // Chacune son tour (une créatrice avec beaucoup de fans ne bloque pas les autres).
+      const ids = mymIds();
+      turn = (turn + 1) % Math.max(1, ids.length);
+      for (const cid of [...ids.slice(turn), ...ids.slice(0, turn)]) {
         const rows = new Map(all('SELECT fan_id, checked_at FROM mym_fans WHERE creator_id = ?', cid).map((r) => [r.fan_id, r.checked_at]));
         for (const c of inboxChats(cid).chats) {
           const at = rows.get(c.fanId);
