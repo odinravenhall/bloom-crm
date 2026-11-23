@@ -13,8 +13,8 @@ type Tab = "active" | "old" | "interested";
 type L = { id: string; name: string; color: string | null; icon: string | null; kind: "manual" | "auto"; count: number };
 type RG = { id: string; name: string; color: string | null; icon: string | null; kind: "manual" | "auto" };
 type Meta = { age: string | null; gender: string | null; source: string | null; notes: string | null } | null;
-type Row = { fanId: string; name: string; username: string | null; avatar: string | null; status: string | null; since: number | null; expires: number | null; canceled: boolean; gross: number; purchases: number; lists: RG[]; meta: Meta; lastAt: string | null };
-type Data = { tab: Tab; counts: Record<Tab, number>; progress: { checked: number; total: number }; lists: L[]; total: number; rows: Row[] };
+type Row = { fanId: string | null; mymId?: string; name: string; username: string | null; avatar: string | null; status: string | null; since: number | null; expires: number | null; canceled: boolean; gross: number; purchases: number; lists: RG[]; meta: Meta; lastAt: string | null };
+type Data = { source?: "mym"; tab: Tab; counts: Record<Tab, number>; progress: { checked: number; total: number }; lists: L[]; total: number; rows: Row[] };
 const TITLE: Record<Tab, string> = { active: "Abonnés Actifs", old: "Anciens Abonnés", interested: "Fans Intéressés" };
 const SOURCES = ["Instagram", "Twitter", "Snap", "Facebook", "Tiktok", "Telegram", "Autre"];
 const color = (g: { color: string | null }) => g.color || "#364574";
@@ -82,6 +82,7 @@ export function MymFans({ tab }: { tab: Tab }) {
             </label>
           )}
           <span className="flex-1" />
+          {d?.source === "mym" ? <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: "rgba(60,209,136,.15)", color: "var(--mp-up)" }}>En direct de MYM</span> : null}
           {d && d.progress.checked < d.progress.total ? <span className="text-[12px]" style={{ color: "var(--mp-muted)" }}>Bloom relit les fans chez Substy : {d.progress.checked} / {d.progress.total}</span> : null}
           <label className="flex items-center gap-2">Rechercher :
             <span className="flex h-8 w-48 items-center gap-1.5 rounded-md px-2" style={{ background: "var(--mp-card-2)" }}><Search className="size-3.5" style={{ color: "var(--mp-muted)" }} /><input value={q} onChange={(e) => setQ(e.target.value)} className="min-w-0 flex-1 bg-transparent outline-none" /></span>
@@ -91,7 +92,7 @@ export function MymFans({ tab }: { tab: Tab }) {
           <table className="w-full min-w-[760px] text-[13px]">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: "var(--mp-line)", color: "var(--mp-head)" }}>
-                {!interested ? <th className="w-10 px-3 py-3"><input type="checkbox" checked={!!d?.rows.length && d.rows.every((r) => picked.has(r.fanId))} onChange={(e) => setPicked(e.target.checked ? new Set(d?.rows.map((r) => r.fanId)) : new Set())} /></th> : null}
+                {!interested ? <th className="w-10 px-3 py-3"><input type="checkbox" checked={!!d?.rows.length && d.rows.every((r) => !r.fanId || picked.has(r.fanId))} onChange={(e) => setPicked(e.target.checked ? new Set(d?.rows.map((r) => r.fanId).filter((x): x is string => !!x)) : new Set())} /></th> : null}
                 <th className="px-3 py-3 font-semibold">{interested ? "Pseudo MYM" : "Pseudo"}</th>
                 {interested ? (
                   <>
@@ -110,8 +111,8 @@ export function MymFans({ tab }: { tab: Tab }) {
             </thead>
             <tbody>
               {(d?.rows ?? []).map((r) => (
-                <tr key={r.fanId} className="border-b" style={{ borderColor: "var(--mp-line)" }}>
-                  {!interested ? <td className="px-3"><input type="checkbox" checked={picked.has(r.fanId)} onChange={() => setPicked((s) => (s.has(r.fanId) ? (s.delete(r.fanId), new Set(s)) : new Set(s.add(r.fanId))))} /></td> : null}
+                <tr key={r.fanId ?? r.mymId} className="border-b" style={{ borderColor: "var(--mp-line)" }}>
+                  {!interested ? <td className="px-3">{r.fanId ? <input type="checkbox" checked={picked.has(r.fanId)} onChange={() => { const id = r.fanId!; setPicked((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s.add(id)))); }} /> : null}</td> : null}
                   <td className="px-3 py-2.5">
                     <span className="flex items-center gap-2.5">
                       <Avatar src={r.avatar} name={r.name} size="size-7" />
@@ -131,8 +132,12 @@ export function MymFans({ tab }: { tab: Tab }) {
                       </td>
                       <td className="px-3 text-[12px]" style={{ color: "var(--mp-muted)" }}>{tab === "old" ? date(r.expires) : date(r.since)}</td>
                       <td className="px-3 text-right whitespace-nowrap">
-                        <Link href={`/app/messagerie?c=${encodeURIComponent(`${creatorId}~${r.fanId}`)}`} className="mr-1 rounded px-2 py-1 text-[11px]" style={{ background: "rgba(41,156,219,.15)", color: "#299cdb" }}>Chat</Link>
-                        <button onClick={() => setEdit(r)} className="rounded px-2 py-1 text-[11px]" style={{ background: "rgba(58,109,240,.15)", color: "#6f8ff8" }}>Modifier</button>
+                        {r.fanId ? (
+                          <>
+                            <Link href={`/app/messagerie?c=${encodeURIComponent(`${creatorId}~${r.fanId}`)}`} className="mr-1 rounded px-2 py-1 text-[11px]" style={{ background: "rgba(41,156,219,.15)", color: "#299cdb" }}>Chat</Link>
+                            <button onClick={() => setEdit(r)} className="rounded px-2 py-1 text-[11px]" style={{ background: "rgba(58,109,240,.15)", color: "#6f8ff8" }}>Modifier</button>
+                          </>
+                        ) : <span className="text-[11px]" style={{ color: "var(--mp-muted)" }} title="Pas encore de conversation avec ce fan chez Substy">—</span>}
                       </td>
                     </>
                   )}

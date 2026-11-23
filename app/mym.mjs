@@ -160,6 +160,37 @@ export async function mymSite(cid, path) {
   return data;
 }
 
+// ---------------------------------------------------------------- abonnés / anciens / intéressés (site MYM)
+const followCache = new Map();
+/** Compteurs MYM (abonnés actifs, anciens, intéressés, bloqués), gardés 2 min. */
+export async function mymFollowerCounts(cid) {
+  const hit = followCache.get(cid);
+  if (hit && Date.now() - hit.at < 2 * 60_000) return hit.v;
+  const d = await mymSite(cid, '/app/ajax/followers/counts');
+  const v = { active: Number(d?.countActiveSubscriptions) || 0, old: Number(d?.countInactiveSubscriptions) || 0, interested: Number(d?.countInterestedFans) || 0, blocked: Number(d?.countBlockedFans) || 0 };
+  followCache.set(cid, { at: Date.now(), v });
+  return v;
+}
+const TAB_PATH = { active: 'active_subscriptions', old: 'inactive_subscriptions', interested: 'interested_fans' };
+const strip = (h) => String(h).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&#039;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+/** Une page de fans MYM d'un onglet (pseudo + identifiant MYM), dans l'ordre de MYM. */
+export async function mymFollowers(cid, tab, { offset = 0, limit = 50, search = '' } = {}) {
+  const q = new URLSearchParams({ offset: String(offset), limit: String(limit), search, sort: '' });
+  const d = await mymSite(cid, `/app/ajax/followers/${TAB_PATH[tab]}?${q}`);
+  const html = String(d?.html || '');
+  const rows = html
+    .split(/<div[^>]*class="user-card[^"]*"/)
+    .slice(1)
+    .map((chunk) => {
+      const id = /data-fan-id="(\d+)"/.exec(chunk)?.[1] || null;
+      const text = strip(chunk.replace(/<span[^>]*avatar__name[^>]*>[^<]*<\/span>/, ''));
+      const avatar = /<img[^>]+src="([^"]+)"/.exec(chunk)?.[1] || null;
+      return id ? { mymId: id, username: text.split(' ')[0] || text, avatar } : null;
+    })
+    .filter(Boolean);
+  return { total: Number(d?.total) || 0, more: !!d?.loadMore, rows };
+}
+
 export const isLinked = (cid) => !!one('SELECT 1 AS x FROM mym_links WHERE creator_id = ?', String(cid));
 
 /** Vérifie le compte (profil MYM créatrice) puis enregistre la liaison. */

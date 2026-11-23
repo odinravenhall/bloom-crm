@@ -5,6 +5,7 @@ import { all } from './store.mjs';
 import { canSee, onCreator, seesAll } from './team.mjs';
 import { PERMS } from './staff.mjs';
 import { tabOf } from './mymfans.mjs';
+import { isLinked, mymFollowerCounts } from './mym.mjs';
 
 const DAY = 864e5;
 const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t));
@@ -55,8 +56,14 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
         mine.map(async (c) => {
           const rev = await revenueOf(c.id, days, mode).catch((e) => ({ error: e.message, total: 0, delta: null, series: Array(days).fill(0), newSubs: 0, parts: {} }));
           const fans = all('SELECT status, gross FROM mym_fans WHERE creator_id = ? AND checked_at > 0', c.id);
-          const counts = { active: 0, old: 0, interested: 0 };
+          let counts = { active: 0, old: 0, interested: 0 };
           for (const f of fans) counts[tabOf(f.status)]++;
+          // Compte relié à MYM : les vrais compteurs de MYM.
+          let direct = false;
+          if (isLinked(c.id)) {
+            const m = await mymFollowerCounts(c.id).catch(() => null);
+            if (m) (counts = { active: m.active, old: m.old, interested: m.interested }), (direct = true);
+          }
           const team = users.filter((x) => seesAll(x) || x.all_creators || access.some((a) => a.user_id === x.id && a.creator_id === c.id));
           return {
             id: c.id,
@@ -72,7 +79,7 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
             source: rev.source || null,
             since: rev.since || null,
             sales: rev.sales ?? null,
-            fans: { ...counts, checked: fans.length, payers: fans.filter((f) => f.gross > 0).length },
+            fans: { ...counts, checked: fans.length, payers: fans.filter((f) => f.gross > 0).length, direct },
             team: { leads: team.filter((x) => ['admin', 'manager', 'lead'].includes(x.role)).length, chatters: team.filter((x) => x.role === 'chatter').length, total: team.length },
             online: onCreator(c.id).map((o) => ({ name: o.name, avatar: o.avatar })),
           };

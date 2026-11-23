@@ -11,6 +11,7 @@ import { all, db, one, run } from './store.mjs';
 import { img, inboxChats, money, plain } from './chat.mjs';
 import { canSee, isBoss, platformOfCreator } from './team.mjs';
 import { forgetFans, mymGroups } from './fanlists.mjs';
+import { isLinked, mymFollowerCounts, mymFollowers } from './mym.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_fans (
@@ -120,6 +121,37 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       const page = Math.max(1, Number(p.get('page')) || 1);
       const listIds = (p.get('lists') || '').split(',').filter(Boolean);
       const sort = p.get('sort') === 'name' ? 'name' : p.get('sort') === 'since' ? 'since' : 'gross';
+      // Compte relié à MYM : listes et compteurs lus directement chez MYM (filtre par groupe : données Bloom).
+      if (isLinked(cid) && !listIds.length) {
+        try {
+          const [counts, page_] = await Promise.all([mymFollowerCounts(cid), mymFollowers(cid, tab, { offset: (page - 1) * per, limit: per, search: q })]);
+          const norm = (x) => String(x || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const byName = new Map();
+          for (const f of mymFansOf(cid)) for (const n of new Set([norm(f.username), norm(f.name)])) if (n && !byName.has(n)) byName.set(n, f);
+          const groups = mymGroups(cid);
+          const meta = new Map(all('SELECT fan_id, age, gender, source, notes FROM mym_fan_meta WHERE creator_id = ?', cid).map((m) => [m.fan_id, m]));
+          const lists = groups.map((g) => ({ id: g.id, name: g.name, color: g.color, icon: g.icon, kind: g.kind, count: g.members.size }));
+          return send(res, 200, {
+            tab,
+            source: 'mym',
+            counts: { active: counts.active, old: counts.old, interested: counts.interested },
+            progress: { checked: 1, total: 1 },
+            lists,
+            total: page_.total,
+            rows: page_.rows.map((r) => {
+              const f = byName.get(norm(r.username));
+              return {
+                fanId: f?.fan_id || null, mymId: r.mymId, name: f?.name || r.username, username: r.username, avatar: r.avatar || f?.avatar || null, status: tab === 'active' ? 'active' : tab === 'old' ? 'expired' : null,
+                since: f?.subscribed_at || null, expires: f?.expires_at || null, canceled: !!f?.canceled, gross: f?.gross || 0, net: f?.net || 0, purchases: f?.purchases || 0, lastPurchase: f?.last_purchase || null,
+                lists: f ? groups.filter((g) => g.members.has(f.fan_id)).map((g) => ({ id: g.id, name: g.name, color: g.color, icon: g.icon, kind: g.kind })) : [],
+                meta: f ? meta.get(f.fan_id) || null : null, lastAt: f?.lastAt || null,
+              };
+            }),
+          });
+        } catch (e) {
+          console.warn('[mym-fans] lecture MYM :', e.message);
+        }
+      }
       const all_ = mymFansOf(cid);
       const checked = all_.filter((f) => f.status !== undefined);
       const counts = { active: 0, old: 0, interested: 0 };
