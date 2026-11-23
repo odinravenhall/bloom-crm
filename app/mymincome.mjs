@@ -5,6 +5,9 @@
 //    (commande « #… », pseudo du fan, lien « /app/chat/fan/<idFan>/init »).
 //  - Le fan y est désigné par son ancien numéro ; la messagerie (styx) utilise un autre identifiant. Bloom fait le lien
 //    par le pseudo (liste des conversations, sinon recherche chez MYM) et garde l'identifiant de la messagerie.
+//  - La liste contient aussi les virements à la créatrice (« Versement PU… », montant négatif) : gardés à 0 €, type
+//    « payout », pour ne pas fausser le chiffre d'affaires.
+//  - Autres titres vus : « Média privé », « Pourboires », « Media On Demand », « Médias push ».
 //  - Les montants sont NETS : ce que MYM crédite à la créatrice (pas ce que le fan a payé). Abonnement gratuit = 0 €.
 //  - Le site s'affiche en français ou en anglais selon le compte : les titres sont reconnus dans les deux langues.
 // Ces transactions vont dans `rv_live` (src = 'mym') : tout Bloom lit déjà cette table (Compte Creator, Mes ventes,
@@ -27,6 +30,7 @@ for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_li
   } catch {}
 }
 db.exec('CREATE INDEX IF NOT EXISTS rv_live_creator_at ON rv_live (creator_id, at)');
+run("UPDATE rv_live SET type = 'payout', gross = 0 WHERE src = 'mym' AND type = 'refund' AND (raw LIKE 'Versement%' OR raw LIKE 'Payout%' OR raw LIKE 'Virement%')");
 // 23/11/2026 : les premières ventes ont été attribuées avant la règle « IA déduite » : on les refait.
 if (!getSetting('mym_attr_fix2')) {
   run("UPDATE rv_live SET attr_at = NULL, origin = NULL, origin_by = NULL, message_id = NULL WHERE src = 'mym'");
@@ -48,6 +52,8 @@ export function moneyCents(s) {
 /** Titre de la transaction (français ou anglais) → type de Bloom. */
 function typeOf(title, amount) {
   const t = title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  // Virement des gains à la créatrice (« Versement PU… ») : ce n'est pas une vente.
+  if (/versement|payout|virement|withdraw/.test(t)) return 'payout';
   if (amount < 0 || /refund|rembours|chargeback|fraud/.test(t)) return 'refund';
   if (/subscri|abonnement|renew|renouvel/.test(t)) return 'sub';
   if (/tip|pourboire/.test(t)) return 'tip';
@@ -100,7 +106,7 @@ function save(cid, list) {
     const type = typeOf(t.title, t.amount);
     const r = run(
       `INSERT OR IGNORE INTO rv_live (id, creator_id, type, at, gross, currency, fan_id, fan_name, message_id, matched, first_seen, src, raw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 'mym', ?)`,
-      `mym:${t.id}`, cid, type, t.at, t.amount, t.currency, inboxFanByUsername(cid, t.fan) || t.fanId, t.fan, now, t.title.slice(0, 80),
+      `mym:${t.id}`, cid, type, t.at, type === 'payout' ? 0 : t.amount, t.currency, inboxFanByUsername(cid, t.fan) || t.fanId, t.fan, now, t.title.slice(0, 80),
     );
     if (r.changes) fresh++;
   }
