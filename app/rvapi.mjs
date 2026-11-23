@@ -380,7 +380,17 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       }
     }],
     ['POST', /^\/api\/rv\/conversations\/([^/]+)\/messages\/([^/]+)$/, async (req, res) => send(res, 400, { error: 'Les réactions ne passent pas par Substy pour l’instant.' })],
-    ['DELETE', /^\/api\/rv\/conversations\/([^/]+)\/messages\/([^/]+)$/, async (req, res) => send(res, 400, { error: 'Supprimer un message n’est pas encore possible via Substy.' })],
+    // Supprimer un de nos messages : « unsend » de Substy (le message disparaît aussi chez le fan).
+    ['DELETE', /^\/api\/rv\/conversations\/([^/]+)\/messages\/([^/]+)$/, async (req, res, id, mid) => {
+      const x = conv(req, res, decodeURIComponent(id));
+      if (!x) return;
+      try {
+        await substy.unsend(x.cid, x.fanId, decodeURIComponent(mid));
+        send(res, 200, { ok: true });
+      } catch (e) {
+        send(res, 502, { error: `Suppression refusée : ${e.message}` });
+      }
+    }],
     ['POST', /^\/api\/rv\/conversations\/([^/]+)\/watch$/, async (req, res) => send(res, 200, { ok: true })],
     ['POST', /^\/api\/rv\/conversations\/([^/]+)\/sequence$/, async (req, res, id) => {
       const x = conv(req, res, decodeURIComponent(id));

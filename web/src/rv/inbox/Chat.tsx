@@ -645,6 +645,7 @@ export function Chat({
             <div key={it.message.id} className="contents">
               {sep}
               <Bubble
+                mp={mp}
                 it={it}
                 sentBy={sentBy[it.message.id]}
                 replyBy={it.replyTo ? sentBy[it.replyTo.id] : undefined}
@@ -662,7 +663,7 @@ export function Chat({
                   }
                 }}
                 onDelete={async () => {
-                  if (!confirm("Supprimer ce message ? Il disparaîtra aussi chez le fan sur Reveal.")) return;
+                  if (!confirm(mp ? "Supprimer ce message ? Il disparaîtra aussi chez le fan." : "Supprimer ce message ? Il disparaîtra aussi chez le fan sur Reveal.")) return;
                   try {
                     await api("DELETE", `/api/conversations/${conv.id}/messages/${it.message.id}`);
                     toast("Message supprimé");
@@ -1023,17 +1024,18 @@ function PpvCard({ b, teasing }: { b: NonNullable<LiveMsg["bundleWithMedias"]>; 
 const CAN_REACT = false;
 const CAN_DELETE = false;
 
-function Bubble({ it, sentBy, replyBy, seen, onDelete, onReply, onReact }: { it: LiveMsg; sentBy?: string; replyBy?: string; seen: boolean; onDelete: () => void; onReply: () => void; onReact: (emoji: string) => void }) {
+function Bubble({ it, sentBy, replyBy, seen, onDelete, onReply, onReact, mp }: { it: LiveMsg; sentBy?: string; replyBy?: string; seen: boolean; onDelete: () => void; onReply: () => void; onReact: (emoji: string) => void; mp?: boolean }) {
   const m = it.message;
   const fan = !!it.authorMessage?.memberId;
   if (m.type === "information") return <p className="my-1 text-center text-xs text-muted">{m.content}</p>;
   const b = it.bundleWithMedias;
   const teasing = b?.teasingMedias?.length ? b.teasingMedias : b?.teasingMedia ? [b.teasingMedia] : [];
   const author = fan ? null : sentBy ? `${sentBy} · CRM` : it.authorMessage?.displayName;
+  const by = (it as LiveMsg & { by?: { kind: string; name: string } | null }).by ?? null;
   return (
     <div className={cn("group/msg pop flex max-w-[78%] flex-col", fan ? "self-start" : "self-end items-end")} title={new Date(m.createdAt).toLocaleString("fr-FR")}>
       <div className="flex items-center gap-1.5">
-        {!fan && !m.deletedAt ? <MsgActions mine={it.reactions?.find((r) => !r.memberId)?.emoji ?? null} onReply={onReply} onReact={onReact} side="left" /> : null}
+        {!mp && !fan && !m.deletedAt ? <MsgActions mine={it.reactions?.find((r) => !r.memberId)?.emoji ?? null} onReply={onReply} onReact={onReact} side="left" /> : null}
         {CAN_DELETE && !fan && !m.deletedAt ? (
           <button onClick={onDelete} title="Supprimer le message" className="grid size-7 shrink-0 place-items-center rounded-lg text-muted opacity-0 transition-opacity group-hover/msg:opacity-100 hover:bg-rose-500/15 hover:text-rose-300">
             <Trash2 className="size-3.5" />
@@ -1061,9 +1063,29 @@ function Bubble({ it, sentBy, replyBy, seen, onDelete, onReply, onReact }: { it:
         )}
         <MediaGrid list={it.medias ?? []} />
       </div>
-      {fan && !m.deletedAt ? <MsgActions mine={it.reactions?.find((r) => !r.memberId)?.emoji ?? null} onReply={onReply} onReact={onReact} side="right" /> : null}
+      {!mp && fan && !m.deletedAt ? <MsgActions mine={it.reactions?.find((r) => !r.memberId)?.emoji ?? null} onReply={onReply} onReact={onReact} side="right" /> : null}
       </div>
       {it.reactions?.length ? <Reactions list={it.reactions} fan={fan} /> : null}
+      {mp ? (
+        <span className="mt-1.5 mb-1 flex items-center gap-1.5 px-1 text-[11.5px] font-semibold text-[#878a99]">
+          {fan ? (
+            clock(m.createdAt)
+          ) : (
+            <>
+              {by && ["ai", "auto", "script"].includes(by.kind) ? <Bot className="size-3.5" /> : null}
+              {sentBy ?? (by?.kind === "ai" ? "Substy IA" : by?.kind === "auto" ? `${by.name} (message automatique)` : by?.name ?? "Créatrice")} — {clock(m.createdAt)}
+              {!m.deletedAt ? (
+                <>
+                  <button onClick={onDelete} title="Supprimer ce message (il disparaît aussi chez le fan)" className="text-[#f06548] hover:text-[#ff8a70]">
+                    <Trash2 className="size-3.5" />
+                  </button>
+                  {seen ? <span title="Vu par le fan" className="inline-flex text-[#0ab39c]"><CheckCheck className="size-4" /></span> : <span title="Envoyé, pas encore vu par le fan" className="inline-flex"><Check className="size-4" /></span>}
+                </>
+              ) : null}
+            </>
+          )}
+        </span>
+      ) : (
       <span className="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted">
         {clock(m.createdAt)}
         {author ? ` · ${author}` : ""}
@@ -1079,6 +1101,7 @@ function Bubble({ it, sentBy, replyBy, seen, onDelete, onReply, onReact }: { it:
           )
         ) : null}
       </span>
+      )}
     </div>
   );
 }
