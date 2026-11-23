@@ -13,6 +13,7 @@
 // La planification est gardée par Bloom (`mym_plan`) : Bloom publie à l'heure prévue. Jamais deux fois : la ligne passe
 // en « publishing » avant l'appel, et un échec n'est jamais retenté tout seul.
 // Pas encore fait : stories, « passer en privé après N h », import Excel, suivi des listes d'amis.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
 import { STYX, isLinked, mym, mymSite } from './mym.mjs';
@@ -31,6 +32,14 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS mym_plan_due ON mym_plan (status, at);
 `);
+
+// Vignettes gardées par Bloom : les adresses d'images de MYM sont signées et expirent au bout d'une heure, alors un
+// média choisi dans un script garde une petite copie de sa vignette (data/mymthumbs), servie par /api/mym/cloud/thumb.
+db.exec('CREATE TABLE IF NOT EXISTS mym_thumbs (id TEXT PRIMARY KEY, creator_id TEXT NOT NULL, mime TEXT NOT NULL, at INTEGER NOT NULL)');
+const THUMBS = `${process.env.DATA_DIR || '/data'}/mymthumbs`;
+mkdirSync(THUMBS, { recursive: true });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const cloudItem = (m) => ({ id: String(m.id), type: /video/i.test(m.type || '') ? 'video' : /audio/i.test(m.type || m.mime_type || '') ? 'audio' : 'photo', thumb: m.preview || m.url || null, full: m.url || null, duration: Number(m.duration) || null, usedPublic: !!m.used_in_public_post, usedPrivate: !!m.used_in_private_post });
 
 const FRIENDS_MAX = 12;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -298,6 +307,89 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
     },
 
     // ------------------------------------------------------------ mym.cloud (choix du média à publier)
+    // mym.cloud en direct (relevé le 23/11/2026) : mêmes identifiants de médias et de collections que le vault de
+    // Substy, donc un média choisi ici s'envoie tel quel depuis le chat.
+    //  - collections : GET /v1/cloud/collections?perPage=100 → { data: [{ id, name, items_count, images_count, videos_count }] }
+    //  - médias d'une collection : GET /v1/cloud/collections/<id>/items?perPage=30&cursor=<next_cursor> → { data, next_cursor }
+    //  - tous les médias : GET /v1/cloud?perPage&status=ready[&type=photo|video]&offset=<base64 {"page","perPage"}>
+    //  - vocaux : GET /v1/cloud/audios?perPage&cursor → { data: [{ id, display_name, duration_ms, playback_url }], next_cursor }
+    'GET /api/mym/cloud/collections': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const c = pick(u, res, q(req).get('creatorId'));
+      if (!c) return;
+      try {
+        const d = await mym(c.id, '/v1/cloud/collections?perPage=100', { base: STYX });
+        send(res, 200, { collections: (d?.data || d?.collections || []).map((x) => ({ id: String(x.id), name: x.name || '', total: Number(x.items_count ?? x.media_count) || 0, photos: Number(x.images_count) || 0, videos: Number(x.videos_count) || 0 })) });
+      } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    'GET /api/mym/cloud/medias': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const p = q(req);
+      const c = pick(u, res, p.get('creatorId'));
+      if (!c) return;
+      const type = ['photo', 'video', 'audio'].includes(p.get('type')) ? p.get('type') : '';
+      const col = String(p.get('collectionId') || '');
+      const cursor = String(p.get('cursor') || '');
+      try {
+        if (col) {
+          if (!UUID.test(col)) return send(res, 400, { error: 'Collection inconnue' });
+          const d = await mym(c.id, `/v1/cloud/collections/${col}/items?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
+          const items = (d?.data || []).map(cloudItem).filter((m) => !type || m.type === type);
+          return send(res, 200, { items, nextCursor: d?.next_cursor || null });
+        }
+        if (type === 'audio') {
+          const d = await mym(c.id, `/v1/cloud/audios?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
+          return send(res, 200, { items: (d?.data || []).map((a) => ({ id: String(a.id), type: 'audio', thumb: null, full: a.playback_url || null, duration: a.duration_ms ? Math.round(a.duration_ms / 1000) : null, name: a.display_name || '', usedPublic: false, usedPrivate: false })), nextCursor: d?.next_cursor || null });
+        }
+        const page = Math.max(1, Number(cursor) || 1);
+        const qs = new URLSearchParams({ perPage: '30', status: 'ready' });
+        if (type) qs.set('type', type);
+        if (page > 1) qs.set('offset', Buffer.from(JSON.stringify({ page, perPage: 30 })).toString('base64'));
+        const d = await mym(c.id, `/v1/cloud?${qs}`, { base: STYX });
+        send(res, 200, { items: (d?.data || []).map(cloudItem), nextCursor: page < (Number(d?.meta?.total_pages) || 1) ? String(page + 1) : null });
+      } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    /** Garde une copie des vignettes des médias choisis (adresses MYM signées, valables une heure seulement). */
+    'POST /api/mym/cloud/keep': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const c = pick(u, res, b.creatorId);
+      if (!c) return;
+      const out = {};
+      for (const m of (Array.isArray(b.medias) ? b.medias : []).slice(0, 10)) {
+        const id = String(m.id || '');
+        const url = String(m.thumb || '');
+        if (!UUID.test(id) || !/^https:\/\/[a-z0-9.-]+\.mym\.fans\//i.test(url)) continue;
+        try {
+          if (!existsSync(`${THUMBS}/${id}`)) {
+            const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+            const mime = r.headers.get('content-type') || '';
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (!r.ok || !/^image\//.test(mime) || buf.length > 6_000_000) continue;
+            writeFileSync(`${THUMBS}/${id}`, buf);
+            run('INSERT OR REPLACE INTO mym_thumbs (id, creator_id, mime, at) VALUES (?, ?, ?, ?)', id, c.id, mime.split(';')[0], Date.now());
+          }
+          out[id] = `/api/mym/cloud/thumb?id=${id}`;
+        } catch {}
+      }
+      send(res, 200, { thumbs: out });
+    },
+    'GET /api/mym/cloud/thumb': (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const id = String(q(req).get('id') || '');
+      const t = UUID.test(id) ? one('SELECT creator_id, mime FROM mym_thumbs WHERE id = ?', id) : null;
+      if (!t || !canSee({ ...u, pf: null }, t.creator_id) || !existsSync(`${THUMBS}/${id}`)) return send(res, 404, { error: 'Vignette inconnue' });
+      res.writeHead(200, { 'content-type': t.mime, 'cache-control': 'private, max-age=604800' });
+      res.end(readFileSync(`${THUMBS}/${id}`));
+    },
     'GET /api/mym/cloud': async (req, res) => {
       const u = who(req, res);
       if (!u) return;

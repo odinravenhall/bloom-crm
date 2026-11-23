@@ -389,7 +389,7 @@ function Studio({ creatorId, creatorName, group, canEdit, reload, onClose, onCre
 
 const MAX_MEDIAS = 5;
 type CloudFolder = { id: string; name: string; total: number };
-type CloudMedia = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; caption: string; lists: string[] };
+type CloudMedia = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; name?: string; usedPublic?: boolean; usedPrivate?: boolean };
 
 /** Choix des médias façon MyPulse : « MYM Cloud » (tout) ou une collection à gauche, la grille à droite. */
 function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; selected: Media[]; onChange: (m: Media[]) => void }) {
@@ -401,18 +401,19 @@ function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; sel
   const [busy, setBusy] = useState(false);
   const [fq, setFq] = useState("");
   const [q, setQ] = useState("");
+  const kept = useRef(new Map<string, string>());
   useEffect(() => {
-    api<{ lists: CloudFolder[] }>("GET", `/api/vaultpro/cats?creatorId=${encodeURIComponent(creatorId)}`).then((r) => setFolders(r.lists)).catch(() => {});
+    api<{ collections: CloudFolder[] }>("GET", `/api/mym/cloud/collections?creatorId=${encodeURIComponent(creatorId)}`).then((r) => setFolders(r.collections)).catch((e) => toast((e as Error).message, "err"));
   }, [creatorId]);
   const load = useCallback(
     async (more: string | null) => {
       setBusy(true);
       const p = new URLSearchParams({ creatorId });
-      if (folder) p.set("listId", folder);
-      if (type) p.set("type", type.toUpperCase());
+      if (folder) p.set("collectionId", folder);
+      if (type) p.set("type", type);
       if (more) p.set("cursor", more);
       try {
-        const r = await api<{ items: CloudMedia[]; nextCursor: string | null }>("GET", `/api/vaultpro/medias?${p}`);
+        const r = await api<{ items: CloudMedia[]; nextCursor: string | null }>("GET", `/api/mym/cloud/medias?${p}`);
         setItems((cur) => (more ? [...(cur ?? []), ...r.items] : r.items));
         setCursor(r.nextCursor);
       } catch (e) {
@@ -432,9 +433,22 @@ function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; sel
   const toggle = (m: CloudMedia) => {
     if (selected.some((x) => x.id === m.id)) return onChange(selected.filter((x) => x.id !== m.id));
     if (selected.length >= MAX_MEDIAS) return toast(`${MAX_MEDIAS} médias au plus par message`, "err");
-    onChange([...selected, { id: m.id, type: m.type, thumb: m.thumb, full: m.full, duration: m.duration }]);
+    const next = [...selected, { id: m.id, type: m.type, thumb: m.thumb, full: null, duration: m.duration }];
+    onChange(next);
+    // Les adresses d'images de MYM expirent : Bloom garde une copie de la vignette et la met à la place.
+    if (m.thumb)
+      api<{ thumbs: Record<string, string> }>("POST", "/api/mym/cloud/keep", { creatorId, medias: [{ id: m.id, thumb: m.thumb }] })
+        .then((r) => r.thumbs[m.id] && kept.current.set(m.id, r.thumbs[m.id]))
+        .catch(() => {});
   };
-  const shown = (items ?? []).filter((m) => !q || `${m.caption} ${m.lists.join(" ")} ${m.id}`.toLowerCase().includes(q.toLowerCase()));
+  // Dès qu'une copie est prête, la sélection pointe dessus.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (selected.some((x) => kept.current.has(x.id) && x.thumb !== kept.current.get(x.id))) onChange(selected.map((x) => (kept.current.has(x.id) ? { ...x, thumb: kept.current.get(x.id)! } : x)));
+    }, 600);
+    return () => clearInterval(t);
+  }, [selected, onChange]);
+  const shown = (items ?? []).filter((m) => !q || `${m.name ?? ""} ${m.id}`.toLowerCase().includes(q.toLowerCase()));
   const line = { borderColor: "#2a3020" };
   const fs = { background: "rgba(255,255,255,.04)", borderColor: "#2f3a24", color: "var(--mp-head)" };
   const row = (on: boolean) => (on ? { background: "rgba(199,255,74,.1)", boxShadow: "inset 3px 0 0 var(--mp-accent)", color: "var(--mp-head)" } : undefined);
@@ -453,7 +467,7 @@ function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; sel
         </div>
       </div>
       <div className="min-w-0 flex-1 p-2">
-        <label className="flex h-8 items-center gap-2 rounded-lg border px-2 text-[12px]" style={fs}><Search className="size-3.5" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un média (description, collection)…" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
+        <label className="flex h-8 items-center gap-2 rounded-lg border px-2 text-[12px]" style={fs}><Search className="size-3.5" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher dans les médias affichés…" className="min-w-0 flex-1 bg-transparent outline-none" /></label>
         <div className="mt-2 flex items-center gap-2">
           <b className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "var(--mp-head)" }}>{folder ? folders.find((f) => f.id === folder)?.name : "MYM Cloud"}</b>
           <span className="flex rounded-lg border p-0.5 text-[12px] font-semibold" style={line}>
@@ -464,8 +478,8 @@ function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; sel
           {shown.map((m) => {
             const on = selected.some((x) => x.id === m.id);
             return (
-              <button key={m.id} onClick={() => toggle(m)} className="relative aspect-square overflow-hidden rounded-lg" style={{ background: "rgba(255,255,255,.06)", outline: on ? "2px solid var(--mp-accent)" : undefined }} title={m.caption || m.lists.join(", ")}>
-                {m.thumb ? <img src={m.thumb} alt="" loading="lazy" className="size-full object-cover" /> : <span className="grid size-full place-items-center text-[11px]">{m.type}</span>}
+              <button key={m.id} onClick={() => toggle(m)} className="relative aspect-square overflow-hidden rounded-lg" style={{ background: "rgba(255,255,255,.06)", outline: on ? "2px solid var(--mp-accent)" : undefined }} title={m.usedPublic ? "Déjà utilisé dans un post public" : m.usedPrivate ? "Déjà utilisé dans un post privé" : m.name || ""}>
+                {m.thumb ? <img src={m.thumb} alt="" loading="lazy" className="size-full object-cover" /> : <span className="grid size-full place-items-center px-1 text-center text-[10.5px]">{m.type === "audio" ? `🎤 ${m.name || "vocal"}` : m.type}</span>}
                 {m.type === "video" ? <Play className="absolute inset-0 m-auto size-6 rounded-full bg-black/45 p-1 text-white" /> : null}
                 <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full border" style={on ? { ...LIME, borderColor: "var(--mp-accent)" } : { borderColor: "#fff9", background: "#0006" }}>{on ? <Check className="size-3" /> : null}</span>
                 {m.duration ? <span className="absolute right-1 bottom-1 rounded bg-black/70 px-1 text-[9.5px] font-semibold text-white">{`${String(Math.floor(m.duration / 60)).padStart(2, "0")}:${String(Math.round(m.duration % 60)).padStart(2, "0")}`}</span> : null}
