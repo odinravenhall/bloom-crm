@@ -59,6 +59,7 @@ export function Chat({
   onSent,
   onNext,
   actions,
+  mp,
 }: {
   conv: Conv;
   me: Me;
@@ -69,7 +70,10 @@ export function Chat({
   onSent: (o?: { inSequence?: boolean }) => void;
   onNext: () => void;
   actions: ChatActions;
+  /** Chatting MYM : en-tête et barre d'envoi façon MyPulse. */
+  mp?: boolean;
 }) {
+  const [emo, setEmo] = useState(false);
   const [msgs, setMsgs] = useState<LiveMsg[] | null>(null);
   const [older, setOlder] = useState<LiveMsg[]>([]);
   // Dernière lecture du fan (Reveal) : nos messages envoyés avant = « vu ».
@@ -530,6 +534,14 @@ export function Chat({
             <span className="hidden sm:inline"> dépensés</span>
           </p>
         </div>
+        {mp ? (
+          <>
+            {fanOnline ? <span className="hidden items-center gap-1 text-xs font-semibold text-emerald-300 sm:flex"><span className="size-2 rounded-full bg-emerald-400" /> En ligne</span> : null}
+            <button onClick={toggleAi} title={ai ? "L’IA Substy mène cette conversation : cliquer pour la couper et répondre à la main" : "IA Substy coupée sur ce fan : cliquer pour la rallumer"} className={cn("hidden h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold sm:flex", ai ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300" : "border-line text-muted")}>
+              <Bot className="size-3.5" /> {ai ? "IA pilote" : "IA coupée"}
+            </button>
+          </>
+        ) : null}
         {lockedBy ? (
           <Pill tone="info" className="hidden sm:inline-flex">
             <Lock className="size-3" /> {lockedBy} est dessus
@@ -626,6 +638,11 @@ export function Chat({
         ) : null}
       </div>
 
+      {mp && ai ? (
+        <p className="flex items-center gap-2 border-y border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs text-rose-200">
+          <Bot className="size-4 shrink-0" /> Substy s’occupe de cette conversation : si tu écris, coupe d’abord l’IA (bouton « IA pilote ») ou épingle le fan pour la reprendre.
+        </p>
+      ) : null}
       {/* Composeur */}
       <div className="border-t bg-panel-strong p-3 backdrop-blur md:px-6">
         {replyTo ? (
@@ -701,6 +718,75 @@ export function Chat({
           />
         ) : null}
         {/* Zone de saisie façon Infloww : bandeau haut (emojis + Scripts), grande zone d'écriture, bas (Vault + Envoyer). */}
+        {mp ? (
+          <div>
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="relative">
+                <button type="button" onClick={() => setEmo(!emo)} title="Emoji" className={cn("grid size-8 place-items-center rounded-full border border-line hover:text-fg", emo ? "text-fg" : "text-muted")}>
+                  <Smile className="size-4" />
+                </button>
+                {emo ? (
+                  <div className="absolute bottom-10 left-0 z-20 flex w-64 flex-wrap gap-0.5 rounded-xl border bg-card p-2 shadow-2xl">
+                    {quickEmojis.map((e, i) => (
+                      <button key={`${e}-${i}`} type="button" onClick={() => insertEmoji(e)} className="grid size-8 place-items-center rounded-md text-lg leading-none hover:bg-card-2">{e}</button>
+                    ))}
+                  </div>
+                ) : null}
+              </span>
+              {voice.enabled && mic.supported ? (
+                <button type="button" onClick={toggleMic} title={mic.listening ? "Arrêter la dictée" : "Audio et voix : dicter le message"} className={cn("grid size-8 place-items-center rounded-full border border-line", mic.listening ? "bg-rose-500/20 text-rose-300" : "text-muted hover:text-fg")}>
+                  {mic.listening ? <span className="pulse-dot size-2 rounded-full bg-rose-400" /> : <Mic className="size-4" />}
+                </button>
+              ) : null}
+              <button onClick={() => setPanel(panel === "vault" ? null : "vault")} title="Ajouter des médias (vault / PPV)" className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 font-semibold", panel === "vault" ? "text-fg" : "text-muted hover:text-fg")}>
+                <ImageIcon className="size-4" /> Médias
+              </button>
+              <span className="flex-1" />
+              <button onClick={() => setPanel(panel === "scripts" ? null : "scripts")} title="Scripts et séquences" className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-3 font-semibold", panel === "scripts" ? "text-fg" : "text-muted hover:text-fg")}>
+                <FileText className="size-4" /> Script
+                {lib ? <span className="rounded bg-card-2 px-1 text-[10px] opacity-70" title="Scripts déjà envoyés à ce fan">{lib.scripts.filter((x) => x.usedWithFan).length}/{lib.scripts.length}</span> : null}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <textarea
+                ref={ta}
+                data-chat-input
+                value={text}
+                onChange={(e) => onType(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    trySend();
+                  } else if (e.key === "Escape" && review) {
+                    e.preventDefault();
+                    setReview(false);
+                  }
+                }}
+                placeholder="Écrivez votre message…"
+                className="scroll-thin h-24 min-w-0 flex-1 resize-none rounded-md border border-input bg-card-2/70 px-3 py-2.5 text-sm outline-none placeholder:text-muted/60 focus:border-primary"
+              />
+              <div className="flex w-24 shrink-0 flex-col gap-1.5">
+                <button onClick={trySend} disabled={sending || (!text.trim() && !medias.length)} title="Envoyer (Entrée)" className="grid flex-1 place-items-center rounded-md bg-[#405189] text-xs font-bold tracking-wide text-white disabled:opacity-40">
+                  {sending ? <Loader2 className="size-4 animate-spin" /> : review ? "CONFIRMER" : dict ? "RELIRE" : "ENVOYER"}
+                </button>
+                <button
+                  type="button"
+                  title="Vider le message"
+                  onClick={() => {
+                    onType("");
+                    setMedias([]);
+                    setPrice("");
+                    setScriptId(null);
+                    clearDraft(draftKey);
+                  }}
+                  className="h-8 rounded-md border border-line text-[11px] font-semibold text-muted hover:text-fg"
+                >
+                  SUPPR.
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="flex min-h-40 flex-col overflow-hidden rounded-2xl border border-input bg-card-2/60 focus-within:border-primary">
           {/* Bandeau du haut : emojis à gauche (défilants), Scripts à droite */}
           <div className="flex items-center gap-1 border-b border-line/60 py-1 pr-1.5 pl-1">
@@ -758,6 +844,7 @@ export function Chat({
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {panel === "vault" ? <VaultPicker modelId={conv.modelId} memberId={conv.memberId} selected={medias} onClose={() => setPanel(null)} onPick={(m) => setMedias(m)} /> : null}

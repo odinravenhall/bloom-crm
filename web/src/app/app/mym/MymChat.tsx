@@ -211,6 +211,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
         {current ? (
           <Chat
             key={current.id}
+            mp
             conv={current}
             me={me}
             model={byId[current.modelId]}
