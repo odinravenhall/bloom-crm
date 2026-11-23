@@ -670,3 +670,15 @@ html[data-theme="light"] .pro {
   --pro-line: #e2e2e6; --pro-chip: #ececf0; --pro-on: #e9effe; --pro-fan: #f1f1f4; --pro-me: #e7ecf8; --pro-media: #e8f1f6; --pro-media-on: #d8ebf5;
 }
 .pro-sfw .pro-media img, .pro-sfw .pro-media image, .pro-sfw img.avatar-img { filter: blur(14px); }
+
+/* ---------------------------------------------------------------- Partie MYM (copie de MyPulse) : sombre / clair */
+:root {
+  --mp-page: #1a1d21; --mp-side: #212529; --mp-card: #212529; --mp-card-2: #2a2f34; --mp-line: #2f343a;
+  --mp-text: #ced4da; --mp-head: #f1f6e8; --mp-muted: #878a99; --mp-accent: #c7ff4a; --mp-on-accent: #12160c;
+  --mp-up: #3cd188; --mp-down: #f06548; --mp-purple: #8b5cf6;
+}
+html[data-theme="light"] {
+  --mp-page: #f3f4f6; --mp-side: #ffffff; --mp-card: #ffffff; --mp-card-2: #f3f5f7; --mp-line: #e5e7eb;
+  --mp-text: #495057; --mp-head: #212529; --mp-muted: #878a99; --mp-accent: #a3e635; --mp-on-accent: #12160c;
+}
+.mp-font { font-family: var(--font-poppins, Poppins), "Inter", system-ui, sans-serif; }

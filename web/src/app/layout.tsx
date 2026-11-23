@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Poppins } from "next/font/google";
 import "./globals.css";
 import { Backdrop } from "@/components/Backdrop";
 import { Toaster } from "@/components/Toaster";
@@ -8,6 +8,8 @@ import { bloomPerfBoot } from "@/lib/perf";
 
 // Police de Bloom : Geist, sobre et professionnelle. La variable garde son nom : tout le CSS la lit déjà.
 const jakarta = Geist({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta" });
+// Partie MYM : police de MyPulse.
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-poppins" });
 
 export const metadata: Metadata = {
   title: { default: "Bloom CRM", template: "%s · Bloom CRM" },
@@ -20,7 +22,7 @@ export const viewport: Viewport = { themeColor: "#09090b", width: "device-width"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={jakarta.variable} suppressHydrationWarning>
+    <html lang="fr" className={`${jakarta.variable} ${poppins.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans">
         {/* Thème choisi (clair / sombre / onyx) appliqué avant le premier affichage */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />

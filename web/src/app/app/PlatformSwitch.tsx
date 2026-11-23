@@ -64,8 +64,9 @@ export function PlatformSwitch({ compact }: { compact: boolean }) {
     setOpen(false);
     if (p === pf) return;
     setPf(p);
-    // Tout est rechargé pour la nouvelle plateforme (listes, chiffres, temps réel).
-    window.location.reload();
+    // Tout est rechargé pour la nouvelle plateforme (listes, chiffres, temps réel). MYM arrive sur « Compte Creator »
+    // (comme MyPulse), OnlyFans sur son Dashboard.
+    window.location.assign(p === "mym" ? "/app/mym" : "/app/of");
   };
   const OPTIONS: { p: Pf; sub: string }[] = [
     { p: "of", sub: t(count("of") > 1 ? "{n} creators" : "{n} creator", { n: count("of") }) },
