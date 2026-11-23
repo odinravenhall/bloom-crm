@@ -113,7 +113,7 @@ function tagNames(i, gname) {
 
 /** Bibliothèque de Bloom (tags + séquences) → format `Lib` de Raven, avec ce qui a déjà été envoyé au fan. */
 function libOf(cid, fanId) {
-  const groups = all('SELECT id, kind, name, position, updated_at FROM lib_groups WHERE creator_id = ? ORDER BY position, id', cid);
+  const groups = all('SELECT id, kind, name, position, updated_at FROM lib_groups WHERE creator_id = ? AND COALESCE(active, 1) = 1 ORDER BY position, id', cid);
   const items = all('SELECT i.* FROM lib_items i JOIN lib_groups g ON g.id = i.group_id WHERE g.creator_id = ? ORDER BY i.position, i.id', cid);
   const stats = new Map(
     all(

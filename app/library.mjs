@@ -27,6 +27,14 @@ for (const sql of ["ALTER TABLE lib_items ADD COLUMN tags TEXT NOT NULL DEFAULT 
   } catch {}
 }
 
+// Scripts MYM façon MyPulse (23/11/2026) : description pour l'équipe, script actif ou non dans le chat, et seuil
+// « utilisé » (part des messages envoyés au fan à partir de laquelle le script compte comme déroulé pour lui).
+for (const sql of ['ALTER TABLE lib_groups ADD COLUMN descr TEXT', 'ALTER TABLE lib_groups ADD COLUMN active INTEGER NOT NULL DEFAULT 1', 'ALTER TABLE lib_groups ADD COLUMN threshold INTEGER']) {
+  try {
+    db.exec(sql);
+  } catch {}
+}
+
 const KINDS = ['tag', 'sequence'];
 const CONDS = ['', 'bought', 'not_bought'];
 const tx = (fn) => {
@@ -61,7 +69,7 @@ export function libItemOf(creatorId, id) {
 
 /** Toute la bibliothèque d'une créatrice, avec les chiffres de chaque script ; avec `fanId`, ce qui a déjà été envoyé à ce fan. */
 function library(creatorId, fanId) {
-  const groups = all('SELECT id, kind, name, position FROM lib_groups WHERE creator_id = ? ORDER BY position, id', creatorId);
+  const groups = all('SELECT id, kind, name, position, descr, active, threshold, updated_at AS updatedAt FROM lib_groups WHERE creator_id = ? ORDER BY position, id', creatorId).map((g) => ({ ...g, active: g.active !== 0 }));
   const items = all(
     `SELECT i.* FROM lib_items i JOIN lib_groups g ON g.id = i.group_id WHERE g.creator_id = ? ORDER BY i.position, i.id`,
     creatorId,
@@ -154,16 +162,52 @@ export function libraryRoutes({ userFrom, send, body }) {
       const cid = g ? g.creator_id : String(b.creatorId || '');
       const u = editor(req, res, cid);
       if (!u) return;
-      const name = String(b.name || '').trim().slice(0, 80);
+      const name = String(b.name ?? g?.name ?? '').trim().slice(0, 80);
       if (!name) return send(res, 400, { error: 'Donne un nom' });
+      const descr = 'descr' in b ? String(b.descr || '').trim().slice(0, 1000) || null : g?.descr ?? null;
+      const active = 'active' in b ? (b.active ? 1 : 0) : g?.active ?? 1;
+      const th = Number(b.threshold);
+      const threshold = 'threshold' in b ? (th >= 1 && th <= 100 ? Math.round(th) : null) : g?.threshold ?? null;
       if (g) {
-        run('UPDATE lib_groups SET name = ?, updated_at = ? WHERE id = ?', name, Date.now(), g.id);
+        run('UPDATE lib_groups SET name = ?, descr = ?, active = ?, threshold = ?, updated_at = ? WHERE id = ?', name, descr, active, threshold, Date.now(), g.id);
         return send(res, 200, { id: g.id });
       }
       const kind = KINDS.includes(b.kind) ? b.kind : 'tag';
       const pos = (one('SELECT MAX(position) AS m FROM lib_groups WHERE creator_id = ? AND kind = ?', cid, kind)?.m ?? -1) + 1;
-      const r = run('INSERT INTO lib_groups (creator_id, kind, name, position, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', cid, kind, name, pos, u.id, Date.now(), Date.now());
+      const r = run('INSERT INTO lib_groups (creator_id, kind, name, position, created_by, created_at, updated_at, descr, active, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', cid, kind, name, pos, u.id, Date.now(), Date.now(), descr, active, threshold);
       send(res, 200, { id: Number(r.lastInsertRowid) });
+    },
+    // Import CSV façon MyPulse : une ligne par message (Script ; Message ; Média ; Prix ; Titre). Chaque nom de script
+    // devient un NOUVEAU script (séquence), rien n'est remplacé. Les médias de MyPulse ne sont pas ceux du vault de
+    // Bloom : ils ne suivent pas (le numéro est gardé en note pour les remettre à la main), et le prix non plus.
+    'POST /api/lib/import': async (req, res) => {
+      const b = await body(req);
+      const cid = String(b.creatorId || '');
+      const u = editor(req, res, cid);
+      if (!u) return;
+      const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 3000).map((r) => ({ script: String(r.script || '').trim().slice(0, 80), text: String(r.text || '').slice(0, 5000), media: String(r.media || '').trim().slice(0, 200), price: Number(r.price) || 0, title: String(r.title || '').trim().slice(0, 80) })).filter((r) => r.script && (r.text.trim() || r.media));
+      if (!rows.length) return send(res, 400, { error: 'Aucune ligne lisible dans ce fichier (colonnes attendues : Script ; Message ; Media ; Price ; Title).' });
+      const kind = b.kind === 'tag' ? 'tag' : 'sequence';
+      const out = tx(() => {
+        const made = new Map();
+        let items = 0;
+        let mediasDropped = 0;
+        for (const r of rows) {
+          let gid = made.get(r.script);
+          if (!gid) {
+            const pos = (one('SELECT MAX(position) AS m FROM lib_groups WHERE creator_id = ? AND kind = ?', cid, kind)?.m ?? -1) + 1;
+            gid = Number(run('INSERT INTO lib_groups (creator_id, kind, name, position, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', cid, kind, r.script, pos, u.id, Date.now(), Date.now()).lastInsertRowid);
+            made.set(r.script, gid);
+          }
+          const pos = (one('SELECT MAX(position) AS m FROM lib_items WHERE group_id = ?', gid)?.m ?? -1) + 1;
+          const note = r.media ? `Média à remettre (n° MyPulse ${r.media})${r.price ? ` · prix prévu ${r.price} €` : ''}` : null;
+          if (r.media) mediasDropped++;
+          run('INSERT INTO lib_items (group_id, position, name, text, note, price, medias, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)', gid, pos, r.title || String(pos + 1), r.text || '(média seul)', note, '[]', Date.now(), Date.now());
+          items++;
+        }
+        return { scripts: made.size, items, mediasDropped };
+      });
+      send(res, 200, out);
     },
     'POST /api/lib/group/delete': async (req, res) => {
       const b = await body(req);

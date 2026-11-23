@@ -6,6 +6,9 @@ import { api, toast } from "@/rv/lib/client";
 import { debounce, onLive } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
 import { money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
+import Link from "next/link";
+import { ArrowLeft, Check } from "lucide-react";
+import { Avatar } from "@/rv/components/ui";
 import { MpAvatar } from "@/rv/components/MpAvatar";
 import { Toaster } from "@/rv/components/Toaster";
 import { Chat } from "@/rv/inbox/Chat";
@@ -38,7 +41,12 @@ const keep = (k: string, v: unknown) => {
   } catch {}
 };
 
-export function MymChat() {
+// Switchboard : plusieurs créatrices dans une seule liste de conversations. Les configurations sont gardées sur
+// l'ordinateur de chaque personne (nom, créatrices — 12 au plus —, conversations montrées).
+type SbConfig = { id: number; name: string; creators: string[]; show: "all" | "ai" | "noai" | "handoff" };
+const SB_SHOW: [SbConfig["show"], string][] = [["all", "Toutes"], ["ai", "Gérées par Substy"], ["noai", "Sans Substy"], ["handoff", "À reprendre"]];
+
+export function MymChat({ switchboard = false }: { switchboard?: boolean }) {
   const [boot, setBoot] = useState<Boot | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -46,10 +54,17 @@ export function MymChat() {
   }, []);
   if (!boot) return <p className="mp-font p-8 text-[13px]" style={{ color: "var(--mp-muted)" }}>{err || "Chargement du chatting…"}</p>;
   if (!boot.models.length) return <p className="mp-font p-8 text-[13px]" style={{ color: "var(--mp-muted)" }}>Aucun compte MYM relié à Bloom : relie une modèle dans MYM → Compte Creator → « Ajouter un compte ».</p>;
-  return <Inner me={boot.me} models={boot.models} />;
+  return <Inner me={boot.me} models={boot.models} switchboard={switchboard} />;
 }
 
-function Inner({ me, models }: { me: Me; models: Model[] }) {
+function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboard: boolean }) {
+  const [configs, setConfigs] = useState<SbConfig[]>(() => (switchboard ? stored<SbConfig[]>("sbConfigs", []) : []));
+  const [cfgId, setCfgId] = useState<number | null>(() => (switchboard ? stored<number | null>("sbActive", null) : null));
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const cfg = switchboard ? configs.find((c) => c.id === cfgId) ?? null : null;
+  useEffect(() => {
+    if (switchboard) (keep("sbConfigs", configs), keep("sbActive", cfgId));
+  }, [switchboard, configs, cfgId]);
   const [model, setModel] = useState(() => {
     const m = stored("model", "");
     return models.some((x) => x.id === m) ? m : models.length === 1 ? models[0].id : "";
@@ -87,14 +102,14 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
   const load = useCallback(async () => {
     const s = ++seq.current;
     const p = new URLSearchParams({ tab, sort, window: tab === "reply" ? "72" : "0" });
-    if (model) p.set("model", model);
+    if (model && !cfg) p.set("model", model);
     if (q.trim()) p.set("q", q.trim());
     if (paying) p.set("paying", "1");
     try {
       const r = await api<QueueResp>("GET", "/api/inbox?" + p);
       if (s === seq.current) setData(r);
     } catch {}
-  }, [tab, sort, model, q, paying]);
+  }, [tab, sort, model, q, paying, cfg]);
   useEffect(() => {
     load();
     const later = debounce(load, 400);
@@ -105,7 +120,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
   }, [load]);
 
   // MyPulse ne montre que les comptes MYM : on écarte une conversation d'une autre plateforme si elle arrivait là.
-  const items = useMemo(() => ((data?.items ?? []) as Row[]).filter((c) => byId[c.modelId]), [data, byId]);
+  const items = useMemo(() => ((data?.items ?? []) as Row[]).filter((c) => byId[c.modelId] && (!cfg || cfg.creators.includes(c.modelId))), [data, byId, cfg]);
   const fromList = items.find((c) => c.id === currentId) ?? null;
   useEffect(() => {
     if (fromList) setHeld(fromList);
@@ -165,10 +180,49 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
   return (
     <div className="mp-font flex h-full min-h-0" style={{ background: "var(--mp-page)", color: "var(--mp-text)" }}>
       <Toaster />
+      {switchboard ? (
+        <div className="no-scrollbar hidden w-[78px] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r py-3 sm:flex" style={{ borderColor: "var(--mp-line)" }}>
+          <Link href="/app/mym/chatting" title="Retour au Chatting" className="grid size-9 place-items-center rounded-lg" style={{ background: "var(--mp-card-2)" }}><ArrowLeft className="size-4" /></Link>
+          <button onClick={() => setCfgOpen(true)} title="Configurations du Switchboard" className="grid size-9 place-items-center rounded-lg" style={{ background: cfg ? BLUE : "var(--mp-card-2)", color: cfg ? "#fff" : undefined }}><Settings className="size-4" /></button>
+          {models.filter((m) => !cfg || cfg.creators.includes(m.id)).map((m) => {
+            const on = !cfg && model === m.id;
+            const n = data?.counts?.[m.id] || 0;
+            return (
+              <button key={m.id} onClick={() => (setCfgId(null), setModel(m.id))} title={`${m.displayName}${n ? ` · ${n} à répondre` : ""}`} className="flex w-full flex-col items-center gap-1">
+                <span className="relative rounded-full p-0.5" style={{ outline: on ? "2px solid var(--mp-accent)" : undefined }}>
+                  <Avatar src={m.avatar} name={m.displayName} size="size-10" />
+                  {n ? <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full px-1 text-[9.5px] leading-4 font-bold text-white" style={{ background: "#f06548" }}>{n > 99 ? "99+" : n}</span> : null}
+                </span>
+                <span className="w-full truncate px-1 text-center text-[10px] font-semibold" style={{ color: on ? "var(--mp-head)" : "var(--mp-muted)" }}>{m.displayName}</span>
+              </button>
+            );
+          })}
+          <span className="mt-auto rounded-full px-2 py-0.5 text-[9px] font-bold text-white" style={{ background: BLUE }} title={cfg ? `Configuration « ${cfg.name} »` : "Switchboard classique : une créatrice à la fois"}>{cfg ? cfg.name.slice(0, 9).toUpperCase() : "CLASSIQUE"}</span>
+        </div>
+      ) : null}
+      {cfgOpen ? (
+        <SwitchboardConfigs
+          models={models}
+          configs={configs}
+          activeId={cfg?.id ?? null}
+          onClose={() => setCfgOpen(false)}
+          onUse={(id) => {
+            const c = configs.find((x) => x.id === id);
+            setCfgId(id);
+            if (c && c.show !== "all") setTab(c.show);
+            setCfgOpen(false);
+          }}
+          onSave={(c, use) => {
+            setConfigs((l) => [...l, c]);
+            if (use) (setCfgId(c.id), c.show !== "all" && setTab(c.show), setCfgOpen(false));
+          }}
+          onDelete={(id) => (setConfigs((l) => l.filter((x) => x.id !== id)), cfgId === id && setCfgId(null))}
+        />
+      ) : null}
       {/* Liste des conversations */}
       <section className={`flex min-h-0 w-full shrink-0 flex-col border-r md:w-[300px] ${current ? "hidden md:flex" : ""}`} style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
         <div className="space-y-2 p-2">
-          {models.length > 1 ? (
+          {models.length > 1 && !switchboard ? (
             <select value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-full rounded-md px-2 text-[12.5px] outline-none" style={{ background: "var(--mp-card-2)", color: "var(--mp-head)" }}>
               <option value="">Tous les comptes MYM</option>
               {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
@@ -238,7 +292,7 @@ function Inner({ me, models }: { me: Me; models: Model[] }) {
                     {c.handoff ? <span className="rounded px-1.5 py-0.5" style={{ background: "rgba(167,139,250,.2)", color: "#a78bfa" }}>À reprendre</span> : null}
                     {(c.groups ?? []).map((g) => <span key={g.name} className="max-w-[130px] truncate rounded px-1.5 py-0.5 uppercase" style={{ background: g.color ? `${g.color}33` : "rgba(64,81,137,.45)", color: g.color || "#8ea2e6" }} title={`Groupe : ${g.name}`}>{g.name}</span>)}
                     {c.box ? <span className="rounded px-1.5 py-0.5" style={{ background: "rgba(47,107,255,.2)", color: "#6ea0ff" }}>Inbox {c.box}</span> : null}
-                    {!model && models.length > 1 ? <span className="rounded px-1.5 py-0.5" style={{ background: "var(--mp-card-2)", color: "var(--mp-muted)" }}>{byId[c.modelId]?.displayName}</span> : null}
+                    {(cfg || !model) && models.length > 1 ? <span className="flex items-center gap-1 rounded py-0.5 pr-1.5 pl-0.5" style={{ background: "var(--mp-card-2)", color: "var(--mp-muted)" }}><Avatar src={byId[c.modelId]?.avatar} name={byId[c.modelId]?.displayName} size="size-3.5" />{byId[c.modelId]?.displayName}</span> : null}
                   </span>
                 </span>
               </button>
@@ -388,6 +442,67 @@ function ChatSettings({ model, models, info, admin, onClose, onChanged }: { mode
           ) : null}
         </>
       )}
+    </div>
+  );
+}
+
+/** « Configurations du Switchboard » : classique (une créatrice à la fois) ou une liste mélangée de plusieurs créatrices. */
+function SwitchboardConfigs({ models, configs, activeId, onClose, onUse, onSave, onDelete }: { models: Model[]; configs: SbConfig[]; activeId: number | null; onClose: () => void; onUse: (id: number | null) => void; onSave: (c: SbConfig, use: boolean) => void; onDelete: (id: number) => void }) {
+  const [name, setName] = useState("");
+  const [on, setOn] = useState<string[]>([]);
+  const [show, setShow] = useState<SbConfig["show"]>("all");
+  const save = (use: boolean) => {
+    if (!name.trim() || !on.length) return toast("Donne un nom et choisis au moins une créatrice", "err");
+    onSave({ id: Date.now(), name: name.trim().slice(0, 40), creators: on, show }, use);
+    setName("");
+    setOn([]);
+    setShow("all");
+  };
+  const row = "flex items-center gap-3 rounded-md border px-4 py-3";
+  return (
+    <div className="mp-font fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+      <div className="no-scrollbar max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-lg p-5 text-[13px]" style={{ background: "#262a2f", color: "var(--mp-text)" }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 className="flex items-center justify-between text-[17px] font-semibold" style={{ color: "var(--mp-head)" }}><span className="flex items-center gap-2"><Settings className="size-4" /> Configurations du Switchboard</span><button onClick={onClose}><X className="size-4" /></button></h3>
+        <p className="mt-4">Plusieurs créatrices dans une seule liste de conversations, mélangées de la plus récente à la plus ancienne, avec le nom de la créatrice. La dernière configuration choisie revient à l’ouverture du Switchboard.</p>
+        <div className="mt-4 space-y-2">
+          <div className={row} style={{ borderColor: "var(--mp-line)", boxShadow: activeId === null ? "inset 3px 0 0 #0ab39c" : undefined }}>
+            <span className="flex-1"><b className="block text-[14px]" style={{ color: "var(--mp-head)" }}>Switchboard classique</b>Une créatrice à la fois, sa liste à elle.</span>
+            {activeId === null ? <span className="rounded px-2 py-0.5 text-[11px] font-bold" style={{ background: "#0ab39c22", color: "#0ab39c" }}>Utilisée</span> : <button onClick={() => onUse(null)} className="h-8 rounded-md px-3 text-white" style={{ background: BLUE }}>Utiliser</button>}
+          </div>
+          {configs.map((c) => (
+            <div key={c.id} className={row} style={{ borderColor: "var(--mp-line)", boxShadow: activeId === c.id ? "inset 3px 0 0 #0ab39c" : undefined }}>
+              <span className="min-w-0 flex-1"><b className="block text-[14px]" style={{ color: "var(--mp-head)" }}>{c.name}</b><span className="block truncate">{c.creators.map((id) => models.find((m) => m.id === id)?.displayName).filter(Boolean).join(", ") || "créatrices retirées"} · {SB_SHOW.find(([k]) => k === c.show)?.[1]}</span></span>
+              {activeId === c.id ? <span className="rounded px-2 py-0.5 text-[11px] font-bold" style={{ background: "#0ab39c22", color: "#0ab39c" }}>Utilisée</span> : <button onClick={() => onUse(c.id)} className="h-8 rounded-md px-3 text-white" style={{ background: BLUE }}>Utiliser</button>}
+              <button onClick={() => confirm(`Supprimer la configuration « ${c.name} » ?`) && onDelete(c.id)} title="Supprimer" style={{ color: "var(--mp-down)" }}><X className="size-4" /></button>
+            </div>
+          ))}
+          {!configs.length ? <p className="px-1" style={{ color: "var(--mp-muted)" }}>Aucune configuration pour l’instant.</p> : null}
+        </div>
+        <div className="mt-4 rounded-md border p-4" style={{ borderColor: "var(--mp-line)" }}>
+          <b className="text-[14px]" style={{ color: "var(--mp-head)" }}>Nouvelle configuration</b>
+          <p className="mt-3 font-semibold" style={{ color: "var(--mp-head)" }}>Nom</p>
+          <input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex. Mes MYM du soir" className="mt-1.5 h-9 w-full rounded-md px-3 outline-none" style={{ background: "#2f343a", color: "var(--mp-head)" }} />
+          <p className="mt-3"><b style={{ color: "var(--mp-head)" }}>Créatrices</b> · 12 au plus.</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {models.map((m) => {
+              const sel = on.includes(m.id);
+              return (
+                <button key={m.id} onClick={() => setOn(sel ? on.filter((x) => x !== m.id) : on.length < 12 ? [...on, m.id] : on)} className="flex items-center gap-2 rounded-md border py-1.5 pr-3 pl-2 font-semibold" style={{ borderColor: sel ? "#0ab39c" : "var(--mp-line)", color: "var(--mp-head)" }}>
+                  <span className="grid size-4 place-items-center rounded border" style={{ borderColor: "#5b626b", background: sel ? "#0ab39c" : undefined }}>{sel ? <Check className="size-3 text-white" /> : null}</span>
+                  <Avatar src={m.avatar} name={m.displayName} size="size-6" />{m.displayName}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 font-semibold" style={{ color: "var(--mp-head)" }}>Conversations montrées</p>
+          <select value={show} onChange={(e) => setShow(e.target.value as SbConfig["show"])} className="mt-1.5 h-9 w-full rounded-md px-3 outline-none" style={{ background: "#2f343a", color: "var(--mp-head)" }}>{SB_SHOW.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button onClick={() => save(true)} className="flex h-9 items-center gap-1.5 rounded-md px-4 font-semibold text-white" style={{ background: BLUE }}><Check className="size-4" /> Enregistrer et utiliser</button>
+            <button onClick={() => save(false)} className="h-9 rounded-md px-4" style={{ background: "#2f343a" }}>Enregistrer</button>
+            <button onClick={onClose} className="h-9 px-3" style={{ color: "var(--mp-head)" }}>Annuler</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
