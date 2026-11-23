@@ -1077,9 +1077,12 @@ function Bubble({ it, sentBy, replyBy, seen, onDelete, onReply, onReact, mp }: {
               {sentBy ?? (by?.kind === "ai" ? "Substy IA" : by?.kind === "auto" ? `${by.name} (message automatique)` : by?.name ?? "Créatrice")} — {clock(m.createdAt)}
               {!m.deletedAt ? (
                 <>
-                  <button onClick={onDelete} title="Supprimer ce message (il disparaît aussi chez le fan)" className="text-[#f06548] hover:text-[#ff8a70]">
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  {/* MYM refuse de supprimer un message qui porte un média (PPV, média offert, push) : pas de poubelle dessus. */}
+                  {b || it.medias?.length || by?.name === "Push" ? null : (
+                    <button onClick={onDelete} title="Supprimer ce message (il disparaît aussi chez le fan)" className="text-[#f06548] hover:text-[#ff8a70]">
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
                   {seen ? <span title="Vu par le fan" className="inline-flex text-[#0ab39c]"><CheckCheck className="size-4" /></span> : <span title="Envoyé, pas encore vu par le fan" className="inline-flex"><Check className="size-4" /></span>}
                 </>
               ) : null}

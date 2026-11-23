@@ -10,7 +10,9 @@
 //      price: { amount (centimes), currency }, media: [{ id, type, thumbnail_url, url }] } }] }
 //  - compteurs : GET /v1/chats/status_counts → { unread, muted, blocked, pending_requests, to_deliver }
 // L'identifiant d'un fan est le même chez MYM et chez Substy : l'état de l'IA (Substy) se recolle sans table de passage.
-// Écriture (formats lus dans le code du site le 23/11/2026) :
+// Écriture (formats lus dans le code du site le 23/11/2026, VÉRIFIÉS le même jour sur un vrai fan : texte envoyé puis
+// supprimé, média payant à 5 € envoyé). MYM refuse de supprimer un message qui porte un média privé ou un push
+// (422 « A message containing a private media or a push cannot be deleted ») : un PPV envoyé ne se retire pas.
 //  - envoyer : POST /v1/chats/messages { receiver_id, content, type: "text" } ; avec des médias :
 //    { receiver_id, content, type: "private_media", price (en CENTIMES), attachments: [idsMédias], third_party_consent }
 //  - supprimer : DELETE /v1/chats/messages/<id>?for=everyone (ou « me » : seulement de notre côté)
