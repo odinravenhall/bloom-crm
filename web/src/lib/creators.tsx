@@ -40,6 +40,13 @@ export function CreatorsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => setPfState(getPf()), []);
   // Plateforme choisie en haut du menu : seulement ses créatrices, sauf sur les pages communes (IA, équipe…).
   const path = usePathname() || "";
+  // Une page MYM ouverte alors qu'on est côté OnlyFans (lien, autre onglet…) : on passe côté MYM, sinon elle serait vide.
+  useEffect(() => {
+    if (/^\/app\/mym(\/|$)/.test(path) && getPf() !== "mym") {
+      setPf("mym");
+      location.reload();
+    }
+  }, [path]);
   const creators = useMemo(() => (isCommonPage(path) ? allCreators : allCreators.filter((c) => platformOf(c) === pf)), [allCreators, pf, path]);
   const [creatorId, setId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
