@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, Ban, Bot, ChartArea, ChartColumn, ChevronDown, Clock, Contact, ContactRound,
+  Activity, Ban, Bot, ChartArea, ChartColumn, ChevronDown, Contact, ContactRound,
   Feather, Images, LayoutGrid, ListFilter, Menu, MessageCirclePlus, MessagesSquare, Route, ScrollText, SlidersHorizontal, SquareArrowOutUpRight,
   SquareUser, UserRound, Bell, ShieldCheck, type LucideIcon,
 } from "lucide-react";
@@ -24,7 +24,6 @@ type Entry = { key: string; label: string; icon: LucideIcon; href?: string; role
 const CHAT: Role[] = ["admin", "manager", "lead", "chatter"];
 const BOSS: Role[] = ["admin", "manager", "lead"];
 const MANAGE: Role[] = ["admin", "manager"];
-const soon = (label: string) => `/app/bientot?f=${encodeURIComponent(label)}`;
 
 // Menu OnlyFans : copie de la barre d'Infloww (mêmes entrées, même ordre). Les pages pas encore faites : « Bientôt ».
 const NAV: (Entry | "divider")[] = [
@@ -68,7 +67,6 @@ const NAV: (Entry | "divider")[] = [
     children: [
       { label: "Manage employees", icon: Contact, href: "/app/employees" },
       { label: "Role settings", icon: ShieldCheck, href: "/app/roles", roles: MANAGE },
-      { label: "Shift schedule", icon: Clock, href: soon("Shift schedule") },
     ],
   },
 ];
