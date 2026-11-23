@@ -178,16 +178,16 @@ export async function mymFollowers(cid, tab, { offset = 0, limit = 50, search = 
   const q = new URLSearchParams({ offset: String(offset), limit: String(limit), search, sort: '' });
   const d = await mymSite(cid, `/app/ajax/followers/${TAB_PATH[tab]}?${q}`);
   const html = String(d?.html || '');
-  const rows = html
-    .split(/<div[^>]*class="user-card[^"]*"[^>]*>/)
-    .slice(1)
-    .map((chunk) => {
-      const id = /data-fan-id="(\d+)"/.exec(chunk)?.[1] || null;
-      const text = strip(chunk.replace(/<span[^>]*avatar__name[^>]*>[^<]*<\/span>/, ''));
-      const avatar = /<img[^>]+src="([^"]+)"/.exec(chunk)?.[1] || null;
-      return id ? { mymId: id, username: text.split(' ')[0] || text, avatar } : null;
-    })
-    .filter(Boolean);
+  // Une carte = avatar (title = pseudo) … puis le lien « data-open-fan-profile-modal data-fan-id="…" » (relevé le 23/11/2026).
+  const segs = html.split(/data-open-fan-profile-modal/);
+  const rows = [];
+  for (let i = 0; i < segs.length - 1; i++) {
+    const id = /data-fan-id="(\d+)"/.exec(segs[i + 1])?.[1];
+    const titles = [...segs[i].matchAll(/title="([^"]*)"/g)].map((m) => strip(m[1]));
+    const username = titles[titles.length - 1] || null;
+    const avatar = [...segs[i].matchAll(/<img[^>]+src="([^"]+)"/g)].pop()?.[1] || null;
+    if (id && username) rows.push({ mymId: id, username, avatar });
+  }
   return { total: Number(d?.total) || 0, more: !!d?.loadMore, rows };
 }
 
