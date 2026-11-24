@@ -47,7 +47,28 @@ export function MymDirect() {
   const { creators, creatorId, setCreator } = useCreators();
   const [links, setLinks] = useState<LinkRow[] | null>(null);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState("messages");
+  const [tab, setTab] = useState("site");
+  // Le vrai site de MYM, relayé par Bloom sur son adresse dédiée (admins et managers).
+  const [site, setSite] = useState<{ url: string; host: string } | null>(null);
+  const [siteErr, setSiteErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const openSite = async () => {
+    if (!creatorId) return;
+    setBusy(true);
+    setSiteErr("");
+    setSite(null);
+    try {
+      const r = await api<{ url: string; host: string }>("POST", "/api/mym/site/ticket", { creatorId });
+      // L'adresse dédiée existe-t-elle ? (sinon le cadre resterait blanc sans explication)
+      const ok = await fetch(`https://${r.host}/__bloom/ping`, { mode: "no-cors", cache: "no-store" }).then(() => true).catch(() => false);
+      if (!ok) setSiteErr(`L’adresse ${r.host} ne répond pas encore : elle doit être créée chez l’hébergeur du nom de domaine et ajoutée sur le serveur.`);
+      else setSite(r);
+    } catch (e) {
+      setSiteErr((e as Error).message);
+    }
+    setBusy(false);
+  };
+  useEffect(() => setSite(null), [creatorId]);
   useEffect(() => {
     api<{ links: LinkRow[] }>("GET", "/api/mym/links").then((r) => setLinks(r.links)).catch((e) => setErr((e as Error).message));
   }, []);
@@ -57,7 +78,7 @@ export function MymDirect() {
     <div className="mp-font flex min-h-full" style={{ background: "var(--mp-page)", color: "var(--mp-text)" }}>
       {/* La barre du site MYM : Messages, Studio, Revenus, Profil, Notifs, Réglages. */}
       <div className="flex w-[76px] shrink-0 flex-col items-center gap-1 py-4" style={{ background: "#111", borderRight: "1px solid var(--mp-line)" }}>
-        {[...SECTIONS.map((s) => [s.key, s.title, s.icon] as const), ["settings", "Réglages", <Settings key="s" className="size-5" />] as const].map(([k, t, icon]) => <button key={k} onClick={() => setTab(k)} className="flex w-full flex-col items-center gap-1.5 py-3 text-[11px]" style={tab === k ? { background: "#222", color: "#fff" } : { color: "#c9cdd6" }}>{icon}{t}</button>)}
+        {[["site", "Site MYM", <ExternalLink key="x" className="size-5" />] as const, ...SECTIONS.map((s) => [s.key, s.title, s.icon] as const), ["settings", "Réglages", <Settings key="s" className="size-5" />] as const].map(([k, t, icon]) => <button key={k} onClick={() => setTab(k)} className="flex w-full flex-col items-center gap-1.5 py-3 text-[11px]" style={tab === k ? { background: "#222", color: "#fff" } : { color: "#c9cdd6" }}>{icon}{t}</button>)}
       </div>
       <div className="min-w-0 flex-1 p-4 md:p-6">
         <div className="flex flex-wrap items-center gap-3">
@@ -71,7 +92,23 @@ export function MymDirect() {
           </p>
         ) : null}
 
-        {sec ? (
+        {tab === "site" ? (
+          <div className="mt-4">
+            {site ? (
+              <>
+                <p className="mb-2 flex flex-wrap items-center gap-3 text-[12.5px]"><span>Le site de MYM, avec la session du compte relié. Tout ce que tu y fais est fait sur le compte de la modèle.</span><span className="flex-1" /><button onClick={openSite} className="rounded border px-3 py-1" style={{ borderColor: "var(--mp-line)", color: "var(--mp-head)" }}>Recharger</button></p>
+                <iframe key={site.url} src={site.url} title="Site MYM" className="w-full rounded-xl" style={{ height: "calc(100vh - 230px)", minHeight: 520, border: "1px solid var(--mp-line)", background: "#fff" }} />
+              </>
+            ) : (
+              <div className="max-w-3xl rounded-2xl p-5" style={tk.card}>
+                <p className="text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>Le site de MYM dans Bloom</p>
+                <p className="mt-2 text-[13px] leading-relaxed">Ouvre creators.mym.fans ici, déjà connecté au compte relié, sans mot de passe. Réservé aux admins et managers. Chaque ouverture est notée dans Activité. Se déconnecter du site y est bloqué (cela couperait la liaison avec Bloom).</p>
+                <button onClick={openSite} disabled={busy || !l?.linked} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[13.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#4a57a8" }}><ExternalLink className="size-4" /> {busy ? "Ouverture…" : "Ouvrir le site MYM"}</button>
+                {siteErr ? <p className="mt-3 text-[13px]" style={{ color: "var(--mp-down)" }}>{siteErr}</p> : null}
+              </div>
+            )}
+          </div>
+        ) : sec ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {sec.items.map((it) => (
               <Link key={it.label} href={creatorId ? `${it.href}?c=${encodeURIComponent(creatorId)}` : it.href} className="rounded-2xl p-5 transition hover:brightness-125" style={tk.card}>

@@ -39,6 +39,7 @@ import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
 import { mymTeamRoutes } from './mymteam.mjs';
 import { mymModRoutes, startMymMod } from './mymmod.mjs';
 import { journalRequest } from './journal.mjs';
+import { mymSiteProxy, mymSiteRoutes } from './mymsite.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -439,6 +440,7 @@ Object.assign(routes, mymStatsRoutes({ userFrom, send, creators: () => state.cre
 Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymModRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, mymSiteRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
@@ -453,6 +455,8 @@ const rv = rvRoutes({ substy, userFrom, send, body, creators: () => state.creato
 
 Object.assign(createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
+  // Adresse dédiée « Accès MYM (Direct) » : le site de MYM relayé (mymsite.mjs).
+  if (path === '/mymsite' || path.startsWith('/mymsite/')) return mymSiteProxy(req, res).catch(() => res.headersSent || res.end());
   const h = routes[`${req.method} ${path}`];
   try {
     if (h) await h(req, res);

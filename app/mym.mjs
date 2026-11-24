@@ -165,6 +165,18 @@ export async function mymSite(cid, path) {
  * texte, l'adresse de redirection et les cookies posés par MYM (à renvoyer avec le formulaire : le jeton du formulaire
  * est lié à la session de la page). `form` (URLSearchParams) = envoi du formulaire en POST. Jamais de redirection suivie.
  */
+/** Les cookies de session du compte relié, tels que le site creators.mym.fans les attend (pour mymsite.mjs). */
+export async function mymSiteCookie(cid) {
+  await accessOf(cid);
+  const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);
+  const access = open(l.access);
+  const idTok = l.id_token ? open(l.id_token) : null;
+  const claims = JSON.parse(Buffer.from(access.split('.')[1], 'base64url').toString('utf8'));
+  const user = encodeURIComponent(claims.username || claims.sub);
+  const pre = `CognitoIdentityServiceProvider.${l.client_id}`;
+  return [`${pre}.LastAuthUser=${user}`, `${pre}.${user}.accessToken=${access}`, ...(idTok ? [`${pre}.${user}.idToken=${idTok}`] : []), 'amplify-signin-with-hostedUI=false'].join('; ');
+}
+
 export async function mymSiteRaw(cid, path, { form, json, method, cookies = '', xhr = false } = {}) {
   await accessOf(cid);
   const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);

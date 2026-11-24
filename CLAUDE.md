@@ -293,8 +293,18 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   personne (`mym_notifs_seen:<id>`). On ne lit PAS la page de notifications de MYM (l'ouvrir les marquerait comme lues).
 - `/app/mym/acces` : « Accès & équipe » façon MyPulse sur les routes `staff` existantes (rôle + créateurs, renommer,
   retirer des créateurs, inviter par pseudo Discord, fiche `GET /api/mym/team/person`). Les droits restent par RÔLE.
-- Pas encore fait : droits cochés personne par personne, Accès MYM direct (session MYM ouverte depuis Bloom), temps
-  connecté / sessions / snapshots des shifts.
+- Pas encore fait : droits cochés personne par personne, temps connecté / sessions / snapshots des shifts.
+
+## MYM → Accès MYM (Direct) : le site de MYM dans Bloom (24/11/2026) — `app/mymsite.mjs`, page `/app/mym/direct`
+
+- Demandé par l'agence, comme MyPulse, pour les admins et managers seulement. Une adresse dédiée (`MYM_SITE_HOST`,
+  par défaut `mym.ravencrm.xyz`) : Next y renvoie tout vers `/mymsite/…` de l'API (`next.config.mjs`, règle par
+  adresse), qui refait chaque requête chez creators.mym.fans avec la session du compte relié (ajoutée côté serveur).
+- Ouverture par ticket à usage unique (`POST /api/mym/site/ticket` → `/__bloom/open?t=`), session de 4 h propre à cette
+  adresse, affichage seulement dans un cadre de Bloom, déconnexion et suppression de compte refusées, journal.
+- À faire HORS dépôt pour que ça marche : l'enregistrement DNS de l'adresse (Cloudflare) et son entrée dans le Caddy
+  du VPS, vers `bloom-web:3000` comme bloom.ravencrm.xyz. `GET /api/mym/site/probe` vérifie le relais sans l'adresse.
+- ⚠️ Les pages de MYM contiennent le jeton de la modèle : qui ouvre cette page peut agir sur le compte hors de Bloom.
 
 ## MYM → Pilotage d'équipe : Modération, Activité, En direct (24/11/2026) — `app/mymmod.mjs`, `app/journal.mjs`
 
