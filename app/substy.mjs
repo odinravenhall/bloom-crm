@@ -245,7 +245,11 @@ export class SubstySession {
    * ensuite dans le navigateur de la personne, connectée à Substy (page …/browser/sessions/<jeton>/access de Substy).
    */
   browserSession(creatorId) { return this.call('agency.browser.getOrCreateSession', { creatorId, label: 'Bloom CRM' }); }
-  /** Supprimer (« unsend ») un message envoyé au fan. Format relevé sur le site de Substy (22/11/2026), sans rien supprimer. */
+  /**
+   * Supprimer (« unsend ») un message envoyé au fan. `messageId` = l'identifiant OnlyFans du message (un nombre), pas
+   * l'identifiant provisoire (uuid) que Substy donne juste après l'envoi : avec celui-là, Substy répond « Internal server
+   * error ». Possible seulement tant que `cancelSeconds` du message n'est pas à 0 (24 h sur OnlyFans).
+   */
   /** Marquer la conversation lue chez Substy (procédure vue dans le code du site). */
   markRead(creatorId, fanId, messageId) { return this.call('messages.markRead', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }
   unsend(creatorId, fanId, messageId) { return this.call('messages.unsend', { creatorId, fanId: String(fanId), messageId: String(messageId) }); }

@@ -461,7 +461,30 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       if (!x) return;
       try {
         if (mymDirect(x.cid)) await mymDelete(x.cid, decodeURIComponent(mid));
-        else await substy.unsend(x.cid, x.fanId, decodeURIComponent(mid));
+        else {
+          // OnlyFans (par Substy), relevé le 24/11/2026 : un message qui vient de partir porte d'abord un identifiant
+          // provisoire de Substy (uuid) ; la suppression ne marche qu'avec l'identifiant d'OnlyFans (un nombre), qui
+          // arrive quelques secondes plus tard. Et OnlyFans ne laisse supprimer que pendant 24 h (`cancelSeconds`).
+          const want = decodeURIComponent(mid);
+          const numeric = (id) => /^\d+$/.test(String(id));
+          let target = null;
+          let ref = null;
+          for (let i = 0; i < 4 && !target; i++) {
+            if (i) await new Promise((r) => setTimeout(r, 2500));
+            const items = (await substy.messages(x.cid, x.fanId, { limit: 30 }))?.items || [];
+            ref = items.find((m) => String(m.id) === want) || ref;
+            if (ref && numeric(ref.id)) target = ref;
+            else if (ref) {
+              const at = Date.parse(ref.createdAt) || 0;
+              target = items.find((m) => m.isSentByCreator && numeric(m.id) && plain(m.text) === plain(ref.text) && Math.abs((Date.parse(m.createdAt) || 0) - at) < 120_000) || null;
+            } else if (numeric(want)) target = { id: want };
+            else break;
+          }
+          if (!target) return send(res, 409, { error: ref ? 'Ce message vient de partir : OnlyFans ne l’a pas encore enregistré. Réessaie dans quelques secondes.' : 'Message introuvable chez Substy (trop ancien ?).' });
+          if (target.reverted) return send(res, 200, { ok: true });
+          if (target.cancelSeconds === 0) return send(res, 409, { error: 'OnlyFans ne permet plus de supprimer ce message (délai de 24 h dépassé).' });
+          await substy.unsend(x.cid, x.fanId, String(target.id));
+        }
         send(res, 200, { ok: true });
       } catch (e) {
         send(res, 502, { error: `Suppression refusée : ${e.message}` });
