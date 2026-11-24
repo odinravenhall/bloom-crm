@@ -340,3 +340,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   MYM (`mymDelete`, textes seulement, 100 par appel, définitif). ⚠️ Jamais essayé sur un vrai message.
 - En direct : présence de `team.mjs` (`liveView`), appareil d'après le navigateur ; pays seulement si l'hébergeur envoie
   l'en-tête `cf-ipcountry` ; pas de ville.
+
+## Automatisation → Nudge IA (25/11/2026) — `app/nudges.mjs`, page `/app/mym/nudges`
+
+- Les automatisations de SUBSTY pilotées depuis Bloom, OnlyFans et MYM : liste (`creators.automations.getByCreator`),
+  activer / couper (`toggle`), copier vers une autre modèle (`duplicateToCreator`), dupliquer, supprimer. Admins et
+  managers. Un nudge IA = déclencheur « le fan passe en ligne », délai aléatoire, message `aiGenerated`.
+- Bloom ne CRÉE pas et ne MODIFIE pas le contenu d'un nudge : la forme de `data` de `create` / `update` n'est pas connue
+  avec certitude. On part d'un nudge fait une fois dans Substy et on le copie. ⚠️ `toggle`, copie et suppression : lus
+  dans le code du site, jamais déclenchés par Bloom avant qu'un admin clique.

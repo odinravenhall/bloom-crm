@@ -34,7 +34,7 @@ const NAV: Entry[] = [
   },
   {
     key: "auto", label: "Automatisation", icon: Zap, roles: BOSS,
-    children: [{ label: "Tour de contrôle", href: soon("Tour de contrôle") }, { label: "Auto-Post", href: soon("Auto-Post") }, { label: "Auto-Story", href: soon("Auto-Story") }, { label: "Nudge IA", href: soon("Nudge IA") }, { label: "Auto-DM", href: soon("Auto-DM") }],
+    children: [{ label: "Tour de contrôle", href: soon("Tour de contrôle") }, { label: "Auto-Post", href: soon("Auto-Post") }, { label: "Auto-Story", href: soon("Auto-Story") }, { label: "Nudge IA", href: "/app/mym/nudges" }, { label: "Auto-DM", href: soon("Auto-DM") }],
   },
   { key: "ai", label: "IA Substy", icon: Bot, href: "/app/ia", roles: MANAGE },
   {

@@ -40,6 +40,7 @@ import { mymTeamRoutes } from './mymteam.mjs';
 import { mymModRoutes, startMymMod } from './mymmod.mjs';
 import { journalRequest } from './journal.mjs';
 import { mymSiteProxy, mymSiteRoutes } from './mymsite.mjs';
+import { nudgeRoutes } from './nudges.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, setExtraGuilds, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -453,6 +454,7 @@ Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => sta
 Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymModRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymSiteRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, nudgeRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
