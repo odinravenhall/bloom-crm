@@ -474,13 +474,16 @@ export function mymRoutes({ userFrom, send, body, creators, onLinked }) {
       if (!u || u.role !== 'admin') return send(res, 403, { error: 'Admins seulement' });
       const p = new URL(req.url, 'http://x').searchParams;
       const cid = String(p.get('creatorId') || '');
-      const ALLOWED = { counts: '/app/ajax/followers/counts', active: '/app/ajax/followers/active_subscriptions?offset=0&limit=5&search=&sort=', calendar: '/v1/posts/calendar', me: '/creators/me' };
+      const ALLOWED = { counts: '/app/ajax/followers/counts', active: '/app/ajax/followers/active_subscriptions?offset=0&limit=5&search=&sort=', calendar: '/v1/posts/calendar', me: '/creators/me', cloud: '/v1/cloud?perPage=2&status=ready&type=photo', posts: '/v1/posts?perPage=2' };
       const what = String(p.get('what') || 'counts');
       if (!ALLOWED[what]) return send(res, 400, { error: 'Adresse non autorisée' });
       const shape = (o) => (o && typeof o === 'object' ? (Array.isArray(o) ? `array:${o.length}` : Object.keys(o).slice(0, 20)) : typeof o === 'string' ? `text:${o.length}` : typeof o);
       try {
-        const d = what === 'calendar' ? await mym(cid, ALLOWED[what], { base: STYX }) : what === 'me' ? await mym(cid, ALLOWED[what]) : await mymSite(cid, ALLOWED[what]);
-        send(res, 200, { ok: true, shape: shape(d), total: d?.total ?? d?.countActiveSubscriptions ?? null });
+        const d = ['calendar', 'cloud', 'posts'].includes(what) ? await mym(cid, ALLOWED[what], { base: STYX }) : what === 'me' ? await mym(cid, ALLOWED[what]) : await mymSite(cid, ALLOWED[what]);
+        // Premier élément d'une liste : ses champs, et la valeur de ceux qui ressemblent à un identifiant (jamais d'adresse).
+        const first = Array.isArray(d?.data) ? d.data[0] : null;
+        const ids = first ? Object.fromEntries(Object.entries(first).filter(([k, v]) => /id$|^id|key|number|ref/i.test(k) && (typeof v === 'string' || typeof v === 'number') && !/^https?:/.test(String(v))).map(([k, v]) => [k, String(v).slice(0, 60)])) : null;
+        send(res, 200, { ok: true, shape: shape(d), first: first ? Object.keys(first) : null, ids, total: d?.total ?? d?.countActiveSubscriptions ?? null });
       } catch (e) {
         send(res, 200, { ok: false, status: e.status || null, error: e.message });
       }
