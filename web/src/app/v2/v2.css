@@ -1,0 +1,110 @@
+/* Bloom v2 — le nouveau design unique (OnlyFans + MYM), construit à part sur /v2 (25/11/2026).
+   Palette bleue : nuit profonde, surfaces bleu ardoise, accent bleu vif → bleu clair.
+   Tout est rangé sous « .v2 » : la version actuelle (/app, /pro) n'est pas touchée.
+   Les anciens écrans affichés dans ce cadre reprennent la palette par leurs variables (--color-*, --mp-*, --of-*). */
+.v2 {
+  --color-bg: #060a14;
+  --color-card: #0c1322;
+  --color-card-2: #121b30;
+  --color-line: #1c2843;
+  --color-input: #283a5e;
+  --color-fg: #eef3ff;
+  --color-muted: #8ea0c4;
+  --color-panel: rgb(5 9 19 / 0.55);
+  --color-panel-strong: rgb(5 9 19 / 0.86);
+  --color-primary: #3b82f6;
+  --color-primary-soft: #8cc2ff;
+  --color-on-primary: #ffffff;
+  --color-bubble-fan: #111a2e;
+  --color-bubble-me: #15345f;
+  /* écrans MYM */
+  --mp-page: #060a14; --mp-side: #0c1322; --mp-card: #0c1322; --mp-card-2: #121b30; --mp-line: #1c2843;
+  --mp-text: #a9b8d8; --mp-head: #eef3ff; --mp-muted: #8ea0c4; --mp-accent: #5aa2ff; --mp-on-accent: #04101f;
+  /* écrans OnlyFans */
+  --of-page: #060a14; --of-card: #0c1322; --of-line: #1c2843; --of-text: #eef3ff; --of-muted: #8ea0c4; --of-blue: #3b82f6;
+  /* propres à la v2 */
+  --v2-blue: #3b82f6;
+  --v2-sky: #7cc4ff;
+  --v2-deep: #1d3fae;
+  --v2-glow: 59 130 246;
+  --v2-of: #38a8ff;
+  --v2-mym: #8b7bff;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+/* Fond : deux halos bleus très doux qui dérivent lentement. */
+.v2-backdrop { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.v2-backdrop::before, .v2-backdrop::after {
+  content: ""; position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%; filter: blur(90px); opacity: 0.22;
+  background: radial-gradient(circle, rgb(var(--v2-glow) / 0.9), transparent 62%);
+  animation: v2-drift 26s ease-in-out infinite alternate;
+}
+.v2-backdrop::before { top: -28vmax; left: -14vmax; }
+.v2-backdrop::after { bottom: -34vmax; right: -18vmax; background: radial-gradient(circle, rgb(124 196 255 / 0.7), transparent 60%); opacity: 0.13; animation-duration: 34s; animation-direction: alternate-reverse; }
+@keyframes v2-drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(6vmax, 4vmax, 0) scale(1.12); } }
+
+/* Apparition en cascade des blocs. */
+.v2-rise { opacity: 0; transform: translateY(10px); animation: v2-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes v2-rise { to { opacity: 1; transform: none; } }
+
+/* Carte : bord qui s'éclaire et léger soulèvement au survol. */
+.v2-card { position: relative; background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--color-card); border: 1px solid var(--color-line); border-radius: 18px; transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease; }
+.v2-card.v2-lift:hover { transform: translateY(-2px); border-color: rgb(var(--v2-glow) / 0.45); box-shadow: 0 14px 40px -18px rgb(var(--v2-glow) / 0.55); }
+
+/* Texte en dégradé bleu (titre, chiffres clés). */
+.v2-grad { background: linear-gradient(92deg, #ffffff 0%, var(--v2-sky) 55%, var(--v2-blue) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Logo provisoire : le mot seul, avec un point lumineux qui respire (l'emplacement du futur logo). */
+.v2-logo-dot { width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg, var(--v2-sky), var(--v2-blue)); box-shadow: 0 0 0 0 rgb(var(--v2-glow) / 0.6); animation: v2-pulse 2.6s ease-out infinite; }
+@keyframes v2-pulse { 0% { box-shadow: 0 0 0 0 rgb(var(--v2-glow) / 0.55); } 70% { box-shadow: 0 0 0 10px rgb(var(--v2-glow) / 0); } 100% { box-shadow: 0 0 0 0 rgb(var(--v2-glow) / 0); } }
+
+/* Menu : la ligne active a un trait bleu et un fond qui glisse. */
+.v2-nav-item { position: relative; display: flex; align-items: center; gap: 0.7rem; height: 38px; padding: 0 0.75rem; border-radius: 10px; color: var(--color-muted); font-size: 13.5px; font-weight: 500; transition: color 0.18s ease, background-color 0.18s ease, transform 0.18s ease; white-space: nowrap; }
+.v2-nav-item:hover { color: var(--color-fg); background: rgb(255 255 255 / 0.04); }
+.v2-nav-item:active { transform: scale(0.985); }
+.v2-nav-item[data-on="true"] { color: #fff; background: linear-gradient(90deg, rgb(var(--v2-glow) / 0.22), rgb(var(--v2-glow) / 0.04)); }
+.v2-nav-item[data-on="true"]::before { content: ""; position: absolute; left: -10px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: linear-gradient(180deg, var(--v2-sky), var(--v2-blue)); box-shadow: 0 0 12px rgb(var(--v2-glow) / 0.9); animation: v2-bar 0.35s ease; }
+@keyframes v2-bar { from { transform: scaleY(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Sélecteur de plateforme : la pastille glisse d'un côté à l'autre. */
+.v2-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 12px; background: var(--color-card-2); border: 1px solid var(--color-line); }
+.v2-switch > button { position: relative; z-index: 1; height: 30px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--color-muted); transition: color 0.2s ease; }
+.v2-switch > button[data-on="true"] { color: #fff; }
+.v2-switch > i { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 9px; background: linear-gradient(135deg, var(--v2-blue), var(--v2-deep)); box-shadow: 0 6px 18px -8px rgb(var(--v2-glow) / 0.9); transition: transform 0.32s cubic-bezier(0.3, 0.8, 0.2, 1); }
+.v2-switch[data-pf="mym"] > i { transform: translateX(100%); }
+
+/* Courbes : le trait se dessine, l'aire monte ensuite. */
+.v2-draw { stroke-dasharray: var(--len, 2000); stroke-dashoffset: var(--len, 2000); animation: v2-draw 1.3s cubic-bezier(0.3, 0.7, 0.2, 1) 0.15s forwards; }
+@keyframes v2-draw { to { stroke-dashoffset: 0; } }
+.v2-fade { opacity: 0; animation: v2-fadein 0.8s ease 0.7s forwards; }
+@keyframes v2-fadein { to { opacity: 1; } }
+.v2-grow { transform-origin: left center; transform: scaleX(0); animation: v2-grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; animation-delay: calc(var(--i, 0) * 70ms + 200ms); }
+@keyframes v2-grow { to { transform: none; } }
+
+/* Point « en direct ». */
+.v2-live { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgb(52 211 153 / 0.6); animation: v2-live 1.8s ease-out infinite; }
+@keyframes v2-live { 70% { box-shadow: 0 0 0 7px rgb(52 211 153 / 0); } 100% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0); } }
+
+.v2 ::selection { background: rgb(var(--v2-glow) / 0.4); }
+.v2-scroll { scrollbar-width: thin; scrollbar-color: #24345a transparent; }
+
+/* Moins d'animations : réglage du système, ou « Réduire les animations » de Bloom. */
+@media (prefers-reduced-motion: reduce) {
+  .v2-backdrop::before, .v2-backdrop::after, .v2-logo-dot, .v2-live { animation: none; }
+  .v2-rise, .v2-fade { animation: none; opacity: 1; transform: none; }
+  .v2-draw { animation: none; stroke-dashoffset: 0; }
+  .v2-grow { animation: none; transform: none; }
+}
+html[data-motion="off"] .v2-backdrop::before, html[data-motion="off"] .v2-backdrop::after { animation: none; }
+
+/* Cadre d'un écran : les écrans « plein écran » de la version actuelle (position fixe) restent dans la zone de droite. */
+.v2-frame { position: relative; min-height: 100%; transform: translateZ(0); }
+.v2-frame.v2-full { height: 100%; overflow: hidden; }
+.v2-fade-in { animation: v2-fadein 0.35s ease both; }
+/* Messagerie OnlyFans (Messages Pro) repeinte en bleu. */
+.v2 .pro, .v2 {
+  --pro-page: #060a14; --pro-bar: #050913; --pro-tab: #121b30; --pro-tab-off: #0c1322; --pro-panel: #0c1322; --pro-pop: #0f1829;
+  --pro-line: #1c2843; --pro-chip: #16213a; --pro-on: #15264a; --pro-fan: #111a2e; --pro-me: #15345f; --pro-media: #0f2540; --pro-media-on: #123560;
+}
+@media (prefers-reduced-motion: reduce) { .v2-fade-in { animation: none; } }

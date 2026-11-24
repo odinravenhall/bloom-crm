@@ -349,3 +349,16 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Bloom ne CRÉE pas et ne MODIFIE pas le contenu d'un nudge : la forme de `data` de `create` / `update` n'est pas connue
   avec certitude. On part d'un nudge fait une fois dans Substy et on le copie. ⚠️ `toggle`, copie et suppression : lus
   dans le code du site, jamais déclenchés par Bloom avant qu'un admin clique.
+
+## Bloom v2 : le nouveau design unique, construit à part (25/11/2026) — `web/src/app/v2/`
+
+- Adresse : `/v2` (la version actuelle `/app` et `/pro` reste en service ; on branchera la v2 dessus quand elle sera
+  prête). UN seul CRM pour OnlyFans et MYM : même menu, mêmes noms d'écrans, la plateforme est un simple choix en haut
+  du menu (`bloom_pf`). Design propre à Bloom, bleu (nuit / bleu vif / bleu clair), animé mais sobre ; on ne copie plus
+  le look d'Infloww ni de MyPulse. Logo : le mot « bloom » et un point, en attendant un vrai logo.
+- `v2.css` : tout est sous `.v2` (variables `--color-*`, `--mp-*`, `--of-*`, `--pro-*` repeintes en bleu, classes
+  `v2-*`). `screens.ts` : la liste des écrans (groupe, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
+  `V2Home.tsx` : accueil commun (un appel `/api/revenue?pf=all` sur 30 jours). `V2Screen.tsx` : pour chaque écran, le
+  composant de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
+- Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
+- En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
