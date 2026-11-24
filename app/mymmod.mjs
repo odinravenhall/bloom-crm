@@ -20,12 +20,19 @@ db.exec('CREATE TABLE IF NOT EXISTS bl_alerts (msg_id TEXT PRIMARY KEY, at INTEG
 db.exec('CREATE INDEX IF NOT EXISTS bl_alerts_at ON bl_alerts (at)');
 db.exec('CREATE TABLE IF NOT EXISTS bl_allowed (creator_id TEXT NOT NULL, cat TEXT NOT NULL, by_name TEXT, at INTEGER NOT NULL, PRIMARY KEY (creator_id, cat))');
 
+// 24/11/2026 : « signal » et « kik » retirés des règles (mots courants en français) : on repart de zéro.
+if (!getSetting('mod_rules_v2')) {
+  run('DELETE FROM bl_alerts');
+  setSetting('mod_scan_at', '');
+  setSetting('mod_rules_v2', '1');
+}
+
 const DAY = 864e5;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const CATS = { phone: 'Numéro de téléphone', social: 'Autre réseau ou messagerie', platform: 'Autre plateforme', link: 'Lien externe', pay: 'Paiement hors plateforme' };
 const RULES = [
   ['phone', /(?:\+|00)\d{2}[\s.\-]?\d(?:[\s.\-]?\d{2}){4}|\b0[1-9](?:[\s.\-]?\d{2}){4}\b/],
-  ['social', /\b(?:snap(?:chat)?|insta(?:gram)?|telegram|whats?app|tiktok|discord|facebook|messenger|signal|skype|wechat|kik)\b/],
+  ['social', /\b(?:snap(?:chat)?|insta(?:gram)?|telegram|whats?app|tiktok|discord|facebook|messenger|skype|wechat)\b/],
   ['platform', /\b(?:only ?fans|fansly|fanvue|patreon|swame|uncove|loyalfans|manyvids)\b/],
   ['link', /https?:\/\/(?!(?:[a-z0-9-]+\.)?mym\.fans)|\bwww\.|\b(?!mym\.)[a-z0-9-]{3,}\.(?:com|fr|net|io|me|gg|xyz|link|ly|app)\b/],
   ['pay', /\b(?:paypal|lydia|revolut|virement|rib|iban|wero|cash ?app|crypto|bitcoin|usdt|paysafe(?:card)?|pcs|western union|transcash|sumeria)\b/],
