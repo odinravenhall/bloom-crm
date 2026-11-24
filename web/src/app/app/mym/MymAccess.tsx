@@ -36,6 +36,7 @@ export function MymAccess() {
     <div className="mp-font min-h-full p-4 md:p-6" style={{ background: "var(--mp-page)", color: "var(--mp-text)" }}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1"><h1 className="text-[20px] font-bold tracking-tight uppercase" style={{ color: "var(--mp-head)" }}>Accès & équipe</h1><p className="text-[13.5px]">Qui travaille sur quels comptes, et avec quel rôle.</p></div>
+        <Link href="/app/employees" className="flex h-10 items-center gap-2 rounded-lg border px-4 text-[13.5px] font-medium" style={{ borderColor: "var(--mp-line)", color: "var(--mp-head)" }}>Groupes et comptes</Link>
         <Link href="/app/roles" className="flex h-10 items-center gap-2 rounded-lg border px-4 text-[13.5px] font-medium" style={{ borderColor: "#3577f1", color: "#6f9bff" }}><Bookmark className="size-4" /> Rôles et droits par page</Link>
         {d?.canEdit ? <button onClick={() => setModal({ kind: "invite" })} className="flex h-10 items-center gap-2 rounded-lg px-4 text-[13.5px] font-semibold text-white" style={{ background: "#4a57a8" }}><UserPlus className="size-4" /> Inviter</button> : null}
       </div>
@@ -66,7 +67,7 @@ export function MymAccess() {
           </table>
         </div>
       </div>
-      <p className="mt-3 text-[11.5px] leading-relaxed" style={{ color: "var(--mp-muted)" }}>Dans Bloom, les droits ne se cochent pas personne par personne : chacun a un rôle, et les pages ouvertes à chaque rôle se règlent dans « Rôles et droits par page ». Groupes, activation et suppression d’un compte restent dans Employés → Gérer les employés.</p>
+      <p className="mt-3 text-[11.5px] leading-relaxed" style={{ color: "var(--mp-muted)" }}>Dans Bloom, les droits ne se cochent pas personne par personne : chacun a un rôle, et les pages ouvertes à chaque rôle se règlent dans « Rôles et droits par page ». Les groupes, l’activation et la suppression d’un compte sont dans « Groupes et comptes ».</p>
       {modal && modal.kind !== "invite" && modal.kind !== "stats" && d ? <Edit m={modal} d={d} crs={crs} onClose={() => setModal(null)} onDone={done} /> : null}
       {modal?.kind === "invite" && d ? <Edit m={modal} d={d} crs={crs} onClose={() => setModal(null)} onDone={done} /> : null}
       {modal?.kind === "stats" ? <Stats e={modal.e} onClose={() => setModal(null)} /> : null}
