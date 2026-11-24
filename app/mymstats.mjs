@@ -3,7 +3,7 @@
 //  - catégories d'après le titre de la transaction chez MYM : abonnement, renouvellement, média privé, Media On Demand,
 //    médias push, pourboires, autres ; les remboursements sont comptés à part (pas dans le chiffre d'affaires) ;
 //  - renouvellement = un abonnement d'un fan (même pseudo) qui s'était déjà abonné avant dans l'historique de Bloom
-//    (180 jours) : MYM ne fait pas la différence dans sa liste ;
+//    (400 jours) : MYM ne fait pas la différence dans sa liste ;
 //  - total d'abonnés actifs : MYM ne donne que le nombre du moment. Bloom le relève toutes les 10 minutes et garde la
 //    dernière valeur de chaque jour (`mym_subs_daily`), depuis le 24/11/2026 : pas de courbe avant cette date.
 // Jours = jours de Paris.

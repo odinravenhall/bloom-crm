@@ -22,8 +22,8 @@ import { mymAuthor, mymChatMessages, mymChatPage } from './mymchat.mjs';
 import { inboxChat, inboxFanByUsername } from './chat.mjs';
 
 const DAY = 864e5;
-// 180 jours : de quoi comparer 90 jours aux 90 précédents.
-const KEEP_DAYS = 180;
+// 400 jours : de quoi afficher l'année entière dans Statistiques Globales.
+const KEEP_DAYS = 400;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 for (const sql of ['ALTER TABLE rv_live ADD COLUMN src TEXT', 'ALTER TABLE rv_live ADD COLUMN origin TEXT', 'ALTER TABLE rv_live ADD COLUMN origin_by TEXT', 'ALTER TABLE rv_live ADD COLUMN raw TEXT', 'ALTER TABLE rv_live ADD COLUMN attr_at INTEGER']) {
   try {
@@ -152,16 +152,16 @@ async function syncRecent(cid) {
   }
   return fresh;
 }
-/** L'historique (180 jours), repris là où il s'était arrêté : quelques pages à chaque passage. */
+/** L'historique (400 jours), repris là où il s'était arrêté : quelques pages à chaque passage. */
 async function backfill(cid) {
-  if (getSetting(`mym_tx_done2:${cid}`)) return;
+  if (getSetting(`mym_tx_done3:${cid}`)) return;
   const n = one("SELECT COUNT(*) AS n FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid)?.n || 0;
   let p = Math.max(1, Math.floor(n / 10) - 1);
   for (let i = 0; i < 25; i++, p++) {
     const list = await fetchPage(cid, p);
     save(cid, list);
     if (!list.length || list[list.length - 1].at < Date.now() - KEEP_DAYS * DAY) {
-      setSetting(`mym_tx_done2:${cid}`, String(Date.now()));
+      setSetting(`mym_tx_done3:${cid}`, String(Date.now()));
       break;
     }
     await sleep(700);
@@ -263,7 +263,7 @@ export function mymIncome(cid, days) {
   const total = sum(cur);
   const before = sum(rows.filter((x) => x.at < from));
   const since = one("SELECT MIN(at) AS t FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid)?.t || null;
-  const complete = !!getSetting(`mym_tx_done2:${cid}`);
+  const complete = !!getSetting(`mym_tx_done3:${cid}`);
   const byDay = new Map();
   for (const x of cur) byDay.set(ymd(x.at), (byDay.get(ymd(x.at)) || 0) + x.gross / 100);
   const part = (f) => Math.round(sum(cur.filter(f)) * 100) / 100;
@@ -316,7 +316,7 @@ export function mymIncomeRoutes({ userFrom, send, creators, live = () => ({}) })
         // Journal des messages sur 3 jours, par source (substy / mym) et auteur : pour vérifier la reconnaissance de l'IA.
         const journal = all("SELECT COALESCE(src, 'substy') AS src, from_fan AS fromFan, COALESCE(kind, '-') AS kind, COUNT(*) AS n, SUM(text IS NOT NULL AND text <> '') AS withText FROM msg_log WHERE creator_id = ? AND at > ? GROUP BY 1, 2, 3", cid, Date.now() - 3 * DAY);
         const s = st(cid);
-        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done2:${cid}`), ...a, types, titles, substyRows: substy, origins, journal, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
+        return { id: cid, name: c.name, on: mymIncomeOn(cid), complete: !!getSetting(`mym_tx_done3:${cid}`), ...a, types, titles, substyRows: substy, origins, journal, lastTry: s.at || null, lastOk: s.ok || null, error: s.error };
       });
       send(res, 200, { creators: list, live: live() });
     },

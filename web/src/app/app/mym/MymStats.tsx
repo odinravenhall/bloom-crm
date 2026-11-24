@@ -155,7 +155,7 @@ export function MymStats() {
       <div className="mt-4 rounded-2xl p-5" style={card}>
         <Head icon={<UserPlus className="size-4" />} title="Nouveaux abonnés" creators={d?.creators ?? []} right={<><span className="rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: "#0ab39c33", color: "#0ab39c" }}>{int(T.newSubs)} nouveaux</span><span className="ml-1.5 rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: "#f7b84b33", color: "#f7b84b" }}>{int(T.renewals)} renouv.</span></>} />
         <Bars points={days.map((x) => ({ label: x.day, v: x.newSubs, v2: x.renewals }))} />
-        <p className="mt-2 text-[11.5px]" style={{ color: "#7b8fd4" }}>Nouveau = premier abonnement du fan connu de Bloom sur ce modèle. Renouv. = abonnement d’un fan déjà abonné avant (dans les 180 jours d’historique lus chez MYM). Abonnements gratuits compris.</p>
+        <p className="mt-2 text-[11.5px]" style={{ color: "#7b8fd4" }}>Nouveau = premier abonnement du fan connu de Bloom sur ce modèle. Renouv. = abonnement d’un fan déjà abonné avant (dans l’historique lu chez MYM). Abonnements gratuits compris.</p>
       </div>
 
       <div className="mt-4 rounded-2xl p-5" style={card}>
@@ -193,7 +193,7 @@ const ticksX = (n: number) => {
 };
 
 /** Courbe pleine (revenus, total d'abonnés). Survol = jour montré ; clic = jour figé. Les jours sans valeur sont sautés. */
-function Area({ points, hover, pinned, onHover, onPick, fmt, h = 330 }: { points: { label: string; v: number | null }[]; hover: number | null; pinned: boolean; onHover: (i: number | null) => void; onPick: (i: number) => void; fmt: (v: number) => string; h?: number }) {
+function Area({ points, hover, pinned, onHover, onPick, fmt, h = 300 }: { points: { label: string; v: number | null }[]; hover: number | null; pinned: boolean; onHover: (i: number | null) => void; onPick: (i: number) => void; fmt: (v: number) => string; h?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   const L = 64, R = 14, T = 14, B = 30;
   const vals = points.map((p) => p.v).filter((v): v is number => v != null);
@@ -224,7 +224,7 @@ function Area({ points, hover, pinned, onHover, onPick, fmt, h = 330 }: { points
         const v = lo + ((max - lo) * k) / 5;
         return <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#ffffff" strokeOpacity=".06" /><text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="11.5" fill="#878a99">{fmt(v)}</text></g>;
       })}
-      {ticksX(n).map((i) => <text key={i} x={x(i)} y={h - 8} textAnchor="middle" fontSize="11.5" fill="#878a99">{short(points[i].label)}</text>)}
+      {ticksX(n).map((i) => <text key={i} x={x(i)} y={h - 8} textAnchor={n > 1 && i === n - 1 ? "end" : n > 1 && i === 0 ? "start" : "middle"} fontSize="11.5" fill="#878a99">{short(points[i].label)}</text>)}
       {pts.length > 1 ? <><path d={`${path} L${pts[pts.length - 1][0]},${h - B} L${pts[0][0]},${h - B} Z`} fill="url(#mpArea)" /><path d={path} fill="none" stroke="#c7ff4a" strokeWidth="2.2" /></> : null}
       {pts.length === 1 ? <circle cx={pts[0][0]} cy={pts[0][1]} r="4.5" fill="#141a11" stroke="#c7ff4a" strokeWidth="2.4" /> : null}
       {hp ? <><line x1={hp[0]} x2={hp[0]} y1={T} y2={h - B} stroke="#c7ff4a" strokeOpacity={pinned ? 0.6 : 0.25} strokeDasharray={pinned ? undefined : "4 4"} /><circle cx={hp[0]} cy={hp[1]} r="6" fill="#fff" stroke="#c7ff4a" strokeWidth="2.5" /></> : null}
@@ -234,7 +234,7 @@ function Area({ points, hover, pinned, onHover, onPick, fmt, h = 330 }: { points
 
 function Bars({ points }: { points: { label: string; v: number; v2: number }[] }) {
   const [tip, setTip] = useState<number | null>(null);
-  const h = 330, L = 44, R = 14, T = 14, B = 30;
+  const h = 230, L = 44, R = 14, T = 14, B = 30;
   const max = nice(Math.max(...points.map((p) => p.v), 1));
   const n = points.length;
   const slot = (W - L - R) / Math.max(n, 1);
@@ -242,8 +242,8 @@ function Bars({ points }: { points: { label: string; v: number; v2: number }[] }
   const y = (v: number) => T + (1 - v / max) * (h - T - B);
   return (
     <svg viewBox={`0 0 ${W} ${h}`} className="mt-4 w-full select-none" onMouseLeave={() => setTip(null)}>
-      {[0, 1, 2, 3, 4, 5, 6].map((k) => {
-        const v = (max * k) / 6;
+      {[0, 1, 2, 3, 4].map((k) => {
+        const v = (max * k) / 4;
         return <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#ffffff" strokeOpacity=".06" /><text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="11.5" fill="#878a99">{Math.round(v)}</text></g>;
       })}
       {points.map((p, i) => <rect key={p.label} x={L + i * slot + (slot - bw) / 2} y={y(p.v)} width={bw} height={Math.max(0, h - B - y(p.v))} rx={Math.min(3, bw / 3)} fill="#a8d83f" opacity={tip == null || tip === i ? 1 : 0.55} onMouseEnter={() => setTip(i)} />)}

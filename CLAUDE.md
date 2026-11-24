@@ -245,3 +245,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   connues (`inboxPeek`), groupes de Bloom, filtres, prix intelligent, programmation, retrait (texte seulement : MYM refuse
   de supprimer un message avec média), retrait auto des non lus, challenge en 2 temps (`onMymFanMessage` de `chat.mjs`).
   Lancer une campagne : team leaders et plus. Une campagne en cours à la fois par créatrice.
+
+## MYM → Statistiques Globales (24/11/2026) — `app/mymstats.mjs`, page `/app/mym/stats`
+
+- Copie de la « Vue d'ensemble » de MyPulse sur `rv_live` (src = 'mym', nets, 400 jours d'historique) : chiffres par
+  jour de Paris et par type, remboursements à part (comme MyPulse). Vérifié le 24/11/2026 contre un export MyPulse de
+  30 jours : totaux, nombres de ventes et de pourboires identiques jour par jour.
+- Total d'abonnés actifs : relevé toutes les 10 min (`mym_subs_daily`), pas d'historique avant le 24/11/2026.
+- « À répondre » (Messages Pro et messagerie) : `waiting()` de `inbox.mjs` ne tient plus compte du « non lu » de Substy
+  quand le dernier message vient de la créatrice (l'IA a déjà répondu).
