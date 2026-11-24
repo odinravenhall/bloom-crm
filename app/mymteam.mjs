@@ -246,6 +246,8 @@ export function mymTeamRoutes({ userFrom, send, creators }) {
       if (!x.cids.length) return send(res, 200, empty);
       const rows = all(`SELECT m.creator_id AS cid, m.at, m.by_name AS name, m.price, m.medias, m.reply_ms FROM msg_log m WHERE m.from_fan = 0 AND m.deleted = 0 AND m.kind IN ('bloom', 'employee') AND m.by_name IS NOT NULL AND m.creator_id IN (${x.inSql}) AND m.at >= ? AND m.at < ? ORDER BY m.at`, ...x.cids, start, end);
       const ids = new Map(all('SELECT id, name FROM users').map((u) => [u.name, u.id]));
+      // Temps passé dans Bloom sur la période (team.mjs) : « actif » = sur le chat, « inactif » = Bloom ouvert ailleurs.
+      const work = new Map(all('SELECT user_id, SUM(active) AS a, SUM(idle) AS i, COUNT(*) AS d FROM work_log WHERE day >= ? AND day <= ? GROUP BY user_id', from, to).map((w) => [w.user_id, w]));
       const by = new Map();
       for (const r of rows) (by.get(r.name) || by.set(r.name, []).get(r.name)).push(r);
       const worked = new Set();
@@ -265,6 +267,7 @@ export function mymTeamRoutes({ userFrom, send, creators }) {
           models: [...models].map(([id, n]) => ({ name: x.names.get(id) || id, n })).sort((a, b) => b.n - a.n),
           replyAvg: rep.length ? Math.round(rep.reduce((a, b) => a + b, 0) / rep.length / 1000) : null, replyMedian: rep.length ? Math.round(median(rep) / 1000) : null,
           first: list[0].at, last: list[list.length - 1].at, ppvPaid: paid, ppvFree: free,
+          bloomActiveMin: Math.round((work.get(ids.get(name))?.a || 0) / MIN), bloomIdleMin: Math.round((work.get(ids.get(name))?.i || 0) / MIN), bloomDays: work.get(ids.get(name))?.d || 0,
         };
       }).sort((a, b) => b.messages - a.messages);
       // Un chatteur précis : son activité minute par minute (minutes où il a écrit) pour le graphique.

@@ -806,6 +806,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       if (u.role === 'chatter') return send(res, 403, { error: 'Envoi groupé réservé aux team leaders, managers et admins.' });
       const cid = String(b.creatorId);
       const text = String(b.text || '').slice(0, 5000);
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      const refusedMass = text.trim() ? refuseBanned(u, cid, null, text) : null;
+      if (refusedMass) return send(res, 400, { error: refusedMass });
       const ids = (a, n) => (Array.isArray(a) ? [...new Set(a.map(String))].slice(0, n) : []);
       const mediaIds = ids(b.mediaIds, 50);
       const inc = ids(b.includedListIds, 50);

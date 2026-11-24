@@ -9,6 +9,7 @@
 import { all, db, one, run } from './store.mjs';
 import { broadcast, inboxChat, patchInboxChat } from './chat.mjs';
 import { canChat, canSee, seesAll } from './team.mjs';
+import { refuseBanned } from './journal.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS relance_config (creator_id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0, cut_ai INTEGER NOT NULL DEFAULT 1, stop_reply INTEGER NOT NULL DEFAULT 1, steps TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL, updated_by TEXT);
@@ -178,6 +179,11 @@ export function relanceRoutes({ substy, userFrom, send, body, creators }) {
       if (!u) return;
       const steps = (Array.isArray(b.steps) ? b.steps : []).slice(0, MAX_STEPS).map((s) => ({ wait: Math.round(Number(s.wait)), text: String(s.text || '').trim().slice(0, 1000) }));
       if (steps.some((s) => !s.text)) return send(res, 400, { error: 'Chaque message de la relance doit avoir un texte.' });
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      for (const s of steps) {
+        const refused = refuseBanned(u, cid, null, s.text);
+        if (refused) return send(res, 400, { error: refused });
+      }
       if (steps.some((s) => !(s.wait >= 1 && s.wait <= 24 * 60))) return send(res, 400, { error: 'Les délais vont de 1 minute à 24 heures.' });
       if (b.enabled && !steps.length) return send(res, 400, { error: 'Ajoute au moins un message avant d’activer la relance.' });
       // Mots interdits : vérifiés une fois ici (comme pour un envoi depuis la messagerie).

@@ -644,6 +644,19 @@ function netRatio(account, platform) {
 }
 
 /**
+ * Créatrices MYM dont les revenus sont lus chez MYM en direct (mymincome.mjs, réglage `mym_tx_on:<id>`) : leurs ventes
+ * viennent de `rv_live` (src = 'mym', montants nets, déjà définitifs) et plus du compte MyPulse rapproché, qui est
+ * laissé de côté pour ne rien compter deux fois. Renvoie les lignes au format de `rv_sales` (compte « mym:<id> »).
+ */
+function directMym(creators, from, to) {
+  const ids = creators.filter((c) => /mym/i.test(c.platform || '') && getSetting(`mym_tx_on:${c.id}`)).map((c) => String(c.id));
+  if (!ids.length) return { ids, rows: [] };
+  const rows = all(`SELECT id, creator_id, fan_id, fan_name, at, type, gross, currency, origin, origin_by FROM rv_live WHERE creator_id IN (${ids.map(() => '?').join(',')}) AND src = 'mym' AND type NOT IN ('payout', 'refund') AND gross >= 0 AND at >= ? AND at < ?`, ...ids, from, to)
+    .map((r) => ({ id: r.id, account: `mym:${r.creator_id}`, platform: 'mym', fan_id: r.fan_id, fan_name: r.fan_name, at: r.at, type: r.type === 'push' ? 'ppv' : r.type, gross: r.gross, net: r.gross, currency: r.currency || 'EUR', status: '', seller: null, origin: r.type === 'sub' ? null : r.origin === 'employee' ? 'bloom' : r.origin || null, origin_by: r.origin_by || null }));
+  return { ids, rows };
+}
+
+/**
  * Chiffres de [from, to] (jours de Paris, inclus) pour les créatrices de Bloom.
  * Ventes officielles + ventes Substy pas encore arrivées d'Infloww / MyPulse (« provisoires », moins de 24 h).
  */
@@ -652,13 +665,15 @@ export function revenue({ from, to, creators }) {
   const end = parisMidnight(addDay(to, 1));
   const days = Math.round((end - start) / DAY);
   const pStart = start - days * DAY;
-  const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => creators.some((c) => c.id === m.creator_id));
+  const direct = directMym(creators, pStart, end);
+  const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => creators.some((c) => c.id === m.creator_id) && !direct.ids.includes(String(m.creator_id)));
   const acc = new Map(maps.map((m) => [m.account, m.creator_id]));
   const accounts = [...acc.keys()];
-  const empty = { from, to, total: 0, prev: 0, provisional: 0, sales: 0, buyers: 0, byType: {}, byOrigin: {}, days: [], creators: [], recent: [], unmapped: creators.filter((c) => !maps.some((m) => m.creator_id === c.id)).map((c) => c.id) };
-  if (!accounts.length) return empty;
-  const ph = accounts.map(() => '?').join(',');
-  const rows = all(`SELECT id, account, platform, fan_id, fan_name, at, type, gross, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
+  for (const id of direct.ids) acc.set(`mym:${id}`, id);
+  const empty = { from, to, total: 0, prev: 0, provisional: 0, sales: 0, buyers: 0, byType: {}, byOrigin: {}, days: [], creators: [], recent: [], unmapped: creators.filter((c) => !maps.some((m) => m.creator_id === c.id) && !direct.ids.includes(String(c.id))).map((c) => c.id) };
+  if (!accounts.length && !direct.ids.length) return empty;
+  const ph = accounts.map(() => '?').join(',') || "''";
+  const rows = [...all(`SELECT id, account, platform, fan_id, fan_name, at, type, gross, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end), ...direct.rows];
   // Ventes Substy pas encore confirmées (récentes uniquement : au-delà de 24 h (MyPulse peut avoir plusieurs heures de retard), une vente non confirmée n'est pas comptée).
   const live = all(
     `SELECT l.*, m.account, a.platform FROM rv_live l JOIN rv_map m ON m.creator_id = l.creator_id JOIN rv_accounts a ON a.id = m.account
@@ -675,7 +690,7 @@ export function revenue({ from, to, creators }) {
   for (let d = from; d <= to; d = addDay(d, 1)) perDay.set(d, { day: d, onlyfans: 0, mym: 0, provisional: 0 });
   const buyers = new Set();
   const cr = (id) => {
-    if (!perCreator.has(id)) perCreator.set(id, { creatorId: id, account: maps.find((m) => m.creator_id === id)?.account, platform: null, currency: null, net: 0, eur: 0, prev: 0, provisional: 0, sales: 0, byType: {}, byOrigin: {} });
+    if (!perCreator.has(id)) perCreator.set(id, { creatorId: id, account: maps.find((m) => m.creator_id === id)?.account || (direct.ids.includes(String(id)) ? 'MYM en direct' : undefined), platform: null, currency: null, net: 0, eur: 0, prev: 0, provisional: 0, sales: 0, byType: {}, byOrigin: {} });
     return perCreator.get(id);
   };
   const originOf = (r) => (r.type === 'sub' ? 'sub' : r.origin || (r.seller ? 'chatter' : 'other'));
@@ -769,13 +784,15 @@ export function performance({ from, to, creators }) {
   const start = parisMidnight(from);
   const end = parisMidnight(addDay(to, 1));
   const pStart = start - (end - start);
-  const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => creators.some((c) => c.id === m.creator_id));
+  const direct = directMym(creators, pStart, end);
+  const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => creators.some((c) => c.id === m.creator_id) && !direct.ids.includes(String(m.creator_id)));
   const acc = new Map(maps.map((m) => [m.account, m.creator_id]));
   const out = { from, to, total: 0, prev: 0, subs: 0, sellers: [], creators: [] };
-  if (!acc.size) return out;
+  if (!acc.size && !direct.ids.length) return out;
   const accounts = [...acc.keys()];
-  const ph = accounts.map(() => '?').join(',');
-  const rows = all(`SELECT account, fan_id, fan_name, at, type, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end);
+  for (const id of direct.ids) acc.set(`mym:${id}`, id);
+  const ph = accounts.map(() => '?').join(',') || "''";
+  const rows = [...all(`SELECT account, fan_id, fan_name, at, type, net, currency, status, seller, origin, origin_by FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, pStart, end), ...direct.rows];
   const sellerName = new Map(all('SELECT id, name FROM rv_sellers').map((s) => [s.id, s.name]));
   const sellers = new Map();
   const perCreator = new Map();

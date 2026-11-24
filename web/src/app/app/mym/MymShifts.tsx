@@ -9,7 +9,7 @@ import { AuthorNote, addDay, dur, hmin, int, parisDate, parisTime, parisToday, t
 // MYM → Pilotage d'équipe → Contrôle des shifts : copie de MyPulse (Activité du chatteur, Relevé d'activité d'équipe).
 // Tout est calculé sur les messages envoyés depuis Bloom (les seuls dont Bloom connaît l'auteur).
 type Vac = { day: string; start: string; end: string; endDay: string; startAt: number; endAt: number; activeMin: number; messages: number; models: { name: string; n: number }[] };
-type Chatter = { name: string; id: number | null; messages: number; activeMin: number; shifts: number; vacations: Vac[]; models: { name: string; n: number }[]; replyAvg: number | null; replyMedian: number | null; first: number; last: number; ppvPaid: number; ppvFree: number };
+type Chatter = { name: string; id: number | null; messages: number; activeMin: number; shifts: number; vacations: Vac[]; models: { name: string; n: number }[]; replyAvg: number | null; replyMedian: number | null; first: number; last: number; ppvPaid: number; ppvFree: number; bloomActiveMin: number; bloomIdleMin: number; bloomDays: number };
 type Data = { from: string; to: string; idle: number; cut: number; start: number; end: number; creators: TCreator[]; chatters: Chatter[]; minutes?: [number, number][]; totals: { chatters: number; vacations: number; activeMin: number; messages: number; models: number; of: number }; unnamed?: number };
 const frDay = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 const longDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -135,6 +135,9 @@ export function MymShifts() {
             <Kpi label="Messages / heure active" sub="Intensité pendant les phases actives" v={(me.activeMin ? me.messages / (me.activeMin / 60) : 0).toFixed(1)} />
             <Kpi label="Shifts" sub={`Coupure dès ${d.cut} min sans message`} v={me.shifts} />
             <Kpi label="Temps de réponse" sub={`Médiane ${secs(me.replyMedian)}`} v={secs(me.replyAvg)} />
+            <Kpi label="Temps connecté Bloom" sub={`Bloom ouvert, sur ${me.bloomDays} jour(s)`} v={`${int(me.bloomActiveMin + me.bloomIdleMin)} min`} />
+            <Kpi label="Temps actif Bloom" sub="Sur le chat" v={`${me.bloomActiveMin + me.bloomIdleMin ? Math.round((me.bloomActiveMin / (me.bloomActiveMin + me.bloomIdleMin)) * 100) : 0}%`} />
+            <Kpi label="Temps inactif Bloom" sub="Bloom ouvert sur une autre page" v={`${int(me.bloomIdleMin)} min`} />
           </div>
           <div className="mt-4 rounded-2xl p-5" style={tk.card}>
             <b className="text-[16px]" style={{ color: "var(--mp-head)" }}>Activité minute par minute</b>

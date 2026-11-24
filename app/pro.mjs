@@ -6,6 +6,7 @@
 //   - traduction d'un texte (service gratuit sans clé).
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { canSee, seesAll } from './team.mjs';
+import { refuseBanned } from './journal.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pro_pins (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, message_id TEXT NOT NULL, text TEXT, sent_at TEXT, from_fan INTEGER NOT NULL DEFAULT 0,
@@ -106,6 +107,9 @@ export function proRoutes({ substy, userFrom, send, body }) {
       const c = convOf(u, b.conv);
       if (!c) return send(res, 403, { error: 'Pas ta créatrice' });
       const text = String(b.text || '').slice(0, 5000);
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      const refused = text.trim() ? refuseBanned(u, String(b.conv || '').split('~')[0] || null, String(b.conv || '').split('~')[1] || null, text) : null;
+      if (refused) return send(res, 400, { error: refused });
       const medias = Array.isArray(b.mediaIds) ? b.mediaIds.map(String).slice(0, 50) : [];
       const price = Number(b.price) > 0 ? Math.round(Number(b.price) * 100) / 100 : 0;
       if (!text.trim() && !medias.length) return send(res, 400, { error: 'Message vide' });

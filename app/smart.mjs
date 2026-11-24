@@ -9,6 +9,7 @@
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { inboxChats } from './chat.mjs';
+import { refuseBanned } from './journal.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS smart_auto (
@@ -210,6 +211,12 @@ export function smartRoutes({ substy, userFrom, send, body }) {
       if (!u) return;
       const a = clean(b);
       if (!a.collections.length) return send(res, 400, { error: 'Ajoute au moins un message' });
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      for (const c of a.collections)
+        for (const m of c.messages) {
+          const refused = m.text.trim() ? refuseBanned(u, cid, null, m.text) : null;
+          if (refused) return send(res, 400, { error: refused });
+        }
       for (const c of a.collections) for (const m of c.messages) if (m.price && !m.medias.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
       for (const c of a.collections)
         for (const m of c.messages)

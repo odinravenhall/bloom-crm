@@ -233,7 +233,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Part de l'IA : `rv_live.origin` (`ai` / `bloom` / `auto`…) = auteur du message acheté ou du dernier message avant un
   pourboire (14 derniers jours). ⚠️ Côté MYM, Substy ne dit jamais qu'un message vient de son IA (ni flux, ni liste de
   messages, ni historique IA) : « IA » est DÉDUIT = message pas parti de Bloom, pas un push, fan dont l'IA est active. État : `GET /api/mym/income/status` (admins, managers).
-- Pas encore fait : la page Accueil / Stats générale rapproche toujours avec MyPulse (`rv_sales`).
+- Accueil et Performances (`revenue()`, `performance()`) : pour une créatrice MYM lue en direct, les ventes viennent
+  de `rv_live` (`directMym`) et son compte MyPulse rapproché est laissé de côté (24/11/2026).
 
 ## MYM → Envois groupés : Push, MoDs, Mass DM (24/11/2026) — `app/mymbulk.mjs`
 
@@ -318,7 +319,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   endroit, `journalRequest` appelé par `server.mjs` après chaque requête réussie, d'après la table `ACTIONS` (une
   nouvelle route à suivre = une ligne dans cette table). Les messages envoyés n'y sont pas (Message Dashboard).
 - Mots interdits de l'agence : `bl_banned`, vérifiés avant l'envoi (`refuseBanned`) dans la messagerie (`rvapi.mjs`,
-  `/api/send`), refus notés dans `bl_refused`. Pas encore appliqués aux envois groupés, Mass DM et messages programmés.
+  `/api/send`), envois groupés, relances, Mass DM (création du message et lancement), push, messages programmés et
+  Smart Messages ; refus notés dans `bl_refused`.
 - Messages suspects : par RÈGLES (`suspects()`), pas une IA ; relus chaque minute dans `msg_log` → `bl_alerts` ;
   « sorties autorisées » = `bl_allowed` (motif accepté sur un compte).
 - Retrait de messages (admins / managers) : `/api/mym/mod/find` ne fait que lister, `/api/mym/mod/retire` retire chez

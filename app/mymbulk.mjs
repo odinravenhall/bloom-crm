@@ -25,6 +25,7 @@ import { mymChatMessages, mymDelete, mymSend } from './mymchat.mjs';
 import { inboxChat, inboxPeek, onMymFanMessage, patchInboxChat, refreshMymInbox } from './chat.mjs';
 import { mymGroups } from './fanlists.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
+import { refuseBanned } from './journal.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_push_log (id INTEGER PRIMARY KEY, creator_id TEXT NOT NULL, push_id TEXT, payload TEXT NOT NULL, ok INTEGER NOT NULL, answer TEXT, by_name TEXT, at INTEGER NOT NULL);
@@ -389,6 +390,9 @@ export function mymBulkRoutes({ userFrom, send, body, creators }) {
       if (!targets.length) return send(res, 400, { error: 'Choisis au moins une cible.' });
       if (!medias.length) return send(res, 400, { error: 'Choisis au moins un média.' });
       if (!caption) return send(res, 400, { error: 'MYM refuse un push sans message.' });
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      const refusedPush = refuseBanned(x.u, x.c.id, null, caption);
+      if (refusedPush) return send(res, 400, { error: refusedPush });
       if (caption.length > 1500) return send(res, 400, { error: '1 500 caractères au plus.' });
       if (price < 0 || price > 100000) return send(res, 400, { error: 'Prix invalide.' });
       if (b.confirm !== true) return send(res, 400, { error: 'Confirmation manquante.' });
@@ -455,6 +459,9 @@ export function mymBulkRoutes({ userFrom, send, body, creators }) {
       const medias = (Array.isArray(b.medias) ? b.medias : []).slice(0, 5).map((m) => ({ id: String(m.id), type: m.type || 'photo', thumb: m.thumb || null, duration: m.duration ?? null }));
       const price = medias.length ? num(b.price) : 0;
       if (!title) return send(res, 400, { error: 'Donne un titre (visible seulement par l’équipe).' });
+      // Mots interdits de l'agence (Modération) : rien ne part, le refus est noté.
+      const refusedMsg = text ? refuseBanned(x.u, x.c.id, null, text) : null;
+      if (refusedMsg) return send(res, 400, { error: refusedMsg });
       if (!text && !medias.length) return send(res, 400, { error: 'Écris un message ou choisis un média.' });
       if (price && (price < 5 || price > 1000)) return send(res, 400, { error: 'Prix : gratuit, ou de 5 à 1 000 €.' });
       const now = Date.now();
@@ -495,6 +502,9 @@ export function mymBulkRoutes({ userFrom, send, body, creators }) {
       if (!x) return;
       const m = msgOf(b.messageId);
       if (!m || m.creator_id !== x.c.id || m.deleted_at) return send(res, 404, { error: 'Choisis un message prêt.' });
+      // Le message a pu être écrit avant l'ajout d'un mot interdit : on revérifie au lancement.
+      const refusedCamp = m.text ? refuseBanned(x.u, x.c.id, null, m.text) : null;
+      if (refusedCamp) return send(res, 400, { error: refusedCamp });
       const opts = cleanOpts(b);
       if (!opts.audiences.length) return send(res, 400, { error: 'Choisis au moins une audience.' });
       const medias = J(m.medias, []);

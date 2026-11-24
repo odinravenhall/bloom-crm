@@ -12,13 +12,45 @@
 //  - `GET /api/mym/transactions` : la liste des transactions (page Transactions), par type et par période.
 // Jours = jours de Paris.
 import { all, db, getSetting, one, run, setSetting } from './store.mjs';
-import { isLinked, mymFollowerCounts } from './mym.mjs';
+import { isLinked, mymFollowerCounts, mymSiteRaw } from './mym.mjs';
 import { canSee } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
 
 db.exec('CREATE TABLE IF NOT EXISTS mym_subs_daily (creator_id TEXT NOT NULL, day TEXT NOT NULL, active INTEGER NOT NULL, old INTEGER, interested INTEGER, at INTEGER NOT NULL, PRIMARY KEY (creator_id, day))');
 
 const DAY = 864e5;
+// Notifications du site MYM qui ne sont NI un abonnement NI une vente (déjà connus par les revenus) : surtout les
+// demandes de média privé. Lues sur `/app/notifications` (HTML, 100 dernières) toutes les 5 minutes. Vérifié le
+// 24/11/2026 : lire la page depuis le serveur ne marque rien comme lu (c'est un script du site qui le fait). La page ne
+// donne qu'une heure relative (« 2 hours ago ») : on garde l'heure calculée à la première lecture.
+db.exec('CREATE TABLE IF NOT EXISTS mym_site_notifs (creator_id TEXT NOT NULL, key TEXT NOT NULL, fan TEXT, title TEXT, at INTEGER NOT NULL, PRIMARY KEY (creator_id, key))');
+const UNIT = { second: 1e3, seconde: 1e3, minute: 6e4, hour: 36e5, heure: 36e5, day: DAY, jour: DAY, week: 7 * DAY, semaine: 7 * DAY, month: 30 * DAY, mois: 30 * DAY };
+/** « 2 hours ago », « il y a 3 minutes » → millisecondes écoulées (0 si illisible). */
+function agoMs(t) {
+  const m = /(\d+)\s*(seconde|second|minute|heure|hour|jour|day|semaine|week|mois|month)/i.exec(String(t || ''));
+  return m ? Number(m[1]) * UNIT[m[2].toLowerCase()] : 0;
+}
+export function parseSiteNotifs(html) {
+  return String(html).split(/class="js-card-notification/).slice(1).map((seg) => ({
+    key: /data-notification-key="(\d+)"/.exec(seg)?.[1] || null,
+    fan: /avatar--notification"\s+title="([^"]*)"/.exec(seg)?.[1] || /title="([^"]*)"/.exec(seg)?.[1] || null,
+    title: (/card-notification__title[^>]*>([\s\S]*?)<\/p>/.exec(seg)?.[1] || '').replace(/<[^>]*>/g, '').replace(/&#039;|&apos;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(),
+    ago: agoMs(/posted_date[^>]*>([^<]*)</.exec(seg)?.[1]),
+  })).filter((n) => n.key && n.title);
+}
+async function siteNotifs(creators) {
+  for (const c of creators().filter((x) => /mym/i.test(x.platform || '') && isLinked(x.id))) {
+    try {
+      const r = await mymSiteRaw(String(c.id), '/app/notifications');
+      if (r.status !== 200) continue;
+      for (const n of parseSiteNotifs(r.text)) {
+        if (/abonn|subscri|vendu|sold|pourboire|tip/i.test(n.title)) continue;
+        run('INSERT OR IGNORE INTO mym_site_notifs (creator_id, key, fan, title, at) VALUES (?, ?, ?, ?, ?)', String(c.id), n.key, n.fan, n.title.slice(0, 200), Date.now() - n.ago);
+      }
+    } catch {}
+  }
+  run('DELETE FROM mym_site_notifs WHERE at < ?', Date.now() - 90 * DAY);
+}
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const CATS = ['sub', 'renew', 'ppv', 'mod', 'push', 'tip', 'other'];
 const catOf = (r) => (r.type === 'ppv' ? (/on demand|mod\b/i.test(r.raw || '') ? 'mod' : 'ppv') : r.type === 'sub' ? 'sub' : r.type === 'push' ? 'push' : r.type === 'tip' ? 'tip' : 'other');
@@ -108,6 +140,8 @@ async function snapshot(creators) {
 export function startMymStats(creators) {
   setTimeout(() => snapshot(creators).catch(() => {}), 20_000);
   setInterval(() => snapshot(creators).catch(() => {}), 10 * 60_000);
+  setTimeout(() => siteNotifs(creators).catch(() => {}), 40_000);
+  setInterval(() => siteNotifs(creators).catch(() => {}), 5 * 60_000);
 }
 
 export function mymStatsRoutes({ userFrom, send, creators }) {
@@ -133,9 +167,11 @@ export function mymStatsRoutes({ userFrom, send, creators }) {
       const types = kind === 'buy' ? "('ppv', 'tip', 'push')" : kind === 'subs' || kind === 'renew' ? "('sub')" : "('sub', 'ppv', 'tip', 'push')";
       const inSql = ids.map(() => '?').join(',');
       const out = [];
+      // Demandes et autres notifications du site (ni abonnement ni vente).
+      if (kind === 'all' || kind === 'req') for (const n of all(`SELECT creator_id, key, fan, title, at FROM mym_site_notifs WHERE creator_id IN (${inSql}) AND at < ? ORDER BY at DESC LIMIT 60`, ...ids, before)) out.push({ id: `site:${n.key}`, kind: 'req', sub: 'req', fan: n.fan || 'Un fan', title: n.title, creator: names.get(n.creator_id) || '', amount: 0, at: n.at });
       let cursor = before;
       // Nouveaux abonnés / renouvellements se décident ligne par ligne : on lit par paquets jusqu'à en avoir 50.
-      for (let i = 0; i < 8 && out.length < 51; i++) {
+      for (let i = 0; kind !== 'req' && i < 8 && out.length < 51; i++) {
         const rows = all(`SELECT id, creator_id, type, raw, at, gross, fan_id, fan_name FROM rv_live WHERE creator_id IN (${inSql}) AND src = 'mym' AND type IN ${types} AND gross >= 0 AND at < ? ORDER BY at DESC LIMIT 200`, ...ids, cursor);
         if (!rows.length) break;
         for (const r of rows) {
@@ -149,6 +185,7 @@ export function mymStatsRoutes({ userFrom, send, creators }) {
         }
         if (rows.length < 200) break;
       }
+      out.sort((a, b) => b.at - a.at);
       send(res, 200, { ...base, items: out.slice(0, 50), more: out.length > 50, unread: one(`SELECT COUNT(*) AS n FROM rv_live WHERE creator_id IN (${inSql}) AND src = 'mym' AND type IN ('sub', 'ppv', 'tip', 'push') AND at > ?`, ...ids, Math.max(seen, Date.now() - 7 * DAY))?.n || 0 });
     },
     'POST /api/mym/notifs/read': (req, res) => {
