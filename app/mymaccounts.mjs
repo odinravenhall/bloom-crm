@@ -6,7 +6,7 @@ import { all } from './store.mjs';
 import { canSee, onCreator, seesAll } from './team.mjs';
 import { PERMS } from './staff.mjs';
 import { tabOf } from './mymfans.mjs';
-import { isLinked, mymFollowerCounts } from './mym.mjs';
+import { isLinked, isNative, mymFollowerCounts } from './mym.mjs';
 import { mymIncome, mymIncomeOn } from './mymincome.mjs';
 
 const DAY = 864e5;
@@ -16,7 +16,7 @@ export function mymAccountRoutes({ substy, userFrom, send, creators }) {
   const cache = new Map();
   const revenueOf = async (cid, days, mode) => {
     // Compte relié : revenus lus chez MYM en direct (nets), avec la part de l'IA de Substy.
-    if (mymIncomeOn(cid)) return mymIncome(cid, days);
+    if (mymIncomeOn(cid) || isNative(cid)) return mymIncome(cid, days);
     const key = `${cid}|${days}|${mode}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < 5 * 60_000) return hit.v;

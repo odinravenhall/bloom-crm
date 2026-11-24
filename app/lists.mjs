@@ -13,6 +13,7 @@
 // en $ sur OnlyFans, en € sur MYM). Un fan entre tout seul dans la liste dès qu'il remplit la règle, et y reste.
 // Ce qu'un fan a dépensé : le total de Substy, ou à défaut les ventes vues (Substy en direct, Infloww / MyPulse),
 // sans les abonnements.
+import { isNative } from './mym.mjs';
 import { all, db, one, run } from './store.mjs';
 import './inbox.mjs'; // table fan_meta (épingles)
 import { inboxChat, inboxChats, patchInboxChat, refreshInboxTop } from './chat.mjs';
@@ -59,7 +60,11 @@ export async function pinFan(substy, u, cid, fanId, pin) {
   let cut = meta?.pin_cut || 0;
   // Épingler = reprendre le fan : l'IA de Substy est coupée sur lui. Désépingler = on la rallume
   // (sauf créatrice réglée en « humain seulement », où l'IA reste éteinte).
-  if (pin) {
+  if (isNative(cid)) {
+    // Modèle sans Substy : pas d'IA à couper ni à rallumer.
+    ai = false;
+    cut = 0;
+  } else if (pin) {
     if (c?.ai !== false && !isBoss(u) && !(await aiSentPpv(substy, cid, fanId))) throw err(400, 'L’IA n’a pas encore envoyé de PPV à ce fan : attends son premier PPV avant de le reprendre.');
     await substy.setAi(cid, fanId, false);
     patchInboxChat(cid, fanId, { ai: false });

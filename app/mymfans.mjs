@@ -11,7 +11,7 @@ import { all, db, one, run } from './store.mjs';
 import { img, inboxChats, money, plain } from './chat.mjs';
 import { canSee, isBoss, platformOfCreator } from './team.mjs';
 import { forgetFans, mymGroups } from './fanlists.mjs';
-import { isLinked, mymFollowerCounts, mymFollowers } from './mym.mjs';
+import { isLinked, isNative, mymFollowerCounts, mymFollowers } from './mym.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_fans (
@@ -80,7 +80,7 @@ export function mymFanRoutes({ substy, userFrom, send, body, creators }) {
       let next = null;
       let oldest = null;
       // Chacune son tour (une créatrice avec beaucoup de fans ne bloque pas les autres).
-      const ids = mymIds();
+      const ids = mymIds().filter((id) => !isNative(id));
       turn = (turn + 1) % Math.max(1, ids.length);
       for (const cid of [...ids.slice(turn), ...ids.slice(0, turn)]) {
         const rows = new Map(all('SELECT fan_id, checked_at FROM mym_fans WHERE creator_id = ?', cid).map((r) => [r.fan_id, r.checked_at]));

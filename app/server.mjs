@@ -28,7 +28,7 @@ import { sensitiveRoutes } from './sensitive.mjs';
 import { aiScriptRoutes } from './aiscripts.mjs';
 import { mymAccountRoutes } from './mymaccounts.mjs';
 import { mymFanRoutes } from './mymfans.mjs';
-import { mymRoutes } from './mym.mjs';
+import { adoptNatives, mymRoutes, nativeCreators } from './mym.mjs';
 import { mymMediaRoutes } from './mymmedia.mjs';
 import { mymVoucherRoutes } from './mymvouchers.mjs';
 import { mySalesRoutes } from './mysales.mjs';
@@ -80,8 +80,17 @@ function openStream(id) {
  * une créatrice ajoutée sur Substy est prise en compte toute seule (temps réel, conversations, lien Infloww / MyPulse),
  * une créatrice retirée voit son flux fermé.
  */
+/** La liste des créatrices de Bloom : celles de Substy, plus les comptes MYM ajoutés directement (sans Substy). */
+function applyCreators(fromSubsty) {
+  if (adoptNatives(fromSubsty)) console.log('[bloom] modèles MYM fusionnées avec Substy');
+  state.creators = [...fromSubsty, ...nativeCreators()];
+  setCreators(state.creators);
+  setCreatorPics(state.creators);
+  setCreatorPlatforms(state.creators);
+  warmInbox(state.creators.map((c) => c.id).filter(Boolean));
+}
 async function syncCreators({ restart = false } = {}) {
-  if (!getSetting('substy_client')) return;
+  if (!getSetting('substy_client')) return applyCreators([]);
   if (restart) {
     for (const stop of streamStops.values()) stop();
     streamStops.clear();
@@ -94,12 +103,9 @@ async function syncCreators({ restart = false } = {}) {
   const pics = new Map((Array.isArray(det) ? det : []).map((d) => [String(d.id), d.avatar || null]));
   const pidOf = new Map(list.map((c) => [c.id || c.creatorId, String(c.platformUserId ?? '')]));
   const before = new Map((state.creators || []).map((c) => [c.id, c.avatar]));
-  state.creators = list.map(creatorView).map((c) => ({ ...c, avatar: pics.get(pidOf.get(c.id)) || c.avatar || before.get(c.id) || null }));
-  setCreators(state.creators);
-  setCreatorPics(state.creators);
-  setCreatorPlatforms(state.creators);
-  const ids = state.creators.map((c) => c.id).filter(Boolean);
-  warmInbox(ids);
+  applyCreators(list.map(creatorView).map((c) => ({ ...c, avatar: pics.get(pidOf.get(c.id)) || c.avatar || before.get(c.id) || null })));
+  // Temps réel de Substy : seulement pour ses créatrices.
+  const ids = state.creators.filter((c) => !c.native).map((c) => c.id).filter(Boolean);
   for (const id of ids) if (!streamStops.has(id)) {
     console.log('[bloom] créatrice suivie :', state.creators.find((c) => c.id === id)?.name, id);
     openStream(id);
@@ -417,7 +423,8 @@ Object.assign(routes, sensitiveRoutes({ userFrom, send, body }));
 Object.assign(routes, aiScriptRoutes({ substy, userFrom, send, body }));
 Object.assign(routes, mymAccountRoutes({ substy, userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymFanRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
-Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+// Un compte MYM vient d'être relié : la liste des créatrices est refaite tout de suite (il apparaît sans attendre).
+Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [], onLinked: () => syncCreators().catch(() => applyCreators((state.creators || []).filter((c) => !c.native))) }));
 Object.assign(routes, mymMediaRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymVoucherRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.creators || [] }));

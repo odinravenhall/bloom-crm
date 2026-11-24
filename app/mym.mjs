@@ -226,11 +226,62 @@ export async function mymFollowers(cid, tab, { offset = 0, limit = 50, search = 
 
 export const isLinked = (cid) => !!one('SELECT 1 AS x FROM mym_links WHERE creator_id = ?', String(cid));
 
-/** Vérifie le compte (profil MYM créatrice) puis enregistre la liaison. */
-async function saveLink(cid, { clientId, refresh, access, expiresIn, deviceKey }, by) {
+// ---------------------------------------------------------------- comptes MYM ajoutés directement dans Bloom
+// Depuis le 24/11/2026, un compte MYM se relie sans passer par Substy : « Ajouter un compte » demande seulement l'email
+// et le mot de passe MYM Creator (ou l'extension). Bloom lit le profil du compte, puis :
+//  - si ce compte MYM est déjà connu (déjà relié une fois) → même modèle ;
+//  - sinon, si une modèle MYM de Substy porte le même pseudo → c'est elle (elle garde l'IA de Substy) ;
+//  - sinon → une modèle « de Bloom » (`mym_native`, identifiant « mym-<id MYM> »), sans Substy donc sans IA.
+// Si la modèle est ajoutée plus tard chez Substy (même pseudo MYM), Bloom fusionne tout seul : `adoptNatives`.
+db.exec('CREATE TABLE IF NOT EXISTS mym_native (id TEXT PRIMARY KEY, mym_id TEXT NOT NULL, name TEXT, username TEXT, avatar TEXT, created_by TEXT, created_at INTEGER NOT NULL)');
+/** Modèle ajoutée dans Bloom sans Substy (pas d'IA, aucun appel à Substy). */
+export const isNative = (cid) => String(cid || '').startsWith('mym-');
+export const nativeCreators = () => all('SELECT * FROM mym_native ORDER BY created_at').map((n) => ({ id: n.id, name: n.name || n.username || 'Modèle MYM', username: n.username || null, platform: 'mym', avatar: n.avatar || null, native: true }));
+const lower = (x) => String(x || '').trim().toLowerCase();
+/** La modèle de Bloom qui correspond à un profil MYM (voir plus haut). `substy` = les créatrices connues de Substy. */
+function creatorFor(me, substy, by) {
+  const known = one('SELECT creator_id FROM mym_links WHERE mym_id = ?', String(me.id)) || one('SELECT id AS creator_id FROM mym_native WHERE mym_id = ?', String(me.id));
+  if (known) return known.creator_id;
+  const twin = me.username ? substy.find((x) => /mym/i.test(x.platform || '') && !isNative(x.id) && lower(x.username) === lower(me.username)) : null;
+  if (twin) return String(twin.id);
+  const id = `mym-${me.id}`;
+  const pic = me.avatar?.url || me.avatarUrl || me.avatar_url || me.profilePicture?.url || me.profile_picture || (typeof me.avatar === 'string' ? me.avatar : null);
+  run('INSERT OR IGNORE INTO mym_native (id, mym_id, name, username, avatar, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, String(me.id), me.nickname || me.displayName || me.display_name || me.username || null, me.username || null, pic || null, by || null, Date.now());
+  return id;
+}
+/**
+ * Une modèle « de Bloom » vient d'apparaître chez Substy (même pseudo MYM) : tout ce que Bloom a noté sous son
+ * identifiant « mym-… » passe sous l'identifiant de Substy (liaison, conversations, ventes, groupes, accès…), et elle
+ * gagne l'IA. Renvoie le nombre de modèles fusionnées.
+ */
+export function adoptNatives(substy) {
+  let n = 0;
+  for (const nat of all('SELECT * FROM mym_native')) {
+    const twin = nat.username ? substy.find((x) => /mym/i.test(x.platform || '') && !isNative(x.id) && lower(x.username) === lower(nat.username)) : null;
+    if (!twin) continue;
+    const tables = all("SELECT name FROM sqlite_master WHERE type = 'table'").map((t) => t.name).filter((t) => /^[A-Za-z0-9_]+$/.test(t) && all(`PRAGMA table_info("${t}")`).some((col) => col.name === 'creator_id'));
+    for (const t of tables) {
+      run(`UPDATE OR IGNORE "${t}" SET creator_id = ? WHERE creator_id = ?`, String(twin.id), nat.id);
+      run(`DELETE FROM "${t}" WHERE creator_id = ?`, nat.id);
+    }
+    for (const k of all("SELECT key, value FROM settings WHERE key LIKE ?", `%:${nat.id}`)) run('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', k.key.replace(nat.id, String(twin.id)), k.value);
+    run('DELETE FROM mym_native WHERE id = ?', nat.id);
+    console.log(`[bloom] modèle MYM « ${nat.username} » maintenant chez Substy : ${nat.id} → ${twin.id}`);
+    n++;
+  }
+  return n;
+}
+
+/** Vérifie le compte (profil MYM créatrice) puis enregistre la liaison. Sans `cid` : la modèle est trouvée d'après le profil. */
+async function saveLink(cid, { clientId, refresh, access, expiresIn, deviceKey }, by, substy = []) {
   const meR = await fetch(`${API}/creators/me`, { headers: { authorization: `Bearer ${access}`, accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
   const me = await meR.json().catch(() => null);
   if (!meR.ok || !me?.id) throw new MymError(400, 'MYM n’a pas reconnu ce compte comme un compte créatrice (MYM Creator, pas un compte fan).');
+  if (!cid) cid = creatorFor(me, substy, by);
+  // Le même compte MYM ne peut être relié qu'à une seule modèle.
+  const other = one('SELECT creator_id FROM mym_links WHERE mym_id = ? AND creator_id <> ?', String(me.id), cid);
+  if (other) throw new MymError(400, 'Ce compte MYM est déjà relié à une autre modèle dans Bloom.');
+  me.bloomId = cid;
   run(
     `INSERT INTO mym_links (creator_id, client_id, refresh, access, access_exp, mym_id, username, linked_by, linked_at, checked_at, error, device_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
      ON CONFLICT (creator_id) DO UPDATE SET client_id = excluded.client_id, refresh = excluded.refresh, access = excluded.access, access_exp = excluded.access_exp, mym_id = excluded.mym_id,
@@ -242,7 +293,7 @@ async function saveLink(cid, { clientId, refresh, access, expiresIn, deviceKey }
 const logins = new Map(); // essais de connexion en attente d'un code (5 min)
 const attempts = new Map(); // creatorId -> [instants] : 5 essais max par 15 min
 
-export function mymRoutes({ userFrom, send, body, creators }) {
+export function mymRoutes({ userFrom, send, body, creators, onLinked }) {
   const admin = (req, res) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
@@ -269,7 +320,7 @@ export function mymRoutes({ userFrom, send, body, creators }) {
       if (!u) return;
       const b = await body(req);
       const cid = String(b.creatorId || '');
-      if (!mymCreators().some((c) => c.id === cid)) return send(res, 404, { error: 'Modèle MYM inconnue' });
+      if (cid && !mymCreators().some((c) => c.id === cid)) return send(res, 404, { error: 'Modèle MYM inconnue' });
       const code = randomBytes(6).toString('base64url').replace(/[-_]/g, 'x').slice(0, 8).toUpperCase();
       run('DELETE FROM mym_link_codes WHERE expires_at < ?', Date.now());
       run('INSERT INTO mym_link_codes (code, creator_id, created_by, expires_at) VALUES (?, ?, ?, ?)', code, cid, u.name, Date.now() + 15 * 60_000);
@@ -287,9 +338,10 @@ export function mymRoutes({ userFrom, send, body, creators }) {
       if (!/^[a-z0-9]{20,40}$/i.test(clientId) || refresh.length < 100) return send(res, 400, { error: 'Session MYM introuvable : connecte-toi à creators.mym.fans dans ce Chrome, puis réessaie.' });
       try {
         const t = await cognitoRefresh(clientId, refresh);
-        const me = await saveLink(c.creator_id, { clientId, refresh: t.refresh || refresh, access: t.access, expiresIn: t.expiresIn }, c.created_by);
+        const me = await saveLink(c.creator_id || null, { clientId, refresh: t.refresh || refresh, access: t.access, expiresIn: t.expiresIn }, c.created_by, creators());
         run('UPDATE mym_link_codes SET used_at = ? WHERE code = ?', Date.now(), code);
-        const name = creators().find((x) => x.id === c.creator_id)?.name || '';
+        onLinked?.();
+        const name = creators().find((x) => x.id === me.bloomId)?.name || me.username || '';
         send(res, 200, { ok: true, username: me.username || null, creator: name });
       } catch (e) {
         send(res, e.status && e.status < 500 ? 400 : 502, { error: e.message });
@@ -301,14 +353,16 @@ export function mymRoutes({ userFrom, send, body, creators }) {
       if (!u) return;
       const b = await body(req);
       const cid = String(b.creatorId || '');
-      if (!mymCreators().some((c) => c.id === cid)) return send(res, 404, { error: 'Modèle MYM inconnue' });
+      if (cid && !mymCreators().some((c) => c.id === cid)) return send(res, 404, { error: 'Modèle MYM inconnue' });
       if (!b.confirmCreator || !b.confirmOwner) return send(res, 400, { error: 'Coche les deux confirmations.' });
       const email = String(b.email || '').trim();
       const password = String(b.password || '');
       if (!/^\S+@\S+\.\S+$/.test(email) || !password) return send(res, 400, { error: 'Email et mot de passe MYM Creator obligatoires.' });
-      const recent = (attempts.get(cid) || []).filter((t) => Date.now() - t < 15 * 60_000);
-      if (recent.length >= 5) return send(res, 429, { error: 'Trop d’essais pour cette modèle : attends 15 minutes (pour ne pas faire bloquer le compte par MYM).' });
-      attempts.set(cid, [...recent, Date.now()]);
+      // Essais comptés par modèle, ou par email quand on ajoute un compte sans modèle.
+      const key = cid || `email:${email.toLowerCase()}`;
+      const recent = (attempts.get(key) || []).filter((t) => Date.now() - t < 15 * 60_000);
+      if (recent.length >= 5) return send(res, 429, { error: 'Trop d’essais pour ce compte : attends 15 minutes (pour ne pas faire bloquer le compte par MYM).' });
+      attempts.set(key, [...recent, Date.now()]);
       try {
         const start = srpStart();
         let r = await cognito('InitiateAuth', { AuthFlow: 'USER_SRP_AUTH', ClientId: CLIENT_ID, AuthParameters: { USERNAME: email, SRP_A: start.AHex } }).catch((e) => {
@@ -329,15 +383,16 @@ export function mymRoutes({ userFrom, send, body, creators }) {
         }
         if (r.AuthenticationResult) {
           const a = r.AuthenticationResult;
-          const me = await saveLink(cid, { clientId: CLIENT_ID, refresh: a.RefreshToken, access: a.AccessToken, expiresIn: a.ExpiresIn, deviceKey: a.NewDeviceMetadata?.DeviceKey }, u.name);
-          attempts.delete(cid);
-          return send(res, 200, { ok: true, username: me.username || null });
+          const me = await saveLink(cid || null, { clientId: CLIENT_ID, refresh: a.RefreshToken, access: a.AccessToken, expiresIn: a.ExpiresIn, deviceKey: a.NewDeviceMetadata?.DeviceKey }, u.name, creators());
+          attempts.delete(key);
+          onLinked?.();
+          return send(res, 200, { ok: true, username: me.username || null, creatorId: me.bloomId, native: isNative(me.bloomId) });
         }
         const kinds = { SMS_MFA: 'SMS_MFA_CODE', SOFTWARE_TOKEN_MFA: 'SOFTWARE_TOKEN_MFA_CODE', EMAIL_OTP: 'EMAIL_OTP_CODE' };
         if (kinds[r.ChallengeName]) {
           const id = randomBytes(12).toString('base64url');
           const p = r.ChallengeParameters || {};
-          logins.set(id, { cid, by: u.name, challenge: r.ChallengeName, session: r.Session, username: p.USER_ID_FOR_SRP || p.USERNAME || email, at: Date.now() });
+          logins.set(id, { cid, key, by: u.name, challenge: r.ChallengeName, session: r.Session, username: p.USER_ID_FOR_SRP || p.USERNAME || email, at: Date.now() });
           setTimeout(() => logins.delete(id), 5 * 60_000);
           return send(res, 200, { needCode: true, loginId: id, kind: r.ChallengeName, destination: p.CODE_DELIVERY_DESTINATION || null });
         }
@@ -360,10 +415,11 @@ export function mymRoutes({ userFrom, send, body, creators }) {
         const r = await cognito('RespondToAuthChallenge', { ChallengeName: l.challenge, ClientId: CLIENT_ID, Session: l.session, ChallengeResponses: { USERNAME: l.username, [field]: code } });
         if (!r.AuthenticationResult) return send(res, 400, { error: `MYM demande encore une étape (${r.ChallengeName || 'inconnue'}).` });
         const a = r.AuthenticationResult;
-        const me = await saveLink(l.cid, { clientId: CLIENT_ID, refresh: a.RefreshToken, access: a.AccessToken, expiresIn: a.ExpiresIn, deviceKey: a.NewDeviceMetadata?.DeviceKey }, l.by);
+        const me = await saveLink(l.cid || null, { clientId: CLIENT_ID, refresh: a.RefreshToken, access: a.AccessToken, expiresIn: a.ExpiresIn, deviceKey: a.NewDeviceMetadata?.DeviceKey }, l.by, creators());
         logins.delete(String(b.loginId));
-        attempts.delete(l.cid);
-        send(res, 200, { ok: true, username: me.username || null });
+        attempts.delete(l.key);
+        onLinked?.();
+        send(res, 200, { ok: true, username: me.username || null, creatorId: me.bloomId, native: isNative(me.bloomId) });
       } catch (e) {
         send(res, e.status === 401 || e.status === 400 ? 400 : 502, { error: e.message });
       }

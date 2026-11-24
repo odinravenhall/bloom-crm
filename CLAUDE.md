@@ -254,3 +254,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Total d'abonnés actifs : relevé toutes les 10 min (`mym_subs_daily`), pas d'historique avant le 24/11/2026.
 - « À répondre » (Messages Pro et messagerie) : `waiting()` de `inbox.mjs` ne tient plus compte du « non lu » de Substy
   quand le dernier message vient de la créatrice (l'IA a déjà répondu).
+
+## Comptes MYM ajoutés sans Substy (24/11/2026) — `app/mym.mjs`
+
+- « Ajouter un compte » (MYM → Compte Creator) ouvre directement le formulaire email + mot de passe (ou l'extension) :
+  on ne choisit plus une modèle de Substy. Bloom lit le profil MYM et prend, dans l'ordre : la modèle déjà reliée à ce
+  compte, sinon la modèle MYM de Substy au même pseudo (elle garde l'IA), sinon une modèle « de Bloom »
+  (`mym_native`, identifiant `mym-<id MYM>`).
+- Une modèle `mym-…` n'a pas d'IA : `substy.call` refuse tout appel pour elle (`isNative`), ses conversations viennent
+  seulement de MYM, épingler ne touche à aucune IA. Elle est ajoutée à `state.creators` (`applyCreators`).
+- Si elle apparaît plus tard chez Substy (même pseudo), `adoptNatives` passe toutes ses lignes (`creator_id` de toutes
+  les tables + réglages) sous l'identifiant de Substy.

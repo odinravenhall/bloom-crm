@@ -4,6 +4,7 @@ import { onMessageAlert } from './alerts.mjs';
 import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage, mymDirect, twinOf } from './mymchat.mjs';
+import { isNative, nativeCreators } from './mym.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 
 export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
@@ -339,7 +340,8 @@ async function crawl(cid) {
     let pages = 0;
     let stale = 0;
     const seen = new Set();
-    do {
+    // Modèle sans Substy : toutes ses conversations viennent de MYM (plus bas).
+    if (!isNative(cid)) do {
       // Pages de 30 comme le site de Substy : au-delà, sa pagination tourne en boucle.
       const r = await SUB.chats(cid, { limit: 30, cursor });
       let fresh = 0;
@@ -373,6 +375,7 @@ async function refreshTop(cid) {
   if (!SUB) return;
   const b = inboxOf(cid);
   try {
+    if (isNative(cid)) throw new Error('sans Substy');
     const r = await SUB.chats(cid, { limit: 30 });
     for (const it of r?.items || []) put(b, fromSubsty(b, chatView(it)));
   } catch {}
@@ -588,7 +591,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const u = auth(req, res);
       if (!u) return;
       // Les modèles MYM dont le compte n'est pas relié à Bloom ne sont pas affichées.
-      const list = ((await substy.creators()) || []).map(creatorOf).filter((c) => !mymHidden(c.id));
+      // Créatrices de Substy, plus les comptes MYM ajoutés directement dans Bloom.
+      const list = [...((await substy.creators().catch(() => [])) || []), ...nativeCreators()].map(creatorOf).filter((c) => !mymHidden(c.id));
       const allowed = creatorsOf(u);
       send(res, 200, allowed === null ? list : list.filter((c) => allowed.has(String(c.id))));
     },

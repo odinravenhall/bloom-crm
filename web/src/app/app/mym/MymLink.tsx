@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, Eye, EyeOff, KeyRound, Link2, Mail, RefreshCw, ShieldCheck, Unlink, X, XCircle } from "lucide-react";
 import { api, toast } from "@/lib/api";
 
@@ -41,29 +41,18 @@ export function MymLinkChip({ state, canEdit, onChange }: { state: MymLinkState 
   );
 }
 
-/** « Ajouter un compte » : choisir une modèle MYM pas encore reliée, puis la relier. Elle apparaît dans Bloom ensuite. */
-export function AddMymAccount({ links, onClose }: { links: MymLinkState[]; onClose: () => void }) {
-  const free = links.filter((l) => !l.linked);
-  const [pick, setPick] = useState<MymLinkState | null>(null);
+/**
+ * « Ajouter un compte » : directement le formulaire de connexion MYM (email + mot de passe, ou extension), sans choisir
+ * une modèle de Substy. Bloom reconnaît le compte d'après son profil MYM et crée la modèle si elle n'existe pas encore.
+ */
+export function AddMymAccount({ onClose }: { links?: MymLinkState[]; onClose: () => void }) {
   // Après une liaison : on recharge pour que la modèle apparaisse partout.
-  if (pick) return <LinkModal state={pick} onClose={() => window.location.reload()} />;
-  return (
-    <div className="mp-font fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
-      <div className="w-full max-w-[440px] overflow-hidden rounded-lg" style={{ background: "#262a2f", color: "var(--mp-text)" }} onMouseDown={(e) => e.stopPropagation()}>
-        <h3 className="flex items-center justify-between px-4 py-3.5 text-[15px] font-semibold" style={{ background: "#2b3a4a", color: "var(--mp-head)" }}>Ajouter un compte MYM<button onClick={onClose}><X className="size-4" /></button></h3>
-        <div className="px-4 py-4 text-[13px]">
-          <p style={{ color: "var(--mp-muted)" }}>Une modèle MYM n’apparaît dans Bloom qu’une fois son compte relié. Choisis la modèle à relier :</p>
-          <div className="mt-3 space-y-1.5">
-            {free.map((l) => <button key={l.creatorId} onClick={() => setPick(l)} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left font-semibold" style={{ background: "#2f343a", color: "var(--mp-head)" }}><Link2 className="size-4" style={{ color: "var(--mp-accent)" }} />{l.name}</button>)}
-            {!free.length ? <p className="py-6 text-center" style={{ color: "var(--mp-muted)" }}>Toutes les modèles MYM connues sont déjà reliées. Une nouvelle modèle doit d’abord exister chez Substy.</p> : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <LinkModal state={{ creatorId: "", name: "", linked: false }} onClose={onClose} onLinked={() => setTimeout(() => window.location.reload(), 1200)} />;
 }
 
-function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => void }) {
+function LinkModal({ state, onClose, onLinked }: { state: MymLinkState; onClose: () => void; onLinked?: () => void }) {
+  const who = state.name || "Le compte MYM";
+  const known = useRef<Set<string> | null>(null);
   const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [cur, setCur] = useState(state);
@@ -79,11 +68,14 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
     if (!code) return;
     const t = setInterval(async () => {
       const r = await api<{ links: MymLinkState[] }>("GET", "/api/mym/links").catch(() => null);
-      const s = r?.links.find((l) => l.creatorId === state.creatorId);
+      // Ajout d'un compte sans modèle choisie : on guette une liaison qui n'existait pas à l'ouverture.
+      if (r && !known.current) known.current = new Set(r.links.filter((l) => l.linked).map((l) => l.creatorId));
+      const s = state.creatorId ? r?.links.find((l) => l.creatorId === state.creatorId) : r?.links.find((l) => l.linked && !known.current?.has(l.creatorId));
       if (s?.linked && s.ok && (!cur.linked || s.username !== cur.username || (s.checkedAt ?? 0) > (cur.checkedAt ?? 0))) {
         setCur(s);
         setCode(null);
-        toast(`${state.name} est reliée à MYM ✓`);
+        toast(`${s.name || who} est relié à MYM ✓`);
+        onLinked?.();
       }
     }, 3000);
     return () => clearInterval(t);
@@ -109,7 +101,7 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
   return (
     <div className="mp-font fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
       <div className="w-full max-w-[520px] overflow-hidden rounded-lg" style={{ background: "#262a2f", color: "var(--mp-text)" }} onMouseDown={(e) => e.stopPropagation()}>
-        <h3 className="flex items-center justify-between px-4 py-3.5 text-[15px] font-semibold" style={{ background: "#2b3a4a", color: "var(--mp-head)" }}>Relier {state.name} à MYM<button onClick={onClose}><X className="size-4" /></button></h3>
+        <h3 className="flex items-center justify-between px-4 py-3.5 text-[15px] font-semibold" style={{ background: "#2b3a4a", color: "var(--mp-head)" }}>{state.name ? `Relier ${state.name} à MYM` : "Relier un compte MYM"}<button onClick={onClose}><X className="size-4" /></button></h3>
         <div className="px-4 py-4 text-[13px]">
           {cur.linked ? (
             <div className="mb-4 rounded-md p-3" style={{ background: cur.ok ? "rgba(60,209,136,.1)" : "rgba(240,101,72,.1)" }}>
@@ -127,11 +119,11 @@ function LinkModal({ state, onClose }: { state: MymLinkState; onClose: () => voi
               <button key={k} onClick={() => setMode(k)} className="flex-1 py-2 font-semibold" style={mode === k ? { background: "var(--mp-accent)", color: "var(--mp-on-accent)" } : undefined}>{l}</button>
             ))}
           </div>
-          {mode === "login" ? <LoginForm state={state} onDone={(username) => (setCur({ ...cur, linked: true, ok: true, error: null, username, checkedAt: Date.now() }), toast(`${state.name} est reliée à MYM ✓`))} /> : null}
+          {mode === "login" ? <LoginForm state={state} onDone={(username) => (setCur({ ...cur, linked: true, ok: true, error: null, username, checkedAt: Date.now() }), toast(`${username ? `@${username}` : who} est relié à MYM ✓`), onLinked?.())} /> : null}
           {mode === "ext" ? (<>
           <p style={{ color: "var(--mp-muted)" }}>Bloom se branche directement au compte MYM de la modèle (comme MyPulse). Le mot de passe n’est jamais lu : seule la session est gardée, chiffrée, et renouvelée toute seule.</p>
           <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>1</span><div>Une seule fois par ordinateur : installe l’extension. <a href="/bloom-relier-mym.zip" download className="inline-flex items-center gap-1 font-semibold underline" style={{ color: "var(--mp-accent)" }}><Download className="size-3.5" />Télécharger</a><p className="text-[12px]" style={{ color: "var(--mp-muted)" }}>Dézippe, ouvre chrome://extensions, active « Mode développeur », puis « Charger l’extension non empaquetée » et choisis le dossier « bloom-relier-mym ».</p></div></div>
-          <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>2</span><div>Dans ce Chrome, connecte-toi à <b>creators.mym.fans</b> avec le compte de {state.name}.</div></div>
+          <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>2</span><div>Dans ce Chrome, connecte-toi à <b>creators.mym.fans</b> avec le compte de {state.name || "la modèle"}.</div></div>
           <div className={step}><span className={num} style={{ background: "var(--mp-accent)", color: "var(--mp-on-accent)" }}>3</span><div className="flex-1">
             Clique sur l’extension « Bloom – Relier MYM » et colle ce code :
             {code ? (
