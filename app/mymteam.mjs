@@ -214,6 +214,20 @@ export function mymTeamRoutes({ userFrom, send, creators }) {
       });
     },
 
+    // Fiche d'une personne (Contrôle des accès → statistiques) : ventes MYM qui lui sont attribuées et temps passé dans
+    // Bloom sur 30 jours (« actif » = sur le chat, « inactif » = Bloom ouvert ailleurs : `work_log` de team.mjs).
+    'GET /api/mym/team/person': (req, res) => {
+      const x = scope(req, res);
+      if (!x) return;
+      const t = one('SELECT id, name FROM users WHERE id = ? AND deleted = 0', Number(x.p.get('id')));
+      if (!t) return send(res, 404, { error: 'Personne inconnue' });
+      const since = Date.now() - 30 * DAY;
+      const ca = (from) => (x.cids.length ? one(`SELECT SUM(gross) AS s, COUNT(*) AS n FROM rv_live WHERE creator_id IN (${x.inSql}) AND src = 'mym' AND gross > 0 AND origin IN ('bloom', 'employee') AND origin_by = ? AND at >= ?`, ...x.cids, t.name, from) : null);
+      const w = one('SELECT SUM(active) AS a, SUM(idle) AS i FROM work_log WHERE user_id = ? AND day >= ?', t.id, parisDay(since));
+      const msgs = x.cids.length ? one(`SELECT COUNT(*) AS n FROM msg_log WHERE from_fan = 0 AND kind IN ('bloom', 'employee') AND by_name = ? AND creator_id IN (${x.inSql}) AND at >= ?`, t.name, ...x.cids, since)?.n || 0 : 0;
+      send(res, 200, { name: t.name, total: (ca(0)?.s || 0) / 100, d30: (ca(since)?.s || 0) / 100, sales30: ca(since)?.n || 0, activeH: (w?.a || 0) / 3600e3, idleH: (w?.i || 0) / 3600e3, messages30: msgs });
+    },
+
     // ------------------------------------------------------------ Contrôle des shifts
     'GET /api/mym/team/shifts': (req, res) => {
       const x = scope(req, res);

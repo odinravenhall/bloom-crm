@@ -289,8 +289,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   ne comptent donc que les messages envoyés depuis Bloom.
 - Vacation = suite de messages d'un chatteur sans trou de plus de « coupure » minutes ; temps actif = écarts de moins de
   « seuil » minutes (+ 1 min à chaque reprise). Export CSV au format du relevé de MyPulse.
-- Pas encore fait (montré par l'agence le 24/11/2026) : Contrôle des accès façon MyPulse, Accès MYM direct,
-  Notifications MYM, temps connecté / sessions / snapshots des shifts.
+- `/app/mym/notifications` : fil du compte (abonnements, renouvellements, achats) d'après `rv_live`, « lu » par
+  personne (`mym_notifs_seen:<id>`). On ne lit PAS la page de notifications de MYM (l'ouvrir les marquerait comme lues).
+- `/app/mym/acces` : « Accès & équipe » façon MyPulse sur les routes `staff` existantes (rôle + créateurs, renommer,
+  retirer des créateurs, inviter par pseudo Discord, fiche `GET /api/mym/team/person`). Les droits restent par RÔLE.
+- Pas encore fait : droits cochés personne par personne, Accès MYM direct (session MYM ouverte depuis Bloom), temps
+  connecté / sessions / snapshots des shifts.
 
 ## MYM → Pilotage d'équipe : Modération, Activité, En direct (24/11/2026) — `app/mymmod.mjs`, `app/journal.mjs`
 

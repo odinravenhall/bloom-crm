@@ -11,7 +11,7 @@
 //  - meilleurs créneaux de vente : contenus payants et pourboires, par jour de la semaine et heure de Paris ;
 //  - `GET /api/mym/transactions` : la liste des transactions (page Transactions), par type et par période.
 // Jours = jours de Paris.
-import { all, db, one, run } from './store.mjs';
+import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { isLinked, mymFollowerCounts } from './mym.mjs';
 import { canSee } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
@@ -112,6 +112,51 @@ export function startMymStats(creators) {
 
 export function mymStatsRoutes({ userFrom, send, creators }) {
   return {
+    // Notifications MYM : le fil du compte (abonnements, renouvellements, achats), d'après les revenus lus chez MYM.
+    // On ne lit PAS la page de notifications de MYM : l'ouvrir les marquerait comme lues sur le compte de la modèle,
+    // et elle ne donne ni le pseudo ni l'heure exacte. Les demandes de média privé n'y sont donc pas.
+    'GET /api/mym/notifs': (req, res) => {
+      const u = userFrom(req);
+      if (!u) return send(res, 401, { error: 'Connecte-toi' });
+      if (u.role === 'model') return send(res, 403, { error: 'Page réservée à l’équipe' });
+      const p = new URL(req.url, 'http://x').searchParams;
+      const only = p.get('creatorId') || '';
+      const list = creators().filter((c) => /mym/i.test(c.platform || '') && isLinked(c.id) && canSee({ ...u, pf: null }, c.id));
+      const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [m.creator_id, m.nickname]));
+      const names = new Map(list.map((c) => [String(c.id), meta.get(String(c.id)) || c.name]));
+      const ids = [...names.keys()].filter((id) => !only || id === only);
+      const seen = Number(getSetting(`mym_notifs_seen:${u.id}`)) || 0;
+      const base = { creators: [...names].map(([id, name]) => ({ id, name })), seen };
+      if (!ids.length) return send(res, 200, { ...base, items: [], more: false, unread: 0 });
+      const kind = p.get('kind') || 'all';
+      const before = Number(p.get('before')) || Date.now() + DAY;
+      const types = kind === 'buy' ? "('ppv', 'tip', 'push')" : kind === 'subs' || kind === 'renew' ? "('sub')" : "('sub', 'ppv', 'tip', 'push')";
+      const inSql = ids.map(() => '?').join(',');
+      const out = [];
+      let cursor = before;
+      // Nouveaux abonnés / renouvellements se décident ligne par ligne : on lit par paquets jusqu'à en avoir 50.
+      for (let i = 0; i < 8 && out.length < 51; i++) {
+        const rows = all(`SELECT id, creator_id, type, raw, at, gross, fan_id, fan_name FROM rv_live WHERE creator_id IN (${inSql}) AND src = 'mym' AND type IN ${types} AND gross >= 0 AND at < ? ORDER BY at DESC LIMIT 200`, ...ids, cursor);
+        if (!rows.length) break;
+        for (const r of rows) {
+          cursor = r.at;
+          let k = 'buy';
+          if (r.type === 'sub') k = (firstSubs(r.creator_id).get(String(r.fan_name || r.fan_id || '').toLowerCase()) ?? r.at) < r.at ? 'renew' : 'subs';
+          else if (!(r.gross > 0)) continue;
+          if (kind !== 'all' && kind !== k) continue;
+          out.push({ id: String(r.id), kind: k, sub: r.type === 'tip' ? 'tip' : catOf(r), fan: r.fan_name || 'Un fan', creator: names.get(r.creator_id) || '', amount: r.gross / 100, at: r.at });
+          if (out.length >= 51) break;
+        }
+        if (rows.length < 200) break;
+      }
+      send(res, 200, { ...base, items: out.slice(0, 50), more: out.length > 50, unread: one(`SELECT COUNT(*) AS n FROM rv_live WHERE creator_id IN (${inSql}) AND src = 'mym' AND type IN ('sub', 'ppv', 'tip', 'push') AND at > ?`, ...ids, Math.max(seen, Date.now() - 7 * DAY))?.n || 0 });
+    },
+    'POST /api/mym/notifs/read': (req, res) => {
+      const u = userFrom(req);
+      if (!u) return send(res, 401, { error: 'Connecte-toi' });
+      setSetting(`mym_notifs_seen:${u.id}`, String(Date.now()));
+      send(res, 200, { ok: true });
+    },
     'GET /api/mym/stats': (req, res) => {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
