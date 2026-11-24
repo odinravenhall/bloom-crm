@@ -242,7 +242,7 @@ export function mymTrackRoutes({ userFrom, send, body, creators }) {
       const { from, to, today } = period(b);
       const d = dataOf(s.creator_id, from, to, JSON.parse(s.links || '[]'));
       // Rien d'autre que les chiffres des liens choisis (pas d'adresse interne, pas de nom de modèle).
-      send(res, 200, { name: s.name, from, to, today, links: d.links, days: d.days, since: d.since, at: d.at });
+      send(res, 200, { name: s.name, from, to, today, links: d.links.map((l) => ({ ...l, url: null })), days: d.days, since: d.since, at: d.at });
     },
   };
 }
