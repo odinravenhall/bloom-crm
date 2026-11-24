@@ -19,6 +19,7 @@ type Data = {
   provisional: number;
   sales: number;
   blocks: { subscriptions: number; posts: number; messages: number; tips: number; referrals: number; streams: number };
+  messagesBy?: { ai: number; team: number; other: number };
   employeeSales: { label: string; v: number; msgs: number; tips: number; future: boolean }[];
   employeeBefore?: number;
   hourly: boolean;
@@ -155,6 +156,15 @@ export function OfDashboard() {
                     <p className="text-[12px]" style={{ color: C.muted }}>
                       {t(b.label)}
                     </p>
+                    {/* Messages : la part de l'IA de Substy et celle des chatteurs */}
+                    {b.key === "messages" && data?.messagesBy ? (
+                      <p className="mt-1 text-[11.5px] leading-relaxed tabular-nums" style={{ color: C.muted }}>
+                        <span style={{ color: "#c084fc" }}>{t("Substy AI")} {usd(data.messagesBy.ai)}</span>
+                        <br />
+                        <span style={{ color: "#60a5fa" }}>{t("Chatters")} {usd(data.messagesBy.team)}</span>
+                        {data.messagesBy.other > 0 ? <><br />{t("Other")} {usd(data.messagesBy.other)}</> : null}
+                      </p>
+                    ) : null}
                   </div>
                   <span className="grid size-11 shrink-0 place-items-center rounded-full" style={{ background: `${b.color}22`, color: b.color }}>
                     <b.icon className="size-5" />

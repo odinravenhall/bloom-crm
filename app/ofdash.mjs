@@ -3,7 +3,7 @@
 // (comme Infloww : ventes de messages et pourboires faites par les employés, en brut, jour par jour).
 // Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, des modèles OnlyFans présentes chez Substy seulement, plus les ventes Substy des dernières 24 h pas
 // encore confirmées (provisoires). Heure de Paris.
-import { all } from './store.mjs';
+import { all, one } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
 
@@ -65,6 +65,9 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       let total = 0;
       let provisional = 0;
       let sales = 0;
+      // Messages payants : qui les a vendus ? IA de Substy, chatteurs (message parti de Bloom, ou chatteur attribué par
+      // Infloww), ou ni l'un ni l'autre (script automatique, auteur inconnu).
+      const messagesBy = { ai: 0, team: 0, other: 0 };
       if (accounts.length) {
         const ph = accounts.map(() => '?').join(',');
         for (const r of all(`SELECT type, raw_type, gross, net, currency, status, seller, origin, at FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...accounts, start - DAY, end)) {
@@ -78,6 +81,7 @@ export function ofDashRoutes({ userFrom, send, creators }) {
           const v = (gross ? r.gross : r.net) / 100;
           const b = BLOCK[r.type] || (/refer|parrain/i.test(r.raw_type || '') ? 'referrals' : null);
           if (b) blocks[b] += v;
+          if (b === 'messages') messagesBy[r.origin === 'ai' ? 'ai' : r.origin === 'bloom' || r.seller ? 'team' : 'other'] += v;
           total += v;
           sales++;
         }
@@ -85,10 +89,15 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       // Ventes Substy des dernières 24 h pas encore confirmées par Infloww (provisoires).
       if (ids.size) {
         const ph = [...ids].map(() => '?').join(',');
-        for (const l of all(`SELECT type, gross, at FROM rv_live WHERE matched IS NULL AND creator_id IN (${ph}) AND at >= ? AND at < ? AND at > ?`, ...ids, start, end, Date.now() - DAY)) {
+        for (const l of all(`SELECT type, gross, at, message_id FROM rv_live WHERE matched IS NULL AND creator_id IN (${ph}) AND at >= ? AND at < ? AND at > ?`, ...ids, start, end, Date.now() - DAY)) {
           if (/sub/i.test(l.type || '')) continue;
           const v = (gross ? l.gross : l.gross * 0.8) / 100;
-          blocks[/tip/i.test(l.type || '') ? 'tips' : /post/i.test(l.type || '') ? 'posts' : 'messages'] += v;
+          const lb = /tip/i.test(l.type || '') ? 'tips' : /post/i.test(l.type || '') ? 'posts' : 'messages';
+          blocks[lb] += v;
+          if (lb === 'messages') {
+            const k = l.message_id ? one('SELECT kind FROM msg_log WHERE id = ?', l.message_id)?.kind : null;
+            messagesBy[k === 'ai' ? 'ai' : k === 'bloom' || k === 'employee' ? 'team' : 'other'] += v;
+          }
           total += v;
           provisional += v;
         }
@@ -103,6 +112,7 @@ export function ofDashRoutes({ userFrom, send, creators }) {
         provisional: round(provisional),
         sales,
         blocks: Object.fromEntries(Object.entries(blocks).map(([k, v]) => [k, round(v)])),
+        messagesBy: Object.fromEntries(Object.entries(messagesBy).map(([k, v]) => [k, round(v)])),
         employeeSales: points.slice(1).map((x) => ({ label: x.label, v: round(x.msgs + x.tips), msgs: round(x.msgs), tips: round(x.tips), future: x.at > Date.now() })),
         employeeBefore: round(points[0].msgs + points[0].tips),
         hourly,
