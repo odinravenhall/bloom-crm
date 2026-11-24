@@ -183,6 +183,7 @@ async function mymLiveTick(cid) {
         v.by = mymAuthor(cid, m.fanId, v, !!b.map.get(m.fanId)?.ai);
         if (!twinOf(cid, m.fanId, v.fromFan, v.text, Date.parse(v.at) || Date.now(), '')) logMessage(cid, m.fanId, v, 'mym');
         st.events++;
+        if (v.fromFan) for (const fn of fanListeners) Promise.resolve().then(() => fn(cid, m.fanId, v)).catch((e) => console.warn('[bloom] message de fan :', e.message));
         const line = `data: ${JSON.stringify({ creatorId: cid, type: 'new_message', fanId: m.fanId, message: v, via: 'mym' })}\n\n`;
         for (const [c, u] of clients) if (canSee(u, cid)) c.write(line);
       }
@@ -276,6 +277,13 @@ export function inboxFanByUsername(cid, username) {
   for (const c of inboxOf(cid).map.values()) if (String(c.username || '').trim().toLowerCase() === n) return c.fanId;
   return null;
 }
+/** Toutes les conversations en mémoire d'une créatrice, sans relancer de lecture (envois groupés). */
+export const inboxPeek = (cid) => [...inboxOf(cid).map.values()];
+/** Relit TOUTES les conversations d'une créatrice chez MYM (avant un retrait de messages non lus). */
+export const refreshMymInbox = (cid) => overlayMym(cid, 400);
+/** Prévenu à chaque message d'un fan MYM arrivé en direct : (créatrice, fan, message). */
+const fanListeners = [];
+export const onMymFanMessage = (fn) => fanListeners.push(fn);
 export function inboxChats(cid) {
   const b = inboxOf(cid);
   b.usedAt = Date.now();

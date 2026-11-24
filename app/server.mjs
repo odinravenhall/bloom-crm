@@ -33,7 +33,7 @@ import { mymMediaRoutes } from './mymmedia.mjs';
 import { mymVoucherRoutes } from './mymvouchers.mjs';
 import { mySalesRoutes } from './mysales.mjs';
 import { mymIncomeRoutes, startMymIncome } from './mymincome.mjs';
-import { mymBulkRoutes } from './mymbulk.mjs';
+import { mymBulkRoutes, startMymBulk } from './mymbulk.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -463,6 +463,7 @@ Object.assign(createServer(async (req, res) => {
   startRevenue();
   startAlerts(substy);
   startMymIncome(() => state.creators || []);
+  startMymBulk();
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);

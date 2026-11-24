@@ -43,7 +43,7 @@ const NAV: Entry[] = [
   },
   {
     key: "mass", label: "Envois groupés", icon: Send, roles: CHAT,
-    children: [{ label: "Push (MYM officiel)", href: soon("Push (MYM officiel)") }, { label: "MoDs (MYM officiel)", href: soon("MoDs (MYM officiel)") }, { label: "Mass DM", href: "/app/envoi" }],
+    children: [{ label: "Push (MYM officiel)", href: "/app/mym/push" }, { label: "MoDs (MYM officiel)", href: "/app/mym/mods" }, { label: "Mass DM (Bloom)", href: "/app/mym/massdm" }],
   },
   {
     key: "stats", label: "Stats", icon: BarChart3, roles: BOSS,

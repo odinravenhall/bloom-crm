@@ -234,3 +234,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   pourboire (14 derniers jours). ⚠️ Côté MYM, Substy ne dit jamais qu'un message vient de son IA (ni flux, ni liste de
   messages, ni historique IA) : « IA » est DÉDUIT = message pas parti de Bloom, pas un push, fan dont l'IA est active. État : `GET /api/mym/income/status` (admins, managers).
 - Pas encore fait : la page Accueil / Stats générale rapproche toujours avec MyPulse (`rv_sales`).
+
+## MYM → Envois groupés : Push, MoDs, Mass DM (24/11/2026) — `app/mymbulk.mjs`
+
+- Pages `/app/mym/push`, `/app/mym/mods`, `/app/mym/massdm` (copies de MyPulse ; studios plein écran : `MymStudioKit.tsx`).
+- Push = fonction de MYM (api.mym.fans `/v2/pushes`, formats en tête de `mymbulk.mjs`). Création : admins / managers, un
+  seul essai, noté dans `mym_push_log`. ⚠️ Format de création lu dans le code du site, pas encore vérifié sur un vrai push.
+  MoDs = les pushs payants mis au catalogue (`mod: true`).
+- Mass DM = fait par Bloom : un message privé par fan avec `mymSend` (1 toutes les 1,2 s), audience = conversations MYM
+  connues (`inboxPeek`), groupes de Bloom, filtres, prix intelligent, programmation, retrait (texte seulement : MYM refuse
+  de supprimer un message avec média), retrait auto des non lus, challenge en 2 temps (`onMymFanMessage` de `chat.mjs`).
+  Lancer une campagne : team leaders et plus. Une campagne en cours à la fois par créatrice.

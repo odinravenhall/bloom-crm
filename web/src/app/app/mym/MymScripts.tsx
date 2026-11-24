@@ -392,7 +392,7 @@ type CloudFolder = { id: string; name: string; total: number };
 type CloudMedia = { id: string; type: string; thumb: string | null; full: string | null; duration: number | null; name?: string; usedPublic?: boolean; usedPrivate?: boolean };
 
 /** Choix des médias façon MyPulse : « MYM Cloud » (tout) ou une collection à gauche, la grille à droite. */
-function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; selected: Media[]; onChange: (m: Media[]) => void }) {
+export function CloudPicker({ creatorId, selected, onChange, max = MAX_MEDIAS }: { creatorId: string; selected: Media[]; onChange: (m: Media[]) => void; max?: number }) {
   const [folders, setFolders] = useState<CloudFolder[]>([]);
   const [folder, setFolder] = useState("");
   const [type, setType] = useState<"" | "photo" | "video" | "audio">("");
@@ -432,7 +432,7 @@ function CloudPicker({ creatorId, selected, onChange }: { creatorId: string; sel
   }, [load]);
   const toggle = (m: CloudMedia) => {
     if (selected.some((x) => x.id === m.id)) return onChange(selected.filter((x) => x.id !== m.id));
-    if (selected.length >= MAX_MEDIAS) return toast(`${MAX_MEDIAS} médias au plus par message`, "err");
+    if (selected.length >= max) return toast(`${max} média${max > 1 ? "s" : ""} au plus`, "err");
     const next = [...selected, { id: m.id, type: m.type, thumb: m.thumb, full: null, duration: m.duration }];
     onChange(next);
     // Les adresses d'images de MYM expirent : Bloom garde une copie de la vignette et la met à la place.

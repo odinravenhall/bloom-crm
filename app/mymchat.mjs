@@ -39,6 +39,7 @@ function chatOf(c) {
     online: !!u.is_online,
     seenAt: u.last_seen_at || null,
     sub: !!u.is_subscriber,
+    interested: !!u.is_interested,
     last: lm?.id ? { id: String(lm.id), text: String(lm.content || ''), at: lm.date, fromCreator: lm.sender_id === creator, media: lm.type === 'private_media' ? 1 : 0, readAt: lm.read_at || null } : null,
   };
 }
@@ -125,6 +126,10 @@ export function mymAuthor(cid, fanId, v, aiOn = false) {
   const mine = all('SELECT s.text, s.message_id, u.name FROM sent_log s JOIN users u ON u.id = s.user_id WHERE s.creator_id = ? AND s.fan_id = ? AND (s.message_id = ? OR s.at BETWEEN ? AND ?)', String(cid), String(fanId), String(v.id), at - 90_000, at + 90_000)
     .find((l) => l.message_id === String(v.id) || (!l.message_id && same(l.text, v.text)));
   if (mine) return { kind: 'bloom', name: mine.name };
+  // Message parti d'une campagne de Mass DM (mymbulk.mjs).
+  try {
+    if (one('SELECT 1 AS x FROM mdm_sends WHERE message_id = ?', String(v.id))) return { kind: 'auto', name: 'Mass DM' };
+  } catch {}
   const own = one('SELECT kind, by_name FROM msg_log WHERE id = ?', String(v.id));
   const k = own?.kind && own.kind !== 'creator' ? own : twinOf(cid, fanId, false, v.text, at, '') || own;
   return k?.kind === 'ai' ? { kind: 'ai', name: 'IA' }
