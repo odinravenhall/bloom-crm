@@ -35,6 +35,7 @@ import { mySalesRoutes } from './mysales.mjs';
 import { mymIncomeRoutes, startMymIncome } from './mymincome.mjs';
 import { mymBulkRoutes, startMymBulk } from './mymbulk.mjs';
 import { mymStatsRoutes, startMymStats } from './mymstats.mjs';
+import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -431,6 +432,7 @@ Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.crea
 Object.assign(routes, mymIncomeRoutes({ userFrom, send, creators: () => state.creators || [], live: mymLiveState }));
 Object.assign(routes, mymBulkRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymStatsRoutes({ userFrom, send, creators: () => state.creators || [] }));
+Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
@@ -474,6 +476,7 @@ Object.assign(createServer(async (req, res) => {
   startMymIncome(() => state.creators || []);
   startMymBulk();
   startMymStats(() => state.creators || []);
+  startMymTrack(() => state.creators || []);
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);

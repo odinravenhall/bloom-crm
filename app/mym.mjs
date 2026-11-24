@@ -165,7 +165,7 @@ export async function mymSite(cid, path) {
  * texte, l'adresse de redirection et les cookies posés par MYM (à renvoyer avec le formulaire : le jeton du formulaire
  * est lié à la session de la page). `form` (URLSearchParams) = envoi du formulaire en POST. Jamais de redirection suivie.
  */
-export async function mymSiteRaw(cid, path, { form, cookies = '', xhr = false } = {}) {
+export async function mymSiteRaw(cid, path, { form, json, method, cookies = '', xhr = false } = {}) {
   await accessOf(cid);
   const l = one('SELECT client_id, access, id_token FROM mym_links WHERE creator_id = ?', cid);
   const access = open(l.access);
@@ -175,15 +175,16 @@ export async function mymSiteRaw(cid, path, { form, cookies = '', xhr = false } 
   const pre = `CognitoIdentityServiceProvider.${l.client_id}`;
   const cookie = [`${pre}.LastAuthUser=${user}`, `${pre}.${user}.accessToken=${access}`, ...(idTok ? [`${pre}.${user}.idToken=${idTok}`] : []), 'amplify-signin-with-hostedUI=false', ...(cookies ? [cookies] : [])].join('; ');
   const r = await fetch(`https://creators.mym.fans${path}`, {
-    method: form ? 'POST' : 'GET',
+    method: method || (form || json ? 'POST' : 'GET'),
     headers: {
       cookie,
-      accept: 'text/html,application/xhtml+xml',
+      accept: json || method === 'DELETE' ? 'application/json, text/plain, */*' : 'text/html,application/xhtml+xml',
+      ...(json || method === 'DELETE' ? { 'content-type': 'application/json', origin: 'https://creators.mym.fans' } : {}),
       ...(xhr ? { 'x-requested-with': 'XMLHttpRequest' } : {}),
       'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36',
       ...(form ? { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://creators.mym.fans', referer: `https://creators.mym.fans${path}` } : {}),
     },
-    body: form ? form.toString() : undefined,
+    body: form ? form.toString() : json ? JSON.stringify(json) : undefined,
     redirect: 'manual',
     signal: AbortSignal.timeout(30_000),
   });

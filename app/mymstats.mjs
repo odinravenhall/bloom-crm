@@ -5,9 +5,13 @@
 //  - renouvellement = un abonnement d'un fan (même pseudo) qui s'était déjà abonné avant dans l'historique de Bloom
 //    (400 jours) : MYM ne fait pas la différence dans sa liste ;
 //  - total d'abonnés actifs : MYM ne donne que le nombre du moment. Bloom le relève toutes les 10 minutes et garde la
-//    dernière valeur de chaque jour (`mym_subs_daily`), depuis le 24/11/2026 : pas de courbe avant cette date.
+//    dernière valeur de chaque jour (`mym_subs_daily`), depuis le 24/11/2026. Avant le premier relevé, la courbe est
+//    ESTIMÉE : premier relevé moins les nouveaux abonnés arrivés entre-temps (les désabonnements ne sont pas connus,
+//    `subsEst`).
+//  - meilleurs créneaux de vente : contenus payants et pourboires, par jour de la semaine et heure de Paris ;
+//  - `GET /api/mym/transactions` : la liste des transactions (page Transactions), par type et par période.
 // Jours = jours de Paris.
-import { all, db, run } from './store.mjs';
+import { all, db, one, run } from './store.mjs';
 import { isLinked, mymFollowerCounts } from './mym.mjs';
 import { canSee } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
@@ -55,7 +59,42 @@ function statsOf(cid, from, to) {
     if (cat === 'tip' && r.gross > 0) d.nTips++;
   }
   for (const r of all('SELECT day, active FROM mym_subs_daily WHERE creator_id = ? AND day >= ? AND day <= ?', cid, from, to)) if (days.has(r.day)) days.get(r.day).subs = r.active;
+  // Avant le premier relevé : estimation en remontant (relevé − nouveaux abonnés arrivés depuis).
+  const snap = one('SELECT day, active FROM mym_subs_daily WHERE creator_id = ? ORDER BY day LIMIT 1', cid);
+  if (snap && from < snap.day) {
+    const news = new Map();
+    for (const r of all("SELECT at, fan_id, fan_name FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type = 'sub' AND at >= ? AND at < ?", cid, parisMidnight(addDay(from, 1)), parisMidnight(addDay(snap.day, 1)))) {
+      if ((first.get(String(r.fan_name || r.fan_id || '').toLowerCase()) ?? r.at) < r.at) continue;
+      const k = parisDay(r.at);
+      news.set(k, (news.get(k) || 0) + 1);
+    }
+    let v = snap.active;
+    for (let d = snap.day; d > from; ) {
+      v -= news.get(d) || 0;
+      d = addDay(d, -1);
+      const x = days.get(d);
+      if (x) (x.subs = Math.max(0, v)), (x.subsEst = true);
+    }
+  }
   return [...days.values()];
+}
+
+const slotFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', hourCycle: 'h23' });
+const WD = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+/** Ventes (contenus payants, pourboires) par jour de la semaine (0 = dimanche) et heure de Paris. */
+function slotsOf(cids, from, to) {
+  const m = new Map();
+  if (!cids.length) return [];
+  const rows = all(`SELECT at, gross FROM rv_live WHERE creator_id IN (${cids.map(() => '?').join(',')}) AND src = 'mym' AND type IN ('ppv', 'push', 'tip') AND gross > 0 AND at >= ? AND at < ?`, ...cids, parisMidnight(from), parisMidnight(addDay(to, 1)));
+  for (const r of rows) {
+    const p = Object.fromEntries(slotFmt.formatToParts(new Date(r.at)).map((x) => [x.type, x.value]));
+    const k = WD[p.weekday] * 24 + (Number(p.hour) % 24);
+    const s = m.get(k) || { d: WD[p.weekday], h: Number(p.hour) % 24, sum: 0, n: 0 };
+    s.sum += r.gross / 100;
+    s.n++;
+    m.set(k, s);
+  }
+  return [...m.values()].map((s) => ({ ...s, sum: Math.round(s.sum * 100) / 100 }));
 }
 
 /** Relevé du nombre d'abonnés : la dernière valeur de la journée reste. */
@@ -93,7 +132,45 @@ export function mymStatsRoutes({ userFrom, send, creators }) {
         const since = all("SELECT MIN(at) AS t FROM rv_live WHERE creator_id = ? AND src = 'mym'", cid)[0]?.t || null;
         return { id: cid, name: meta.get(cid) || c.name, handle: c.username || null, avatar: c.avatar || null, since, days: statsOf(cid, from, to).map((d) => ({ ...d, ...Object.fromEntries([...CATS, 'refund', 'total'].map((k) => [k, d[k] / 100])) })) };
       });
-      send(res, 200, { from, to, today, creators: out, subsSince: all('SELECT MIN(day) AS d FROM mym_subs_daily')[0]?.d || null });
+      send(res, 200, { from, to, today, creators: out, slots: slotsOf(out.map((c) => c.id), from, to), subsSince: all('SELECT MIN(day) AS d FROM mym_subs_daily')[0]?.d || null });
+    },
+    // Page Transactions : répartition par type + historique (50 par page), sur la période et les types demandés.
+    'GET /api/mym/transactions': (req, res) => {
+      const u = userFrom(req);
+      if (!u) return send(res, 401, { error: 'Connecte-toi' });
+      if (u.role === 'model') return send(res, 403, { error: 'Page réservée à l’équipe' });
+      const p = new URL(req.url, 'http://x').searchParams;
+      const ok = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : null);
+      const from = ok(p.get('from'));
+      const to = ok(p.get('to'));
+      const only = p.get('creatorId') || '';
+      const types = new Set((p.get('types') || '').split(',').filter(Boolean));
+      const offset = Math.max(0, Number(p.get('offset')) || 0);
+      const list = creators().filter((c) => /mym/i.test(c.platform || '') && isLinked(c.id) && canSee({ ...u, pf: null }, c.id) && (!only || c.id === only));
+      const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [m.creator_id, m.nickname]));
+      const names = new Map(list.map((c) => [String(c.id), meta.get(String(c.id)) || c.name]));
+      const ids = [...names.keys()];
+      if (!ids.length) return send(res, 200, { parts: [], total: 0, count: 0, rows: [], more: false, since: null });
+      const rows = all(`SELECT id, creator_id, type, raw, at, gross, fan_name, currency FROM rv_live WHERE creator_id IN (${ids.map(() => '?').join(',')}) AND src = 'mym' AND type <> 'payout' AND at >= ? AND at < ? ORDER BY at DESC`, ...ids, from ? parisMidnight(from) : 0, to ? parisMidnight(addDay(to, 1)) : Date.now() + DAY)
+        .map((r) => ({ ...r, cat: r.type === 'refund' || r.gross < 0 ? 'refund' : catOf(r) }))
+        .filter((r) => !types.size || types.has(r.cat));
+      const parts = new Map();
+      for (const r of rows) {
+        const x = parts.get(r.cat) || { type: r.cat, n: 0, amount: 0 };
+        x.n++;
+        x.amount += r.gross;
+        parts.set(r.cat, x);
+      }
+      const order = ['tip', 'sub', 'ppv', 'mod', 'push', 'other', 'refund'];
+      send(res, 200, {
+        parts: [...parts.values()].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type)).map((x) => ({ ...x, amount: x.amount / 100 })),
+        // Comme MyPulse : les remboursements ne sont pas déduits du total.
+        total: rows.reduce((a, r) => a + (r.cat === 'refund' ? 0 : r.gross), 0) / 100,
+        count: rows.length,
+        rows: rows.slice(offset, offset + 50).map((r) => ({ id: String(r.id).replace(/^mym:/, ''), creator: names.get(r.creator_id) || '', type: r.cat, label: r.raw || '', amount: r.gross / 100, fan: r.fan_name || null, at: r.at })),
+        more: rows.length > offset + 50,
+        since: one(`SELECT MIN(at) AS t FROM rv_live WHERE creator_id IN (${ids.map(() => '?').join(',')}) AND src = 'mym'`, ...ids)?.t || null,
+      });
     },
   };
 }

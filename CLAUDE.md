@@ -265,3 +265,17 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   seulement de MYM, épingler ne touche à aucune IA. Elle est ajoutée à `state.creators` (`applyCreators`).
 - Si elle apparaît plus tard chez Substy (même pseudo), `adoptNatives` passe toutes ses lignes (`creator_id` de toutes
   les tables + réglages) sous l'identifiant de Substy.
+
+## MYM → Stats : Analytique, Transactions, Liens de suivi (24/11/2026) — `app/mymstats.mjs`, `app/mymtrack.mjs`
+
+- `/app/mym/analytique` (un compte) et `/app/mym/transactions` lisent `rv_live` (src = 'mym') comme Statistiques Globales
+  (`GET /api/mym/stats?creatorId=`, `GET /api/mym/transactions`). Statistiques Globales a en plus les meilleurs créneaux
+  de vente (`slots`, heure de Paris) et le comparatif des modèles.
+- Abonnés actifs avant le premier relevé : ESTIMÉS (relevé − nouveaux abonnés arrivés depuis, `subsEst`) ; MYM ne donne
+  ni l'historique ni les désabonnements. Pas de vue « Brut » : MYM ne montre que le net.
+- Liens de suivi = fonction de MYM : page `/app/settings/promotions` du site (totaux par lien seulement), relevée toutes
+  les 10 min dans `mym_track_links` / `mym_track_daily` (le « daily » = différence entre deux jours, rien avant le
+  premier relevé). Créer / supprimer : admins et managers, un seul essai. ⚠️ Formats de création et de suppression lus
+  dans le code du site, pas encore vérifiés sur une vraie action.
+- Partages externes : page publique `/partage/<jeton>` (`POST /api/public/track`), jeton et mot de passe gardés hachés,
+  date de fin facultative ; elle ne montre que les chiffres des liens choisis.
