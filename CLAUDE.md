@@ -263,6 +263,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   (`mym_native`, identifiant `mym-<id MYM>`).
 - Une modèle `mym-…` n'a pas d'IA : `substy.call` refuse tout appel pour elle (`isNative`), ses conversations viennent
   seulement de MYM, épingler ne touche à aucune IA. Elle est ajoutée à `state.creators` (`applyCreators`).
+- Reconnaître la modèle de Substy (`substyTwin`) : par l'identifiant du compte (`platformUserId` de Substy = id MYM),
+  sinon par l'un des noms que Substy connaît. Substy ne remplit PAS « username » (cas d'Emmamelons, 24/11/2026).
 - Si elle apparaît plus tard chez Substy (même pseudo), `adoptNatives` passe toutes ses lignes (`creator_id` de toutes
   les tables + réglages) sous l'identifiant de Substy.
 
