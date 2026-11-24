@@ -473,6 +473,11 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
             if (i) await new Promise((r) => setTimeout(r, 2500));
             const items = (await substy.messages(x.cid, x.fanId, { limit: 30 }))?.items || [];
             ref = items.find((m) => String(m.id) === want) || ref;
+            // Identifiant provisoire déjà remplacé dans la liste de Substy : on retrouve le message par le journal de Bloom.
+            if (!ref && !numeric(want)) {
+              const l = one('SELECT text, at FROM msg_log WHERE id = ? AND from_fan = 0', want);
+              if (l) ref = { id: want, text: l.text || '', createdAt: new Date(l.at).toISOString() };
+            }
             if (ref && numeric(ref.id)) target = ref;
             else if (ref) {
               const at = Date.parse(ref.createdAt) || 0;
