@@ -14,6 +14,8 @@ export type Slot = { d: number; h: number; sum: number; n: number };
 export type Data = { from: string; to: string; today: string; creators: Creator[]; slots?: Slot[]; subsSince: string | null };
 export type Preset = "today" | "yesterday" | "7" | "30" | "month" | "prev" | "year" | "custom";
 export const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" };
+/** Une couleur par modèle (courbes, anneau autour de la photo). */
+export const PALETTE = ["#c7ff4a", "#1fe0b3", "#7b8fd4", "#f7b84b", "#ff5c8a", "#22d3ee", "#f1734f", "#8b5cf6"];
 export const LIME = { background: "var(--mp-accent)", color: "var(--mp-on-accent)" };
 export const eur = (n: number) => `${n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ | /g, " ")} €`;
 export const int = (n: number) => n.toLocaleString("fr-FR").replace(/ | /g, " ");
@@ -134,7 +136,7 @@ export function MymStats() {
       <div className="mt-4 rounded-2xl p-5" style={card}>
         <Head icon={<TrendingUp className="size-4" />} title="Évolution des revenus" creators={d?.creators ?? []} />
         <div className="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
-          <Area points={days.map((x) => ({ label: x.day, v: x.total }))} hover={shown} pinned={pin != null} onHover={(i) => pin == null && setHover(i)} onPick={(i) => setPin(pin === i ? null : i)} fmt={(v) => eur(v)} />
+          <Area points={days.map((x) => ({ label: x.day, v: x.total }))} series={d && d.creators.length > 1 ? d.creators.map((c, i) => ({ color: PALETTE[i % PALETTE.length], vals: c.days.map((x) => x.total) })) : undefined} hover={shown} pinned={pin != null} onHover={(i) => pin == null && setHover(i)} onPick={(i) => setPin(pin === i ? null : i)} fmt={(v) => eur(v)} />
           <div className="rounded-xl" style={{ background: "var(--mp-card-2)", border: "1px solid var(--mp-line)" }}>
             {shown != null && days[shown] ? (
               <>
@@ -143,7 +145,7 @@ export function MymStats() {
                   {pin != null ? <span className="flex items-center gap-2 text-[10.5px] font-bold uppercase" style={{ color: "var(--mp-accent)" }}><Pin className="size-3" /> Jour figé <button onClick={() => setPin(null)} className="rounded-full border px-2 py-0.5 normal-case" style={{ borderColor: "var(--mp-line)", color: "var(--mp-head)" }}>Libérer</button></span> : <Pin className="size-3.5 opacity-50" />}
                 </p>
                 <div className="px-4 py-2">
-                  {d!.creators.map((c) => <p key={c.id} className="flex items-center gap-2.5 py-1.5 text-[13px]"><Avatar src={c.avatar} name={c.name} size="size-7" /><b className="min-w-0 flex-1 truncate" style={{ color: "var(--mp-head)" }}>{c.name}</b><b style={{ color: "var(--mp-head)" }}>{eur(c.days[shown].total)}</b></p>)}
+                  {d!.creators.map((c, i) => <p key={c.id} className="flex items-center gap-2.5 py-1.5 text-[13px]">{d!.creators.length > 1 ? <span className="size-2.5 shrink-0 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} /> : null}<Avatar src={c.avatar} name={c.name} size="size-7" /><b className="min-w-0 flex-1 truncate" style={{ color: "var(--mp-head)" }}>{c.name}</b><b style={{ color: "var(--mp-head)" }}>{eur(c.days[shown].total)}</b></p>)}
                   <p className="mt-2 border-t pt-2 text-[11.5px] leading-relaxed" style={{ borderColor: "var(--mp-line)" }}>Média privé {eur(days[shown].ppv)} · Pourboires {eur(days[shown].tip)}{days[shown].mod ? ` · MoD ${eur(days[shown].mod)}` : ""}{days[shown].push ? ` · Push ${eur(days[shown].push)}` : ""}{days[shown].sub + days[shown].renew ? ` · Abonnements ${eur(days[shown].sub + days[shown].renew)}` : ""}<br />{int(days[shown].newSubs)} nouveaux abonnés · {int(days[shown].renewals)} renouvellements</p>
                 </div>
               </>
@@ -162,7 +164,7 @@ export function MymStats() {
 
       <div className="mt-4 rounded-2xl p-5" style={card}>
         <Head icon={<Users className="size-4" />} title="Total abonnés actifs" creators={d?.creators ?? []} right={hs != null && days[hs]?.subs != null ? <span className="rounded px-2 py-0.5 text-[11.5px] font-bold" style={{ background: "var(--mp-card-2)", color: "var(--mp-head)" }}>{fr(days[hs].day)} · {int(days[hs].subs as number)}{days[hs].subsEst ? " (estimé)" : ""}{hs > 0 && days[hs - 1].subs != null ? <b className="ml-1.5" style={{ color: (days[hs].subs as number) >= (days[hs - 1].subs as number) ? "#3cd188" : "#f06548" }}>{(days[hs].subs as number) >= (days[hs - 1].subs as number) ? "▲" : "▼"}{int(Math.abs((days[hs].subs as number) - (days[hs - 1].subs as number)))}</b> : null}</span> : lastSubs != null ? <span className="rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: "#40518955", color: "#7b8fd4" }}>{int(lastSubs)} actifs</span> : null} />
-        {days.some((x) => x.subs != null) ? <Area points={days.map((x) => ({ label: x.day, v: x.subs }))} hover={hs} pinned={false} onHover={setHs} onPick={() => {}} fmt={(v) => int(Math.round(v))} h={210} /> : <p className="py-10 text-center text-[13px]">Pas encore de relevé sur cette période.</p>}
+        {days.some((x) => x.subs != null) ? <Area points={days.map((x) => ({ label: x.day, v: x.subs }))} series={d && d.creators.length > 1 ? d.creators.map((c, i) => ({ color: PALETTE[i % PALETTE.length], vals: c.days.map((x) => x.subs) })) : undefined} hover={hs} pinned={false} onHover={setHs} onPick={() => {}} fmt={(v) => int(Math.round(v))} h={210} /> : <p className="py-10 text-center text-[13px]">Pas encore de relevé sur cette période.</p>}
         <p className="mt-2 text-[11.5px]" style={{ color: "#7b8fd4" }}>Nombre d’abonnés actifs donné par MYM, relevé par Bloom toutes les 10 minutes (dernière valeur de chaque jour){d?.subsSince ? `, depuis le ${fr(d.subsSince)}` : ""}.{days.some((x) => x.subsEst) ? " Avant cette date, la courbe est estimée : le relevé moins les nouveaux abonnés arrivés entre-temps (MYM ne donne ni l’historique ni les désabonnements, les vrais chiffres étaient donc un peu plus hauts)." : ""}</p>
       </div>
 
@@ -205,7 +207,7 @@ export function Head({ icon, title, creators, right }: { icon: React.ReactNode; 
     <div className="flex items-center gap-3">
       <span className="grid size-9 place-items-center rounded-lg" style={{ background: "rgba(199,255,74,.12)", color: "var(--mp-accent)" }}>{icon}</span>
       <b className="text-[15.5px]" style={{ color: "var(--mp-head)" }}>{title}</b>
-      <span className="flex border-l pl-3" style={{ borderColor: "var(--mp-line)" }}>{creators.slice(0, 8).map((c) => <span key={c.id} className="-ml-1.5 rounded-full first:ml-0" style={{ boxShadow: "0 0 0 2px var(--mp-accent)" }} title={c.name}><Avatar src={c.avatar} name={c.name} size="size-8" /></span>)}</span>
+      <span className="flex border-l pl-3" style={{ borderColor: "var(--mp-line)" }}>{creators.slice(0, 8).map((c, i) => <span key={c.id} className="-ml-1.5 rounded-full first:ml-0" style={{ boxShadow: `0 0 0 2px ${creators.length > 1 ? PALETTE[i % PALETTE.length] : "var(--mp-accent)"}` }} title={c.name}><Avatar src={c.avatar} name={c.name} size="size-8" /></span>)}</span>
       <span className="flex-1" />
       {right}
     </div>
@@ -290,34 +292,38 @@ export function Slots({ slots }: { slots: Slot[] }) {
 }
 
 /** Courbe pleine (revenus, total d'abonnés). Survol = jour montré ; clic = jour figé. Les jours sans valeur sont sautés. */
-export function Area({ points, hover, pinned, onHover, onPick, fmt, h = 300 }: { points: { label: string; v: number | null }[]; hover: number | null; pinned: boolean; onHover: (i: number | null) => void; onPick: (i: number) => void; fmt: (v: number) => string; h?: number }) {
+export function Area({ points, series, hover, pinned, onHover, onPick, fmt, h = 300 }: { points: { label: string; v: number | null }[]; series?: { color: string; vals: (number | null)[] }[]; hover: number | null; pinned: boolean; onHover: (i: number | null) => void; onPick: (i: number) => void; fmt: (v: number) => string; h?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   const L = 64, R = 14, T = 14, B = 30;
-  const vals = points.map((p) => p.v).filter((v): v is number => v != null);
+  // Plusieurs modèles : une courbe chacune (`series`), sinon la courbe du total.
+  const lines = series && series.length > 1 ? series : [{ color: "#c7ff4a", vals: points.map((p) => p.v) }];
+  const vals = lines.flatMap((l) => l.vals).filter((v): v is number => v != null);
   const lo = fmt(1.5).includes("€") || !vals.length ? 0 : Math.max(0, Math.floor((Math.min(...vals) * 0.9) / 100) * 100);
   const max = lo + nice(Math.max(...vals, lo + 1) - lo);
   const n = points.length;
   const x = (i: number) => (n <= 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (n - 1));
   const y = (v: number) => T + (1 - (v - lo) / (max - lo)) * (h - T - B);
-  const pts = points.map((p, i) => (p.v == null ? null : ([x(i), y(p.v)] as [number, number]))).filter((p): p is [number, number] => !!p);
-  const path = smooth(pts);
+  const drawn = lines.map((l) => {
+    const pts = l.vals.map((v, i) => (v == null ? null : ([x(i), y(v)] as [number, number]))).filter((p): p is [number, number] => !!p);
+    return { color: l.color, pts, path: smooth(pts) };
+  });
   const at = (e: React.MouseEvent) => {
     const r = ref.current!.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
     return n <= 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((px - L) / (W - L - R)) * (n - 1))));
   };
-  const hp = hover != null && points[hover]?.v != null ? ([x(hover), y(points[hover].v as number)] as const) : null;
+  const hx = hover != null && hover < n ? x(hover) : null;
+  const gid = `mpArea${h}`;
   return (
     <svg ref={ref} viewBox={`0 0 ${W} ${h}`} className="w-full select-none" style={{ cursor: "pointer" }} onMouseMove={(e) => onHover(at(e))} onMouseLeave={() => onHover(null)} onClick={(e) => onPick(at(e))}>
-      <defs><linearGradient id="mpArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#c7ff4a" stopOpacity=".38" /><stop offset="1" stopColor="#c7ff4a" stopOpacity=".03" /></linearGradient></defs>
+      <defs>{drawn.map((l, i) => <linearGradient key={i} id={`${gid}-${i}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={l.color} stopOpacity={drawn.length > 1 ? 0.22 : 0.38} /><stop offset="1" stopColor={l.color} stopOpacity=".03" /></linearGradient>)}</defs>
       {[0, 1, 2, 3, 4, 5].map((k) => {
         const v = lo + ((max - lo) * k) / 5;
         return <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#ffffff" strokeOpacity=".06" /><text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="11.5" fill="#878a99">{fmt(v)}</text></g>;
       })}
       {ticksX(n).map((i) => <text key={i} x={x(i)} y={h - 8} textAnchor={n > 1 && i === n - 1 ? "end" : n > 1 && i === 0 ? "start" : "middle"} fontSize="11.5" fill="#878a99">{short(points[i].label)}</text>)}
-      {pts.length > 1 ? <><path d={`${path} L${pts[pts.length - 1][0]},${h - B} L${pts[0][0]},${h - B} Z`} fill="url(#mpArea)" /><path d={path} fill="none" stroke="#c7ff4a" strokeWidth="2.2" /></> : null}
-      {pts.length === 1 ? <circle cx={pts[0][0]} cy={pts[0][1]} r="4.5" fill="#141a11" stroke="#c7ff4a" strokeWidth="2.4" /> : null}
-      {hp ? <><line x1={hp[0]} x2={hp[0]} y1={T} y2={h - B} stroke="#c7ff4a" strokeOpacity={pinned ? 0.6 : 0.25} strokeDasharray={pinned ? undefined : "4 4"} /><circle cx={hp[0]} cy={hp[1]} r="6" fill="#fff" stroke="#c7ff4a" strokeWidth="2.5" /></> : null}
+      {drawn.map((l, i) => (l.pts.length > 1 ? <g key={i}><path d={`${l.path} L${l.pts[l.pts.length - 1][0]},${h - B} L${l.pts[0][0]},${h - B} Z`} fill={`url(#${gid}-${i})`} /><path d={l.path} fill="none" stroke={l.color} strokeWidth="2.2" /></g> : l.pts.length === 1 ? <circle key={i} cx={l.pts[0][0]} cy={l.pts[0][1]} r="4.5" fill="#141a11" stroke={l.color} strokeWidth="2.4" /> : null))}
+      {hx != null && lines.some((l) => l.vals[hover as number] != null) ? <><line x1={hx} x2={hx} y1={T} y2={h - B} stroke="#c7ff4a" strokeOpacity={pinned ? 0.6 : 0.25} strokeDasharray={pinned ? undefined : "4 4"} />{lines.map((l, i) => (l.vals[hover as number] != null ? <circle key={i} cx={hx} cy={y(l.vals[hover as number] as number)} r="6" fill="#fff" stroke={l.color} strokeWidth="2.5" /> : null))}</> : null}
     </svg>
   );
 }
