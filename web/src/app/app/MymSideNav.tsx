@@ -47,7 +47,7 @@ const NAV: Entry[] = [
   },
   {
     key: "stats", label: "Stats", icon: BarChart3, roles: BOSS,
-    children: [{ label: "Statistiques Globales", href: "/app/stats" }, { label: "Analytique", href: soon("Analytique") }, { label: "Transactions", href: soon("Transactions") }, { label: "Liens de suivi", href: soon("Liens de suivi") }],
+    children: [{ label: "Statistiques Globales", href: "/app/mym/stats" }, { label: "Analytique", href: soon("Analytique") }, { label: "Transactions", href: soon("Transactions") }, { label: "Liens de suivi", href: soon("Liens de suivi") }],
   },
   {
     key: "team", label: "Pilotage d’équipe", icon: UsersRound, roles: BOSS,
