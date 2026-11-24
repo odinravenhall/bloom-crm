@@ -7,7 +7,7 @@ import { debounce, onLive } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
 import { money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, LayoutGrid } from "lucide-react";
 import { Avatar } from "@/rv/components/ui";
 import { MpAvatar } from "@/rv/components/MpAvatar";
 import { Toaster } from "@/rv/components/Toaster";
@@ -83,6 +83,9 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
   // sur lui ; fermer l'onglet le désépingle et Substy reprend.
   const [tabs, setTabs] = useState<string[]>(() => stored<string[]>("tabs", []));
   const [tabInfo, setTabInfo] = useState<Record<string, Conv>>({});
+  // Comme Infloww : « Home » (liste + conversation) ou l'onglet d'un fan (sa conversation seule, sans la liste).
+  const [view, setView] = useState<string | null>(null);
+  const [homeId, setHomeId] = useState<string | null>(null);
   useEffect(() => keep("tabs", tabs), [tabs]);
   useEffect(() => {
     if (!tabs.length) return;
@@ -154,11 +157,24 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
       setTabs((t) => (t.includes(c.id) ? t : [...t, c.id].slice(-10)));
       setTabInfo((i) => ({ ...i, [c.id]: { ...c, pinned: true } }));
     }
+    showTab(c);
+  };
+  /** Afficher l'onglet d'un fan (on retient la conversation ouverte dans Home pour y revenir). */
+  const showTab = (c: Conv) => {
+    if (!view) setHomeId(currentId === c.id ? null : currentId);
+    setView(c.id);
     open(c);
   };
+  const goHome = () => {
+    setView(null);
+    setCurrentId(homeId && !tabs.includes(homeId) ? homeId : null);
+  };
+  /** Ouvrir depuis la liste : un fan déjà en onglet s'ouvre dans son onglet. */
+  const openFromList = (c: Conv) => (tabs.includes(c.id) ? showTab(c) : open(c));
   const closeTab = async (id: string) => {
     const c = tabInfo[id] ?? items.find((x) => x.id === id) ?? (held?.id === id ? held : null);
     setTabs((t) => t.filter((x) => x !== id));
+    if (view === id) goHome();
     if (c) await setPin(c, false);
   };
   const toggleTab = (c: Conv) => (tabs.includes(c.id) ? closeTab(c.id) : addTab(c));
@@ -178,8 +194,27 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
   );
 
   return (
-    <div className="mp-font flex h-full min-h-0" style={{ background: "var(--mp-page)", color: "var(--mp-text)" }}>
+    <div className="mp-font flex h-full min-h-0 flex-col" style={{ background: "var(--mp-page)", color: "var(--mp-text)" }}>
       <Toaster />
+      {tabs.length ? (
+        <div className="no-scrollbar flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b px-2" style={{ borderColor: "var(--mp-line)", background: "#16191d" }}>
+          <button onClick={goHome} className="flex h-8 shrink-0 items-center gap-1.5 rounded-t-md px-3 text-[12.5px] font-medium" style={!view ? { background: "var(--mp-card)", color: "var(--mp-head)" } : { color: "var(--mp-muted)" }}><LayoutGrid className="size-3.5" /> Home</button>
+          {tabs.map((id) => {
+            const t = tabInfo[id];
+            const on = id === view;
+            return (
+              <span key={id} className="flex h-8 shrink-0 items-center gap-1 rounded-t-md pr-1 pl-2.5 text-[12.5px]" style={on ? { background: "var(--mp-card)", color: "var(--mp-head)" } : { color: "var(--mp-muted)" }}>
+                <button disabled={!t} onClick={() => t && showTab(t)} className="flex items-center gap-1.5">
+                  <span className="max-w-[130px] truncate" style={{ fontWeight: on || t?.fresh ? 600 : 400 }}>{t?.nickname || t?.memberName || "…"}</span>
+                  {t?.fresh && !on ? <span className="size-2 rounded-full" style={{ background: "#f06548" }} /> : null}
+                </button>
+                <button onClick={() => closeTab(id)} title="Fermer l’onglet : le fan est désépinglé et Substy le reprend" className="grid size-5 place-items-center rounded hover:bg-white/10"><X className="size-3" /></button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1">
       {switchboard ? (
         <div className="no-scrollbar hidden w-[78px] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r py-3 sm:flex" style={{ borderColor: "var(--mp-line)" }}>
           <Link href="/app/mym/chatting" title="Retour au Chatting" className="grid size-9 place-items-center rounded-lg" style={{ background: "var(--mp-card-2)" }}><ArrowLeft className="size-4" /></Link>
@@ -220,7 +255,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
         />
       ) : null}
       {/* Liste des conversations */}
-      <section className={`flex min-h-0 w-full shrink-0 flex-col border-r md:w-[300px] ${current ? "hidden md:flex" : ""}`} style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
+      <section className={`flex min-h-0 w-full shrink-0 flex-col border-r md:w-[300px] ${current ? "hidden md:flex" : ""}`} style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)", display: view ? "none" : undefined }}>
         <div className="space-y-2 p-2">
           {models.length > 1 && !switchboard ? (
             <select value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-full rounded-md px-2 text-[12.5px] outline-none" style={{ background: "var(--mp-card-2)", color: "var(--mp-head)" }}>
@@ -265,7 +300,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
             const isNew = !!c.subscribedAt && Date.now() - Date.parse(c.subscribedAt) < 3 * 864e5;
             const online = !!c.lastSeenAt && Date.now() - Date.parse(c.lastSeenAt) < 10 * 60_000;
             return (
-              <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? addTab(c) : open(c))} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), addTab(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
+              <button key={c.id} onClick={(e) => (e.ctrlKey || e.metaKey ? addTab(c) : openFromList(c))} onAuxClick={(e) => e.button === 1 && (e.preventDefault(), addTab(c))} className="flex w-full gap-2.5 border-b px-2.5 py-2.5 text-left" style={{ borderColor: "var(--mp-line)", background: on ? "rgba(64,81,137,.25)" : undefined, outline: on ? `1px solid ${BLUE}` : undefined }}>
                 <span className="flex shrink-0 flex-col items-center gap-1">
                   <span className="relative">
                     <MpAvatar name={c.memberName || c.nickname} size="size-9" />
@@ -303,24 +338,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
 
       {/* Conversation (celle de la messagerie de Bloom pour l'instant) */}
       <section className={`flex min-h-0 min-w-0 flex-1 flex-col ${current ? "" : "hidden md:flex"}`}>
-        <p className="shrink-0 py-1 text-center text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Astuce : <b style={{ color: "var(--mp-head)" }}>Ctrl+clic</b> pour ouvrir un fan dans un onglet (il est épinglé et Substy est coupé sur lui)</p>
-        {tabs.length ? (
-          <div className="no-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1.5" style={{ borderColor: "var(--mp-line)", background: "var(--mp-card)" }}>
-            {tabs.map((id) => {
-              const t = tabInfo[id];
-              const on = id === currentId;
-              return (
-                <span key={id} className="flex shrink-0 items-center gap-1.5 rounded-md py-1 pr-1 pl-1.5 text-[12.5px]" style={{ background: on ? "rgba(64,81,137,.45)" : "var(--mp-card-2)" }}>
-                  <button disabled={!t} onClick={() => t && open(t)} className="flex items-center gap-1.5">
-                    <span className="relative"><MpAvatar name={t?.memberName || t?.nickname} size="size-6" className="!text-[11px]" />{t?.fresh && !on ? <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background: "#2f6bff" }} /> : null}</span>
-                    <span className="max-w-28 truncate" style={{ color: "var(--mp-head)", fontWeight: on || t?.fresh ? 600 : 400 }}>{t?.nickname || t?.memberName || "…"}</span>
-                  </button>
-                  <button onClick={() => closeTab(id)} title="Fermer l’onglet : le fan est désépinglé et Substy le reprend" className="grid size-5 place-items-center rounded" style={{ color: "var(--mp-muted)" }}><X className="size-3" /></button>
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
+        <p className="shrink-0 py-1 text-center text-[11.5px]" style={{ color: "var(--mp-muted)" }}>Astuce : <b style={{ color: "var(--mp-head)" }}>Ctrl+clic</b> ou « Ouvrir dans un nouvel onglet » pour garder un fan en onglet (il est épinglé et Substy est coupé sur lui)</p>
         {current ? (
           <Chat
             key={current.id}
@@ -330,7 +348,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
             model={byId[current.modelId]}
             autoNext={false}
             setAutoNext={() => {}}
-            onBack={() => setCurrentId(null)}
+            onBack={() => (view ? goHome() : setCurrentId(null))}
             onSent={() => load()}
             onNext={() => {
               const i = items.findIndex((c) => c.id === current.id);
@@ -348,6 +366,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
           <MymFanPanel key={current.id} conv={current} model={byId[current.modelId]} onChanged={load} onPin={() => toggleTab(current)} />
         </aside>
       ) : null}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCheck, ChevronDown, FileText, Image as ImageIcon, Lock, LockOpen, Loader2, MailWarning, Mic, PanelRightClose, PanelRightOpen, PanelTop, Pencil, Pin, PinOff, Plus, Reply, Send, Smile, Trash2, Video, X, Crown, Bot } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Lock, LockOpen, Loader2, MailWarning, Mic, PanelRightClose, PanelRightOpen, PanelTop, Pencil, Pin, PinOff, Plus, Reply, Send, Smile, Trash2, Video, X, Crown, Bot } from "lucide-react";
 import { api, ClientError, mediaThumb, toast } from "@/rv/lib/client";
 import { ago, clock, cn, dur, durSec, money, waitTone } from "@/rv/lib/fmt";
 import { perfOn, pollMs } from "@/rv/lib/perf";
@@ -504,9 +504,14 @@ export function Chat({
           {waiting !== null ? <span className="hidden rounded-full bg-[#f7b84b]/15 px-2 py-0.5 text-[11px] font-medium text-[#f7b84b] tabular-nums lg:inline">attend {durSec(waiting)}</span> : null}
           <span className="flex-1" />
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* Comme Infloww : le lien n'existe que dans Home ; un fan déjà en onglet se ferme par la croix de son onglet. */}
+            {!actions.inTabs ? (
+              <button onClick={actions.onTab} title="Garder ce fan en onglet : il est épinglé et Substy est coupé sur lui" className="mr-1 hidden items-center gap-1.5 text-[13px] whitespace-nowrap text-[#4c8dff] hover:underline sm:flex">
+                <ExternalLink className="size-4" /> Ouvrir dans un nouvel onglet
+              </button>
+            ) : null}
             {(
               [
-                [actions.inTabs, actions.onTab, actions.inTabs ? "Fermer l’onglet : le fan est désépinglé et Substy le reprend" : "New Tab : garder ce fan en onglet (épinglé, Substy coupé)", actions.inTabs ? <PinOff key="i" className="size-4" /> : <PanelTop key="i" className="size-4" />],
                 [false, actions.onReadToggle, actions.fresh ? "Marquer comme lu" : "Marquer comme non lu", actions.fresh ? <CheckCheck key="i" className="size-4" /> : <MailWarning key="i" className="size-4" />],
                 [actions.panelOpen, actions.onPanel, actions.panelOpen ? "Masquer la fiche du fan" : "Afficher la fiche du fan", actions.panelOpen ? <PanelRightClose key="i" className="size-4" /> : <PanelRightOpen key="i" className="size-4" />],
               ] as [boolean, () => void, string, React.ReactNode][]
