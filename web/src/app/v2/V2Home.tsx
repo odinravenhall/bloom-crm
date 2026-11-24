@@ -21,7 +21,7 @@ const addDay = (s: string, n: number) => {
 const eur = (c: number, digits = 0) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: digits, minimumFractionDigits: digits }).format(c / 100);
 const money = (c: number, cur: string) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur === "USD" ? "USD" : "EUR" }).format(c / 100);
 const shortDay = (s: string) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${s}T12:00:00Z`));
-const ORIGIN: Record<string, string> = { ai: "IA Substy", bloom: "Chatteurs dans Bloom", chatter: "Chatteurs (Infloww / MyPulse)", substy: "Automatisations Substy", auto: "Automatisations", sub: "Abonnements", other: "Autre" };
+const ORIGIN: Record<string, string> = { ai: "IA Substy", bloom: "Chatteurs dans Bloom", chatter: "Chatteurs (Infloww / MyPulse)", substy: "Automatisations Substy", auto: "Automatisations", sub: "Abonnements", creator: "Compte de la modèle", ext: "Hors Bloom", push: "Push", other: "Autre" };
 const TYPE: Record<string, string> = { ppv: "Message payant", message: "Message payant", tip: "Pourboire", sub: "Abonnement", post: "Post", media: "Média", push: "Push" };
 const isMym = (p?: string | null) => /mym/i.test(p || "");
 
