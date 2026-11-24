@@ -16,7 +16,7 @@ type Push = { id: string; targets: string[]; caption: string; price: number; mod
 type Data = { canSend: boolean; pushes: Push[]; audience: { id: string; count: number }[]; prices: number[]; durations: number[]; restrictions: Record<string, unknown> | null };
 const TARGET: Record<string, { label: string; sub: string; icon: React.ReactNode; limit: string }> = {
   subscribers: { label: "Abonnés", sub: "Tes abonnés actifs, ceux qui paient leur abonnement.", icon: <UserCheck className="size-4" />, limit: "Illimité" },
-  ex_subscribers: { label: "Anciens abonnés", sub: "Les fans dont l’abonnement a pris fin.", icon: <UserMinus className="size-4" />, limit: "1 push / 7 jours" },
+  exSubscribers: { label: "Anciens abonnés", sub: "Les fans dont l’abonnement a pris fin.", icon: <UserMinus className="size-4" />, limit: "1 push / 7 jours" },
   interested: { label: "Intéressés", sub: "Les fans qui ont montré de l’intérêt sans s’abonner.", icon: <UserPlus className="size-4" />, limit: "1 push / 7 jours" },
 };
 const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" };

@@ -3,7 +3,7 @@
 // 1. PUSH (MYM officiel) — api.mym.fans, relevé le 24/11/2026 dans le code du site (page « Nouveau push ») :
 //    - GET /v2/pushes[?offset=<base64 {"page","perPage"}>] → { pagination: { offset }, pushes: [{ id, caption, status, scheduledAt,
 //      publishedAt, teaserId, emailAudiences }] } (5 par page, sans médias ni prix : détail par GET /v2/pushes/<id>) ;
-//      GET /creators/me/audience → [{ id: 'subscribers' | 'ex_subscribers' | 'interested', count }] ;
+//      GET /creators/me/audience → [{ id: 'subscribers' | 'exSubscribers' | 'interested', count }] ;
 //      GET /v2/pushes/prices → { ranges: [{ currency, value (centimes) }], limit } ; /discount-durations → { durations: [secondes] }.
 //    - GET /v2/pushes (liste), GET /v2/pushes/<id>, DELETE /v2/pushes/<id> (push programmé), GET /creators/me/audience,
 //      GET /v2/pushes/prices, /v2/pushes/discount-durations, /v2/pushes/calendar(/restrictions).
@@ -56,7 +56,8 @@ const J = (s, d) => {
   }
 };
 const num = (v) => Number(String(v ?? '').replace(',', '.')) || 0;
-const TARGETS = ['subscribers', 'ex_subscribers', 'interested'];
+// Identifiants des cibles tels que MYM les donne dans /creators/me/audience (vérifié le 24/11/2026).
+const TARGETS = ['subscribers', 'exSubscribers', 'interested'];
 
 // ---------------------------------------------------------------- push : lecture
 const pick = (o, ...keys) => {
