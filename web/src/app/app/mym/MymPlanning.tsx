@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui";
 // MYM → Médias → Planification : copie de MyPulse (Calendrier, À venir, Historique). Bloom garde la planification et
 // publie lui-même le post chez MYM à l'heure prévue, avec un média du mym.cloud de la modèle.
 type Account = { id: string; name: string; username: string | null; avatar: string | null; linked: boolean };
-type Item = { id: number; creatorId: string; kind: string; at: number; visibility: "public" | "private"; caption: string; mediaId: string; mediaType: string | null; status: "planned" | "publishing" | "created" | "failed" | "cancelled"; error: string | null; createdBy: string | null };
+type Item = { id: number; creatorId: string; audience?: string | null; after?: { action: string; ms: number | null; at: number | null; done: number | null; error: string | null } | null; kind: string; at: number; visibility: "public" | "private"; caption: string; mediaId: string; mediaType: string | null; status: "planned" | "publishing" | "created" | "failed" | "cancelled"; error: string | null; createdBy: string | null };
 type Data = { canEdit: boolean; accounts: Account[]; items: Item[]; last?: Record<string, number> };
 type Draft = { id?: number; creatorId: string; at: string; visibility: "public" | "private"; caption: string; mediaId: string; mediaType: string; preview?: string | null };
 const card = { background: "var(--mp-card)", border: "1px solid var(--mp-line)" };
@@ -121,7 +121,7 @@ export function MymPlanning() {
                     <p className="text-right text-[11.5px]"><span className={key === today ? "inline-grid size-5 place-items-center rounded-full font-bold text-white" : ""} style={key === today ? { background: BLUE } : undefined}>{new Date(t).getDate()}</span></p>
                     {its.slice(0, 4).map((i) => (
                       <button key={i.id} onClick={(e) => (e.stopPropagation(), i.status === "planned" ? open(i.at, i) : toast(`${STATUS[i.status][0]}${i.error ? ` : ${i.error}` : ""}`, i.status === "failed" ? "err" : "ok"))} title={`${fmt(i.at)} · ${nameOf(i.creatorId)} · ${i.caption}`} className="mt-1 flex w-full items-center gap-1 truncate rounded px-1.5 py-1 text-left text-[11.5px] font-semibold text-white" style={{ background: i.status === "failed" ? "#a8483a" : i.status === "created" ? "#3d4a5c" : "#5b6bbf" }}>
-                        <Link2 className="size-3 shrink-0" /><span className="truncate">Post — {i.caption || "(sans texte)"}</span>
+                        <Link2 className="size-3 shrink-0" /><span className="truncate">{i.kind === "story" ? `Story — ${i.audience || ""}` : `Post — ${i.caption || "(sans texte)"}`}</span>
                       </button>
                     ))}
                     {its.length > 4 ? <p className="mt-1 text-[10.5px]" style={{ color: "var(--mp-muted)" }}>+{its.length - 4} autres</p> : null}
@@ -155,7 +155,8 @@ function Rows({ items, nameOf, actions }: { items: Item[]; nameOf: (id: string) 
               <td className="px-3">{nameOf(i.creatorId)}</td>
               <td className="px-3">{i.visibility}</td>
               <td className="px-3">
-                <span className="mr-2">{i.caption || "(sans texte)"}</span>
+                <span className="mr-2">{i.kind === "story" ? `Story · ${i.audience || ""}` : i.caption || "(sans texte)"}</span>
+                {i.after ? <span className="mr-2 rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: i.after.error ? "#f0654822" : "#f7b84b22", color: i.after.error ? "#f06548" : "#f7b84b" }} title={i.after.error || undefined}>{i.after.action === "delete" ? "supprimé" : "passé en privé"} {i.after.done === 1 ? "✓" : i.after.error ? "— échec" : `après ${Math.round((i.after.ms || 0) / 3600e3 * 10) / 10} h`}</span> : null}
                 <span className="rounded px-1.5 py-0.5 text-[10.5px] font-bold text-white" style={{ background: STATUS[i.status][1] }}>{STATUS[i.status][0]}</span>
                 {i.error ? <span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--mp-down)" }}>{i.error}</span> : null}
               </td>

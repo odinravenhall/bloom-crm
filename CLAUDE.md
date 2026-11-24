@@ -226,8 +226,13 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `simulate` pour vérifier sans programmer). `media_id` = identifiant du mym.cloud (fichier « Mes médias » de Bloom,
   `GET /api/mym/plan/medias`) : le numéro de média de MyPulse n'existe pas dans l'API du cloud.
 - « L'IA écrit… » dans les listes de conversations : événement `ai_generation_status` de Substy (`useAiWriting`).
-- Pas encore fait : stories, « supprimer / passer en privé après N h » (formats à relever sur une vraie action),
-  suivi des listes d'amis.
+- Après publication (25/11/2026, `afterDue`) : `post_action` delete → `DELETE /v1/posts/<id>` ; make_private → relire
+  le post puis `PATCH /v1/posts/<id>` (mêmes champs, `private: true`). Un seul essai, résultat dans `after_done` /
+  `after_error`. Stories (`publishStory`) : site classique, `GET /app/stories/create` (jeton) puis `POST /app/stories`
+  avec `media` = NUMÉRO du média (celui de MyPulse, pas l'identifiant du cloud) et la case d'audience ; import Excel
+  « Stories » seulement. ⚠️ Ces trois formats sont lus dans le site, jamais essayés sur un vrai compte.
+- Pas encore fait : suivi des listes d'amis ; créer une story depuis le calendrier (Bloom ne connaît pas le numéro
+  du média, seulement l'identifiant du cloud).
 
 ## MYM en direct : temps réel et revenus (23/11/2026) — `app/chat.mjs`, `app/mymincome.mjs`
 

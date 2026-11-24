@@ -18,7 +18,7 @@ import { Readable } from 'node:stream';
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
-import { API, STYX, isLinked, mym, mymSite } from './mym.mjs';
+import { API, STYX, isLinked, mym, mymSite, mymSiteRaw } from './mym.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS mym_feed (
@@ -130,7 +130,55 @@ function syncFeed(cid) {
 
 // ---------------------------------------------------------------- planification
 const LATE_MAX = 30 * 60_000;
-const planView = (p) => ({ id: p.id, creatorId: p.creator_id, kind: p.kind, at: p.at, visibility: p.visibility, caption: p.caption, mediaId: p.media_id, mediaType: p.media_type, status: p.status, error: p.error, createdBy: p.created_by, createdAt: p.created_at, doneAt: p.done_at });
+const planView = (p) => ({ id: p.id, creatorId: p.creator_id, kind: p.kind, at: p.at, visibility: p.visibility, caption: p.caption, mediaId: p.media_id, mediaType: p.media_type, status: p.status, error: p.error, createdBy: p.created_by, createdAt: p.created_at, doneAt: p.done_at, audience: p.audience || null, after: p.after_action ? { action: p.after_action, ms: p.after_ms, at: p.after_at, done: p.after_done, error: p.after_error } : null });
+
+// --- Après la publication d'un post public : le supprimer ou le passer en privé au bout d'un délai (25/11/2026).
+// Formats lus dans le code du site MYM (pas encore vérifiés sur une vraie action) :
+//  - supprimer : `DELETE /v1/posts/<id>` (styx) ;
+//  - modifier : `PATCH /v1/posts/<id>` avec `{ caption, scheduledAt (ISO), private, playlists, thirdPartyConsent }` :
+//    Bloom relit d'abord le post (`GET /v1/posts/<id>`) et renvoie ses valeurs, en changeant seulement `private`.
+// --- Stories : sur le site « classique » (pas dans l'API) : `GET /app/stories/create` donne le formulaire et son jeton,
+// puis `POST /app/stories` (formulaire) avec `media` = le NUMÉRO du média (celui de la colonne media_id de MyPulse,
+// pas l'identifiant du mym.cloud) et la case d'audience. ⚠️ Lu dans le site, jamais essayé sur une vraie story.
+for (const c of ['after_action TEXT', 'after_ms INTEGER', 'after_at INTEGER', 'after_done INTEGER', 'after_error TEXT', 'audience TEXT']) {
+  try {
+    db.exec(`ALTER TABLE mym_plan ADD COLUMN ${c}`);
+  } catch {}
+}
+const STORY_FIELD = { everyone: ['allFansVisibility', 'world'], subscribers: ['subscribersVisibility', 'subscribers'], former_subscribers: ['oldSubscribersVisibility', 'ex_subscribers'], interested: ['followersVisibility', 'interested'] };
+async function publishStory(p) {
+  const page = await mymSiteRaw(p.creator_id, '/app/stories/create', { xhr: true });
+  if (page.status !== 200) throw new Error(`MYM a répondu ${page.status} en ouvrant le formulaire de story`);
+  const token = /name="_token"[^>]*value="([^"]+)"/.exec(page.text)?.[1] || /value="([^"]+)"[^>]*name="_token"/.exec(page.text)?.[1];
+  if (!token) throw new Error('Formulaire de story non reconnu chez MYM (jeton introuvable)');
+  const [field, value] = STORY_FIELD[p.audience] || STORY_FIELD.everyone;
+  const form = new URLSearchParams({ media: String(p.media_id), [field]: value, _token: token });
+  const r = await mymSiteRaw(p.creator_id, '/app/stories', { form, cookies: page.cookies, xhr: true });
+  if (r.status >= 400) throw new Error(`MYM a refusé la story (${r.status})`);
+  return null;
+}
+async function afterDue() {
+  const due = all("SELECT * FROM mym_plan WHERE status = 'created' AND after_action IN ('delete', 'make_private') AND after_done IS NULL AND after_at IS NOT NULL AND after_at <= ? ORDER BY after_at LIMIT 5", Date.now());
+  for (const p of due) {
+    // Marqué d'abord : un seul essai, jamais de deuxième tout seul.
+    if (!run('UPDATE mym_plan SET after_done = 2 WHERE id = ? AND after_done IS NULL', p.id).changes) continue;
+    try {
+      if (!p.mym_post_id) throw new Error('MYM n’a pas donné l’identifiant du post à la publication : à faire à la main sur MYM.');
+      const path = `/v1/posts/${encodeURIComponent(p.mym_post_id)}`;
+      if (p.after_action === 'delete') await mym(p.creator_id, path, { method: 'DELETE', base: STYX });
+      else {
+        const cur = await mym(p.creator_id, path, { base: STYX });
+        const post = cur?.data || cur;
+        if (!post || post.private === undefined) throw new Error('Post illisible chez MYM : rien n’a été modifié.');
+        if (!post.private) await mym(p.creator_id, path, { method: 'PATCH', base: STYX, body: { caption: post.caption || '', scheduledAt: new Date(post.scheduledAt || p.at).toISOString(), private: true, playlists: post.playlists || [], thirdPartyConsent: !!post.thirdPartyConsent } });
+      }
+      run('UPDATE mym_plan SET after_done = 1, after_error = NULL WHERE id = ?', p.id);
+    } catch (e) {
+      run('UPDATE mym_plan SET after_done = 0, after_error = ? WHERE id = ?', String(e.message).slice(0, 300), p.id);
+    }
+  }
+}
+setInterval(() => afterDue().catch(() => {}), 30_000);
 
 async function publishDue() {
   const due = all("SELECT * FROM mym_plan WHERE status = 'planned' AND at <= ? ORDER BY at LIMIT 5", Date.now());
@@ -142,9 +190,9 @@ async function publishDue() {
     // « publishing » d'abord : si Bloom s'arrête pendant l'appel, la ligne ne repartira pas une deuxième fois.
     if (!run("UPDATE mym_plan SET status = 'publishing' WHERE id = ? AND status = 'planned'", p.id).changes) continue;
     try {
-      const r = await mym(p.creator_id, '/v1/posts', { method: 'POST', base: STYX, body: { medias: [p.media_id], caption: p.caption, private: p.visibility === 'private', playlists: [], thirdPartyConsent: false } });
+      const r = p.kind === 'story' ? await publishStory(p) : await mym(p.creator_id, '/v1/posts', { method: 'POST', base: STYX, body: { medias: [p.media_id], caption: p.caption, private: p.visibility === 'private', playlists: [], thirdPartyConsent: false } });
       const pid = r?.id ?? r?.data?.id ?? r?.post?.id ?? null;
-      run("UPDATE mym_plan SET status = 'created', mym_post_id = ?, error = NULL, done_at = ? WHERE id = ?", pid ? String(pid) : null, Date.now(), p.id);
+      run("UPDATE mym_plan SET status = 'created', mym_post_id = ?, error = NULL, done_at = ?, after_at = CASE WHEN after_action IN ('delete', 'make_private') THEN ? + COALESCE(after_ms, 0) END WHERE id = ?", pid ? String(pid) : null, Date.now(), Date.now(), p.id);
     } catch (e) {
       run("UPDATE mym_plan SET status = 'failed', error = ?, done_at = ? WHERE id = ?", String(e.message).slice(0, 300), Date.now(), p.id);
     }
@@ -178,6 +226,17 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
     const [y, mo, d] = m[1].length === 4 ? [m[1], m[2], m[3]] : [m[3], m[2], m[1]];
     const t = parisMidnight(`${y}-${mo}-${d}`) + Number(m[4]) * 3600e3 + Number(m[5]) * 60e3;
     return Number.isFinite(t) ? t : null;
+  };
+  const AUD = { everyone: 'everyone', 'tout le monde': 'everyone', tous: 'everyone', subscribers: 'subscribers', abonnes: 'subscribers', former_subscribers: 'former_subscribers', 'anciens abonnes': 'former_subscribers', anciens: 'former_subscribers', interested: 'interested', interesses: 'interested' };
+  /** « 24h », « 3j », « 90min », « 1h30 » → millisecondes (null si illisible ou sans unité). */
+  const delayMs = (v) => {
+    const s = norm(v).replace(/\s+/g, '');
+    let m = /^(\d+)h(\d{1,2})$/.exec(s);
+    if (m) return Number(m[1]) * 3600e3 + Number(m[2]) * 60e3;
+    m = /^(\d+(?:[.,]\d+)?)(min|mn|m|h|heures?|j|jours?|d)$/.exec(s);
+    if (!m) return null;
+    const n = Number(m[1].replace(',', '.'));
+    return Math.round(n * (/^(min|mn|m)$/.test(m[2]) ? 60e3 : /^h/.test(m[2]) ? 3600e3 : 864e5));
   };
   const cloudCache = new Map(); // cid -> { at, list }
   /** Photos et vidéos prêtes du mym.cloud (identifiant, type, nom du fichier, date), gardées 5 minutes. */
@@ -646,6 +705,27 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       if (!c) return;
       const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 500);
       if (!rows.length) return send(res, 400, { error: 'Aucune ligne remplie dans le fichier.' });
+      // Stories : media_id = le numéro du média chez MYM (comme dans le modèle de MyPulse), date, audience.
+      if (b.kind === 'story') {
+        const lines = [];
+        let n = 0;
+        for (const r of rows) {
+          const line = Number(r.line) || 0;
+          const fail = (why) => lines.push({ line, ok: false, why });
+          const mediaId = String(r.media_id || '').trim();
+          if (!/^\d{3,12}$/.test(mediaId)) { fail('media_id : le numéro du média chez MYM (des chiffres seulement)'); continue; }
+          const at = parisTime(r.date_schedule);
+          if (!at) { fail('date_schedule illisible (attendu : AAAA-MM-JJ HH:MM, heure de Paris)'); continue; }
+          if (at < Date.now() + 60_000) { fail('date déjà passée : ligne ignorée'); continue; }
+          if (at > Date.now() + 366 * 864e5) { fail('date trop lointaine (un an au plus)'); continue; }
+          const aud = AUD[norm(r.story_audience)];
+          if (!aud) { fail('story_audience : everyone, subscribers, former_subscribers ou interested'); continue; }
+          if (!b.simulate) run('INSERT INTO mym_plan (creator_id, kind, at, visibility, caption, media_id, media_type, created_by, created_at, audience) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', c.id, 'story', at, aud === 'everyone' ? 'public' : 'private', '', mediaId, null, u.name, Date.now(), aud);
+          n++;
+          lines.push({ line, ok: true, at, visibility: aud });
+        }
+        return send(res, 200, { simulate: !!b.simulate, total: rows.length, ok: n, lines });
+      }
       let medias;
       try {
         medias = new Map((await cloudAll(c.id)).map((m) => [m.id.toLowerCase(), m]));
@@ -670,8 +750,14 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
         if (!vis) { fail('feed_visibility : public ou private'); continue; }
         const action = ACT[norm(r.post_action || 'none')];
         if (!action) { fail('post_action : none, delete ou make_private'); continue; }
-        // Bloom ne sait pas encore supprimer ni passer en privé un post après coup : on refuse plutôt que de l'oublier.
-        if (action !== 'none') { fail('post_action « delete » / « make_private » pas encore pris en charge par Bloom : mets « none »'); continue; }
+        // Comme MyPulse : une action seulement sur un post public, avec un délai écrit avec son unité (24h, 3j, 90min).
+        let afterMs = null;
+        if (action !== 'none') {
+          if (vis !== 'public') { fail('post_action : seulement pour un post public'); continue; }
+          afterMs = delayMs(r.post_action_delay);
+          if (!afterMs) { fail('post_action_delay obligatoire avec une action, avec son unité : 24h, 3j, 90min, 1h30'); continue; }
+          if (afterMs < 5 * 60e3 || afterMs > 90 * 864e5) { fail('post_action_delay : entre 5 minutes et 90 jours'); continue; }
+        }
         const caption = String(r.caption || '').trim();
         if (caption.length > 1500) { fail('caption : 1 500 caractères au plus'); continue; }
         if (vis === 'public') {
@@ -679,9 +765,9 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
           perDay.set(k, (perDay.get(k) || 0) + 1);
           if (perDay.get(k) > 5) { fail('plus de 5 posts publics ce jour-là (limite de MYM)'); continue; }
         }
-        if (!b.simulate) run('INSERT INTO mym_plan (creator_id, kind, at, visibility, caption, media_id, media_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', c.id, 'feed', at, vis, caption, m.id, m.type, u.name, Date.now());
+        if (!b.simulate) run('INSERT INTO mym_plan (creator_id, kind, at, visibility, caption, media_id, media_type, created_by, created_at, after_action, after_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', c.id, 'feed', at, vis, caption, m.id, m.type, u.name, Date.now(), action === 'none' ? null : action, afterMs);
         okN++;
-        out.push({ line, ok: true, at, visibility: vis });
+        out.push({ line, ok: true, at, visibility: vis, after: action === 'none' ? null : { action, ms: afterMs } });
       }
       send(res, 200, { simulate: !!b.simulate, total: rows.length, ok: okN, lines: out });
     },
