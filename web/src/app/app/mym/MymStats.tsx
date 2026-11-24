@@ -207,7 +207,7 @@ export function Head({ icon, title, creators, right }: { icon: React.ReactNode; 
     <div className="flex items-center gap-3">
       <span className="grid size-9 place-items-center rounded-lg" style={{ background: "rgba(199,255,74,.12)", color: "var(--mp-accent)" }}>{icon}</span>
       <b className="text-[15.5px]" style={{ color: "var(--mp-head)" }}>{title}</b>
-      <span className="flex border-l pl-3" style={{ borderColor: "var(--mp-line)" }}>{creators.slice(0, 8).map((c, i) => <span key={c.id} className="-ml-1.5 rounded-full first:ml-0" style={{ boxShadow: `0 0 0 2px ${creators.length > 1 ? PALETTE[i % PALETTE.length] : "var(--mp-accent)"}` }} title={c.name}><Avatar src={c.avatar} name={c.name} size="size-8" /></span>)}</span>
+      <span className="flex border-l pl-3" style={{ borderColor: "var(--mp-line)" }}>{creators.slice(0, 8).map((c, i) => <span key={c.id} className="-ml-1.5 rounded-full first:ml-0" style={{ boxShadow: `0 0 0 2px ${creators.length > 1 ? PALETTE[i % PALETTE.length] : "var(--mp-accent)"}` }} title={c.name}><Avatar src={c.avatar} name={c.name} size="size-8" className="ring-0!" /></span>)}</span>
       <span className="flex-1" />
       {right}
     </div>
