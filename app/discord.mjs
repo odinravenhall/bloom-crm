@@ -46,6 +46,24 @@ export const extraGuilds = () => {
   }
 };
 const allGuilds = () => [discordGuild(), ...extraGuilds()].filter(Boolean);
+// Rôles d'un serveur EN PLUS qui donnent un rôle de départ dans Bloom : désignés par leur IDENTIFIANT (unique dans tout
+// Discord), jamais par leur nom, et seulement vers « lead » ou « chatter » (jamais admin ni manager par ce chemin).
+// Demandé par l'agence le 25/11/2026 pour le serveur Zèbre Agency. D'autres peuvent être ajoutés dans le réglage
+// `discord_roles_extra` ({ "<id du rôle>": "lead" | "chatter" }).
+const EXTRA_ROLES = { '1507333255949713518': 'lead', '1507333166556254279': 'chatter' };
+function extraRole(roleIds = []) {
+  let more = {};
+  try {
+    more = JSON.parse(getSetting('discord_roles_extra') || '{}');
+  } catch {}
+  const map = { ...EXTRA_ROLES, ...more };
+  let best = null;
+  for (const id of roleIds) {
+    const r = map[String(id)];
+    if ((r === 'lead' || r === 'chatter') && (!best || RANK[r] > RANK[best])) best = r;
+  }
+  return best;
+}
 export async function setExtraGuilds(ids) {
   const known = new Set((await guildsOfBot()).map((g) => g.id));
   const list = [...new Set((Array.isArray(ids) ? ids : []).map(String))].filter((g) => g !== discordGuild());
@@ -207,8 +225,9 @@ export async function oauthFinish(code) {
   const u = m.user || {};
   const main = guild === discordGuild();
   const owner = main ? (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id : null;
-  // Serveur en plus : aucun rôle n'est repris de Discord, il faut avoir été ajouté dans Bloom.
-  const role = main ? await bloomRole(m.roles, u.id === owner) : null;
+  // Serveur en plus : seuls les rôles désignés par leur identifiant comptent (`extraRole`), sinon il faut avoir été
+  // ajouté dans Bloom.
+  const role = main ? await bloomRole(m.roles, u.id === owner) : extraRole(m.roles);
   try {
     return upsertUser({
       discordId: u.id,
@@ -249,7 +268,7 @@ async function onInteraction(i) {
   const u = i.member.user;
   try {
     const perms = BigInt(i.member.permissions || '0');
-    const role = i.guild_id === discordGuild() ? await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR) : null;
+    const role = i.guild_id === discordGuild() ? await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR) : extraRole(i.member.roles);
     const d = linkFor({
       discordId: u.id,
       username: u.username,

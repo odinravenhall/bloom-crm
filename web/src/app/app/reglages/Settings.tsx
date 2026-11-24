@@ -118,7 +118,7 @@ export function Settings() {
           {dc?.bot && dc.guild ? (
             <div className="mt-3 rounded-lg border border-line p-3">
               <p className="text-sm font-semibold">Autres serveurs Discord autorisés</p>
-              <p className="mt-1 text-xs text-muted">Leurs membres peuvent se connecter à Bloom, mais leurs rôles Discord ne comptent pas : chaque personne doit d’abord être ajoutée dans Bloom (Contrôle des accès → Inviter, avec son pseudo Discord). Invite d’abord le bot sur le serveur.</p>
+              <p className="mt-1 text-xs text-muted">Leurs membres peuvent se connecter à Bloom. Sur ces serveurs, seuls les rôles enregistrés par leur identifiant comptent (Zèbre Agency : Team Leader et Chatter) ; les autres personnes doivent d’abord être ajoutées dans Bloom (Contrôle des accès → Inviter, avec leur pseudo Discord). Invite d’abord le bot sur le serveur.</p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {dc.guilds.filter((g) => g.id !== dc.guild).map((g) => {
                   const on = (dc.extra ?? []).includes(g.id);
