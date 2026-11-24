@@ -10,6 +10,7 @@ import { pinFan } from './lists.mjs';
 import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
 import { canChat, canSee, isBoss, platformOfCreator } from './team.mjs';
+import { refuseBanned } from './journal.mjs';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS seq_progress (creator_id TEXT NOT NULL, fan_id TEXT NOT NULL, sequence_id INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, PRIMARY KEY (creator_id, fan_id, sequence_id));
@@ -359,6 +360,9 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const price = Number(b.price) > 0 ? Math.round(Number(b.price)) / 100 : 0;
       if (!message.trim() && !medias.length) return send(res, 400, { error: 'Message vide' });
       if (price && !medias.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
+      // Mots interdits de l'agence, liste de Bloom (Modération) : le message ne part pas, le refus est noté.
+      const refused = message.trim() ? refuseBanned(x.u, x.cid, x.fanId, message) : null;
+      if (refused) return send(res, 400, { error: refused });
       if (message.trim()) {
         const v = await substy.validate(message).catch(() => null);
         const bad = v && (v.valid === false || v.isValid === false || (Array.isArray(v.bannedWords) && v.bannedWords.length) || (Array.isArray(v.matches) && v.matches.length));

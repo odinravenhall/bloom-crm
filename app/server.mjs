@@ -37,6 +37,8 @@ import { mymBulkRoutes, startMymBulk } from './mymbulk.mjs';
 import { mymStatsRoutes, startMymStats } from './mymstats.mjs';
 import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
 import { mymTeamRoutes } from './mymteam.mjs';
+import { mymModRoutes, startMymMod } from './mymmod.mjs';
+import { journalRequest } from './journal.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -178,7 +180,8 @@ async function body(req) {
     parts.push(c);
   }
   try {
-    return JSON.parse(Buffer.concat(parts).toString('utf8') || '{}');
+    // Gardé sur la requête : le journal des actions (journal.mjs) le relit une fois la requête réussie.
+    return (req._json = JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'));
   } catch {
     throw Object.assign(new Error('JSON invalide'), { status: 400 });
   }
@@ -435,6 +438,7 @@ Object.assign(routes, mymBulkRoutes({ userFrom, send, body, creators: () => stat
 Object.assign(routes, mymStatsRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
+Object.assign(routes, mymModRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
@@ -451,9 +455,10 @@ Object.assign(createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
   const h = routes[`${req.method} ${path}`];
   try {
-    if (h) return await h(req, res);
-    if (path.startsWith('/api/rv/')) return await rv(req, res, path);
-    send(res, 404, { error: 'Introuvable' });
+    if (h) await h(req, res);
+    else if (path.startsWith('/api/rv/')) await rv(req, res, path);
+    else return send(res, 404, { error: 'Introuvable' });
+    journalRequest(req, path, res.statusCode, userFrom);
   } catch (e) {
     const status = e instanceof SubstyError ? (e.status === 401 ? 400 : 502) : e.status || 500;
     if (status >= 500) console.error(e);
@@ -479,6 +484,7 @@ Object.assign(createServer(async (req, res) => {
   startMymBulk();
   startMymStats(() => state.creators || []);
   startMymTrack(() => state.creators || []);
+  startMymMod();
   // Ventes en direct de Substy (toutes les 30 s) : comptées « provisoires » jusqu'à l'arrivée de la vente officielle.
   const pollSales = () => substy.recentSales().then(recordLive).catch(() => {});
   setTimeout(pollSales, 8_000);

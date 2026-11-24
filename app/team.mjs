@@ -84,7 +84,7 @@ const ONLINE_MS = 45_000;
 // ailleurs. Compté entre deux signes de vie rapprochés (une page fermée ne compte plus).
 db.exec('CREATE TABLE IF NOT EXISTS work_log (user_id INTEGER NOT NULL, day TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 0, idle INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))');
 const CHAT_PAGE = /^\/(app\/(messagerie|mym\/(chatting|switchboard))|pro)(\/|$)/;
-export function ping(u, { creatorId, fanId, page }) {
+export function ping(u, { creatorId, fanId, page, ua = null, country = null }) {
   try {
     const prev = presence.get(u.id);
     const gap = prev ? Date.now() - prev.at : 0;
@@ -93,7 +93,28 @@ export function ping(u, { creatorId, fanId, page }) {
       run(`INSERT INTO work_log (user_id, day, ${col}) VALUES (?, ?, ?) ON CONFLICT (user_id, day) DO UPDATE SET ${col} = ${col} + excluded.${col}`, u.id, parisDay(Date.now()), gap);
     }
   } catch {}
-  presence.set(u.id, { at: Date.now(), creatorId: creatorId ? String(creatorId) : null, fanId: fanId ? String(fanId) : null, page: page ? String(page).slice(0, 40) : null, name: u.name, avatar: u.avatar || null });
+  const old = presence.get(u.id);
+  // Début de session : le premier signe de vie après un trou de plus de 90 s.
+  const since = old && Date.now() - old.at < 90_000 ? old.since || old.at : Date.now();
+  presence.set(u.id, { at: Date.now(), since, creatorId: creatorId ? String(creatorId) : null, fanId: fanId ? String(fanId) : null, page: page ? String(page).slice(0, 40) : null, name: u.name, avatar: u.avatar || null, role: u.roleName || u.role || null, ua: ua ? String(ua).slice(0, 300) : old?.ua || null, country: country ? String(country).slice(0, 2).toUpperCase() : old?.country || null });
+}
+/** « Chrome sur Windows », ordinateur / mobile, d'après le navigateur annoncé. */
+function deviceOf(ua) {
+  const s = String(ua || '');
+  if (!s) return { label: 'Navigateur inconnu', kind: 'unknown' };
+  const os = /Windows/.test(s) ? 'Windows' : /Android/.test(s) ? 'Android' : /iPhone|iPad|iPod/.test(s) ? 'iOS' : /Mac OS X/.test(s) ? 'macOS' : /Linux/.test(s) ? 'Linux' : null;
+  const br = /Edg\//.test(s) ? 'Edge' : /OPR\//.test(s) ? 'Opera' : /Firefox\//.test(s) ? 'Firefox' : /Chrome\//.test(s) ? 'Chrome' : /Safari\//.test(s) ? 'Safari' : null;
+  return { label: br && os ? `${br} sur ${os}` : br || os || 'Navigateur inconnu', kind: /Android|iPhone|iPod|Mobile/.test(s) ? 'mobile' : os ? 'desktop' : 'unknown' };
+}
+/** Tous ceux qui ont Bloom ouvert en ce moment (page « En direct »). */
+export function liveView() {
+  const out = [];
+  for (const [userId, p] of presence) {
+    if (Date.now() - p.at >= ONLINE_MS) continue;
+    const chatting = !!p.fanId || CHAT_PAGE.test(String(p.page || ''));
+    out.push({ userId, name: p.name, avatar: p.avatar, role: p.role, since: p.since || p.at, at: p.at, page: p.page, creatorId: p.creatorId, fanId: p.fanId, active: chatting, device: deviceOf(p.ua), country: p.country });
+  }
+  return out.sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
 }
 /** Personnes en ligne sur une créatrice (et le fan qu'elles ont ouvert). */
 export function onCreator(creatorId) {

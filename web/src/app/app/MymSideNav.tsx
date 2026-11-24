@@ -51,7 +51,7 @@ const NAV: Entry[] = [
   },
   {
     key: "team", label: "Pilotage d’équipe", icon: UsersRound, roles: BOSS,
-    children: [{ label: "Message Dashboard", href: "/app/mym/message-dashboard" }, { label: "Ventes équipe", href: "/app/mym/ventes-equipe" }, { label: "Contrôle des shifts", href: "/app/mym/shifts" }, { label: "Activité", href: "/app/equipe" }, { label: "Modération", href: soon("Modération") }],
+    children: [{ label: "Message Dashboard", href: "/app/mym/message-dashboard" }, { label: "Ventes équipe", href: "/app/mym/ventes-equipe" }, { label: "Contrôle des shifts", href: "/app/mym/shifts" }, { label: "Activité", href: "/app/mym/activite" }, { label: "En direct", href: "/app/mym/en-direct" }, { label: "Modération", href: "/app/mym/moderation" }, { label: "Contrôle des accès", href: "/app/equipe" }],
   },
   {
     key: "staff", label: "Employés", icon: ShieldCheck, roles: BOSS,

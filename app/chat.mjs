@@ -6,6 +6,7 @@ import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage, mymDirect, twinOf } from './mymchat.mjs';
 import { isNative, nativeCreators } from './mym.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
+import { refuseBanned } from './journal.mjs';
 
 export const money = (p) => (p == null ? 0 : typeof p === 'object' ? (p.minor || 0) / 100 : Number(p) || 0);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -844,7 +845,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       if (!u) return;
       const b = await body(req);
       const cid = b.creatorId && canSee(u, b.creatorId) ? String(b.creatorId) : null;
-      ping(u, { creatorId: cid, fanId: cid ? b.fanId : null, page: b.page });
+      ping(u, { creatorId: cid, fanId: cid ? b.fanId : null, page: b.page, ua: req.headers['user-agent'], country: req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] });
       // scope « all » : la messagerie en vue « Tous » veut savoir qui est sur quel fan, toutes créatrices confondues.
       const others = b.scope === 'all' ? onVisible(u) : cid ? onCreator(cid) : [];
       send(res, 200, { others: others.filter((x) => x.userId !== u.id) });
@@ -997,6 +998,9 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const price = Number(b.price) > 0 ? Math.round(Number(b.price) * 100) / 100 : 0;
       if (!message.trim() && !medias.length) return send(res, 400, { error: 'Message vide' });
       if (price && !medias.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
+      // Mots interdits de l'agence, liste de Bloom (Modération).
+      const refused = message.trim() ? refuseBanned(u, b.creatorId, b.fanId, message) : null;
+      if (refused) return send(res, 400, { error: refused });
       if (message.trim()) {
         // Mots interdits de l'agence (même contrôle que le site de Substy avant chaque envoi).
         const v = await substy.validate(message).catch(() => null);

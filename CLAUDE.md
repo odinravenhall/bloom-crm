@@ -289,5 +289,19 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   ne comptent donc que les messages envoyés depuis Bloom.
 - Vacation = suite de messages d'un chatteur sans trou de plus de « coupure » minutes ; temps actif = écarts de moins de
   « seuil » minutes (+ 1 min à chaque reprise). Export CSV au format du relevé de MyPulse.
-- Pas encore fait (montré par l'agence le 24/11/2026) : Activité (journal des actions), En direct, Modération (détection
-  IA, retrait de messages, mots interdits), Contrôle des accès façon MyPulse, Accès MYM direct, Notifications MYM.
+- Pas encore fait (montré par l'agence le 24/11/2026) : Contrôle des accès façon MyPulse, Accès MYM direct,
+  Notifications MYM, temps connecté / sessions / snapshots des shifts.
+
+## MYM → Pilotage d'équipe : Modération, Activité, En direct (24/11/2026) — `app/mymmod.mjs`, `app/journal.mjs`
+
+- `journal.mjs` (ne dépend que de la base) : `bl_actions` = journal des actions faites dans Bloom (60 jours), rempli à UN
+  endroit, `journalRequest` appelé par `server.mjs` après chaque requête réussie, d'après la table `ACTIONS` (une
+  nouvelle route à suivre = une ligne dans cette table). Les messages envoyés n'y sont pas (Message Dashboard).
+- Mots interdits de l'agence : `bl_banned`, vérifiés avant l'envoi (`refuseBanned`) dans la messagerie (`rvapi.mjs`,
+  `/api/send`), refus notés dans `bl_refused`. Pas encore appliqués aux envois groupés, Mass DM et messages programmés.
+- Messages suspects : par RÈGLES (`suspects()`), pas une IA ; relus chaque minute dans `msg_log` → `bl_alerts` ;
+  « sorties autorisées » = `bl_allowed` (motif accepté sur un compte).
+- Retrait de messages (admins / managers) : `/api/mym/mod/find` ne fait que lister, `/api/mym/mod/retire` retire chez
+  MYM (`mymDelete`, textes seulement, 100 par appel, définitif). ⚠️ Jamais essayé sur un vrai message.
+- En direct : présence de `team.mjs` (`liveView`), appareil d'après le navigateur ; pays seulement si l'hébergeur envoie
+  l'en-tête `cf-ipcountry` ; pas de ville.
