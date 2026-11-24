@@ -651,7 +651,7 @@ function netRatio(account, platform) {
 function directMym(creators, from, to) {
   const ids = creators.filter((c) => /mym/i.test(c.platform || '') && getSetting(`mym_tx_on:${c.id}`)).map((c) => String(c.id));
   if (!ids.length) return { ids, rows: [] };
-  const rows = all(`SELECT id, creator_id, fan_id, fan_name, at, type, gross, currency, origin, origin_by FROM rv_live WHERE creator_id IN (${ids.map(() => '?').join(',')}) AND src = 'mym' AND type NOT IN ('payout', 'refund') AND gross >= 0 AND at >= ? AND at < ?`, ...ids, from, to)
+  const rows = all(`SELECT id, creator_id, fan_id, fan_name, at, type, gross, currency, origin, origin_by FROM rv_live WHERE creator_id IN (${ids.map(() => '?').join(',')}) AND src = 'mym' AND type NOT IN ('payout', 'refund') AND gross > 0 AND at >= ? AND at < ?`, ...ids, from, to)
     .map((r) => ({ id: r.id, account: `mym:${r.creator_id}`, platform: 'mym', fan_id: r.fan_id, fan_name: r.fan_name, at: r.at, type: r.type === 'push' ? 'ppv' : r.type, gross: r.gross, net: r.gross, currency: r.currency || 'EUR', status: '', seller: null, origin: r.type === 'sub' ? null : r.origin === 'employee' ? 'bloom' : r.origin || null, origin_by: r.origin_by || null }));
   return { ids, rows };
 }
