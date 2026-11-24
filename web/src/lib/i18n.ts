@@ -382,6 +382,8 @@ const D: Record<string, [es: string, fr: string]> = {
   "Oldest first": ["Más antiguos primero", "Plus anciens d’abord"],
   More: ["Más", "Plus"],
   Priority: ["Prioridad", "Prioritaires"],
+  "Delete this message for the fan too? This cannot be undone.": ["¿Eliminar este mensaje también para el fan? No se puede deshacer.", "Supprimer ce message chez le fan aussi ? C’est définitif."],
+  "Message deleted": ["Mensaje eliminado", "Message supprimé"],
   Unread: ["No leídos", "À répondre"],
   "Unread with tips": ["No leídos con propinas", "À répondre avec pourboires"],
   "Last message sent by fan": ["Último mensaje del fan", "Dernier message du fan"],

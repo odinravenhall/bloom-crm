@@ -103,6 +103,17 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
   };
 
   const action = (a: Record<string, unknown>) => api("POST", `/api/conversations/${conv.id}/action`, a);
+  // Supprimer un de nos messages chez le fan aussi (« unsend » d'OnlyFans, par Substy). Un média déjà acheté peut être refusé.
+  const deleteMsg = async (m: LiveMsg) => {
+    if (!confirm(t("Delete this message for the fan too? This cannot be undone."))) return;
+    try {
+      await api("DELETE", `/api/conversations/${conv.id}/messages/${encodeURIComponent(m.message.id)}`);
+      toast(t("Message deleted"));
+      load();
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
   const togglePinFan = async () => {
     const v = !pinned;
     setPinned(v);
@@ -334,6 +345,7 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
               translation={trans[m.message.id]}
               onPin={() => pinMsg(m, !pinnedIds.has(m.message.id))}
               onReply={() => setReplyTo(m)}
+              onDelete={() => deleteMsg(m)}
               onTranslate={() => translateMsg(m)}
               t={t}
             />
@@ -364,7 +376,7 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
 
 const Sep = () => <span className="h-3 w-px" style={{ background: "var(--pro-line)" }} />;
 
-function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onTranslate, t }: { m: LiveMsg; fanName: string; by: string | null; pinned: boolean; translation?: string; onPin: () => void; onReply: () => void; onTranslate: () => void; t: (s: string) => string }) {
+function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onDelete, onTranslate, t }: { m: LiveMsg; fanName: string; by: string | null; pinned: boolean; translation?: string; onPin: () => void; onReply: () => void; onDelete: () => void; onTranslate: () => void; t: (s: string) => string }) {
   const fan = !!m.authorMessage?.memberId;
   const [menu, setMenu] = useState(false);
   const medias = m.bundleWithMedias?.medias ?? m.medias ?? [];
@@ -441,6 +453,7 @@ function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onTransla
                 <button onClick={() => (navigator.clipboard.writeText(m.message.content), setMenu(false), toast(t("Copied")))} className="px-1">{t("Copy")}</button>|
                 <button onClick={() => (onReply(), setMenu(false))} className="px-1">{t("Reply")}</button>|
                 <button onClick={() => (onPin(), setMenu(false))} className="px-1">{t(pinned ? "Unpin" : "Pin")}</button>
+                {!deleted ? <>|<button onClick={() => (setMenu(false), onDelete())} className="px-1" style={{ color: "#f06548" }}>{t("Delete")}</button></> : null}
               </span>
             </>
           ) : null}
