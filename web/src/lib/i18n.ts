@@ -990,7 +990,6 @@ const D: Record<string, [es: string, fr: string]> = {
   "Steps are sent in order. A conditional step is only sent if the previous PPV was bought (or not).": ["Los pasos se envían en orden. Un paso condicional solo se envía si el PPV anterior se compró (o no).", "Les étapes partent dans l’ordre. Une étape conditionnelle ne part que si le PPV d’avant a été acheté (ou pas)."],
   "Tag creators": ["Etiquetar creadoras", "Taguer des créatrices"],
   Tags: ["Etiquetas", "Tags"],
-  "Chatters": ["Chatters", "Chatteurs"],
   "Other": ["Otros", "Autre"],
   "AI is writing…": ["La IA está escribiendo…", "L’IA écrit…"],
   "The AI writes the caption": ["La IA escribe el texto", "L’IA écrit la légende"],
