@@ -36,6 +36,7 @@ import { mymIncomeRoutes, startMymIncome } from './mymincome.mjs';
 import { mymBulkRoutes, startMymBulk } from './mymbulk.mjs';
 import { mymStatsRoutes, startMymStats } from './mymstats.mjs';
 import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
+import { mymTeamRoutes } from './mymteam.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
 import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
@@ -433,6 +434,7 @@ Object.assign(routes, mymIncomeRoutes({ userFrom, send, creators: () => state.cr
 Object.assign(routes, mymBulkRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymStatsRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });

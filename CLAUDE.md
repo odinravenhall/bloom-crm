@@ -279,3 +279,15 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   dans le code du site, pas encore vérifiés sur une vraie action.
 - Partages externes : page publique `/partage/<jeton>` (`POST /api/public/track`), jeton et mot de passe gardés hachés,
   date de fin facultative ; elle ne montre que les chiffres des liens choisis.
+
+## MYM → Pilotage d'équipe : Message Dashboard, Ventes équipe, Contrôle des shifts (24/11/2026) — `app/mymteam.mjs`
+
+- Pages `/app/mym/message-dashboard`, `/app/mym/ventes-equipe`, `/app/mym/shifts` (copies de MyPulse, team leaders et plus),
+  sur `msg_log` (messages vus chez MYM, 120 jours) et `rv_live` (ventes MYM, auteur cherché sur 14 jours).
+- ⚠️ Bloom ne connaît le NOM d'un chatteur que pour ce qui part de Bloom. Ce qui est écrit ailleurs (IA de Substy, IA ou
+  chatteurs de MyPulse, appli MYM) est rangé sous « Hors Bloom » (fan dont l'IA est active) ou « Compte MYM ». Les shifts
+  ne comptent donc que les messages envoyés depuis Bloom.
+- Vacation = suite de messages d'un chatteur sans trou de plus de « coupure » minutes ; temps actif = écarts de moins de
+  « seuil » minutes (+ 1 min à chaque reprise). Export CSV au format du relevé de MyPulse.
+- Pas encore fait (montré par l'agence le 24/11/2026) : Activité (journal des actions), En direct, Modération (détection
+  IA, retrait de messages, mots interdits), Contrôle des accès façon MyPulse, Accès MYM direct, Notifications MYM.
