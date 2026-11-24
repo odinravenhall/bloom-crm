@@ -57,7 +57,7 @@ const NAV: Entry[] = [
     key: "staff", label: "Employés", icon: ShieldCheck, roles: BOSS,
     children: [{ label: "Gérer les employés", href: "/app/employees" }, { label: "Rôles et accès", href: "/app/roles", roles: MANAGE }],
   },
-  { key: "direct", label: "Accès MYM (Direct)", icon: ExternalLink, href: soon("Accès MYM (Direct)"), roles: BOSS },
+  { key: "direct", label: "Accès MYM (Direct)", icon: ExternalLink, href: "/app/mym/direct", roles: BOSS },
   { key: "mymnotifs", label: "Notifications MYM", icon: Bell, href: "/app/mym/notifications", roles: CHAT },
   { key: "notifs", label: "Notifications Bloom", icon: Bell, href: "/app/notifications" },
 ];
