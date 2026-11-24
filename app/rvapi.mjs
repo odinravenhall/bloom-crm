@@ -89,6 +89,8 @@ function convOf(cid, c, m, extra = {}) {
 const rvMedia = (m) => ({ id: String(m.id), type: m.type === 'video' ? 'video' : m.type === 'audio' ? 'audio' : 'photo', url: m.full || m.thumb || undefined, smallUrl: m.thumb || undefined, mediumUrl: m.full || m.thumb || undefined, thumbnailUrl: m.thumb || undefined, durationSeconds: m.duration ?? null });
 
 /** Message Bloom → `LiveMsg` de Raven. */
+// Qui a supprimé un message depuis Bloom (Substy ne connaît que le compte de l'agence).
+db.exec('CREATE TABLE IF NOT EXISTS msg_unsent (id TEXT PRIMARY KEY, by_name TEXT, at INTEGER NOT NULL)');
 function liveMsg(v, fanId, fanName) {
   const medias = (v.medias || []).map(rvMedia);
   const out = {
@@ -99,6 +101,9 @@ function liveMsg(v, fanId, fanName) {
     // En plus de Raven : qui a envoyé (IA de Substy, automatisation, chatteur…).
     by: v.by || null,
   };
+  // Suppression façon Infloww : jusqu'à quand le message peut être supprimé (0 = trop tard), et par qui il l'a été.
+  if (!v.fromFan && typeof v.cancelSeconds === 'number') out.unsendUntil = v.cancelSeconds > 0 ? Date.now() + v.cancelSeconds * 1000 : 0;
+  if (v.reverted) out.withdrawnBy = one('SELECT by_name FROM msg_unsent WHERE id = ?', String(v.id))?.by_name || v.revertedBy || null;
   if (v.price > 0) out.bundleWithMedias = { bundle: { price: cents(v.price), isPaid: !!v.paid }, medias };
   else out.medias = medias;
   return out;
@@ -489,8 +494,9 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           if (target.reverted) return send(res, 200, { ok: true });
           if (target.cancelSeconds === 0) return send(res, 409, { error: 'OnlyFans ne permet plus de supprimer ce message (délai de 24 h dépassé).' });
           await substy.unsend(x.cid, x.fanId, String(target.id));
+          for (const id of new Set([want, String(target.id)])) run('INSERT OR REPLACE INTO msg_unsent (id, by_name, at) VALUES (?, ?, ?)', id, x.u.name, Date.now());
         }
-        send(res, 200, { ok: true });
+        send(res, 200, { ok: true, by: x.u.name });
       } catch (e) {
         send(res, 502, { error: `Suppression refusée : ${e.message}` });
       }

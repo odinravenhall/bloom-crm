@@ -104,8 +104,9 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
 
   const action = (a: Record<string, unknown>) => api("POST", `/api/conversations/${conv.id}/action`, a);
   // Supprimer un de nos messages chez le fan aussi (« unsend » d'OnlyFans, par Substy). Un média déjà acheté peut être refusé.
+  const [unsend, setUnsend] = useState<LiveMsg | null>(null);
   const deleteMsg = async (m: LiveMsg) => {
-    if (!confirm(t("Delete this message for the fan too? This cannot be undone."))) return;
+    setUnsend(null);
     try {
       await api("DELETE", `/api/conversations/${conv.id}/messages/${encodeURIComponent(m.message.id)}`);
       toast(t("Message deleted"));
@@ -264,6 +265,7 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
                 <MoreVertical className="size-4" />
               </button>
               {menu ? <ChatMenu conv={conv} name={name} muted={muted} onRename={rename} onMute={() => setMuted(!muted)} onClose={() => setMenu(false)} t={t} /> : null}
+              {unsend ? <ConfirmUnsend onCancel={() => setUnsend(null)} onOk={() => deleteMsg(unsend)} t={t} /> : null}
             </div>
           </div>
         </div>
@@ -345,7 +347,7 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
               translation={trans[m.message.id]}
               onPin={() => pinMsg(m, !pinnedIds.has(m.message.id))}
               onReply={() => setReplyTo(m)}
-              onDelete={() => deleteMsg(m)}
+              onDelete={() => setUnsend(m)}
               onTranslate={() => translateMsg(m)}
               t={t}
             />
@@ -376,6 +378,28 @@ export function ProChat({ conv, me, model, onBack, onNewTab, onNotes, t }: { con
 
 const Sep = () => <span className="h-3 w-px" style={{ background: "var(--pro-line)" }} />;
 
+/** « 23h 59m » : temps restant avant une échéance. */
+const leftTxt = (until: number) => {
+  const m = Math.max(0, Math.floor((until - Date.now()) / 60_000));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+};
+
+/** Fenêtre de confirmation de suppression (à la place de celle du navigateur). */
+function ConfirmUnsend({ onCancel, onOk, t }: { onCancel: () => void; onOk: () => void; t: (s: string) => string }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4" onMouseDown={onCancel}>
+      <div className="w-full max-w-[520px] overflow-hidden rounded-xl shadow-2xl" style={{ background: "var(--pro-pop)", color: "var(--of-text)" }} onMouseDown={(e) => e.stopPropagation()}>
+        <h3 className="border-b px-5 py-4 text-[16px] font-semibold" style={{ borderColor: "var(--pro-line)" }}>{t("Confirm unsend")}</h3>
+        <p className="px-5 py-6 text-[14.5px]">{t("Are you sure you want to unsend this message?")}</p>
+        <div className="flex justify-end gap-3 border-t px-5 py-3.5" style={{ borderColor: "var(--pro-line)" }}>
+          <button onClick={onCancel} className="h-9 rounded-md border px-4 text-[14px]" style={{ borderColor: "var(--pro-line)" }}>{t("Cancel")}</button>
+          <button autoFocus onClick={onOk} className="h-9 rounded-md px-4 text-[14px] font-semibold text-white" style={{ background: "#3b8ae6" }}>{t("Unsend")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onDelete, onTranslate, t }: { m: LiveMsg; fanName: string; by: string | null; pinned: boolean; translation?: string; onPin: () => void; onReply: () => void; onDelete: () => void; onTranslate: () => void; t: (s: string) => string }) {
   const fan = !!m.authorMessage?.memberId;
   const [menu, setMenu] = useState(false);
@@ -383,6 +407,8 @@ function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onDelete,
   const price = m.bundleWithMedias?.bundle.price;
   const paid = m.bundleWithMedias?.bundle.isPaid;
   const deleted = !!m.message.deletedAt;
+  // Comme Infloww : délai restant pour supprimer (OnlyFans : 24 h), et qui a retiré le message.
+  const { unsendUntil: until, withdrawnBy } = m as LiveMsg & { unsendUntil?: number; withdrawnBy?: string | null };
   const body = (
     <div className={`max-w-[640px] rounded-lg px-3.5 py-2.5 text-[15px] ${deleted ? "opacity-50" : ""}`} style={{ background: fan ? "var(--pro-fan)" : "var(--pro-me)" }}>
       {pinned ? <Pin className="mb-1 size-3" style={{ color: BLUE }} /> : null}
@@ -453,15 +479,17 @@ function Bubble({ m, fanName, by, pinned, translation, onPin, onReply, onDelete,
                 <button onClick={() => (navigator.clipboard.writeText(m.message.content), setMenu(false), toast(t("Copied")))} className="px-1">{t("Copy")}</button>|
                 <button onClick={() => (onReply(), setMenu(false))} className="px-1">{t("Reply")}</button>|
                 <button onClick={() => (onPin(), setMenu(false))} className="px-1">{t(pinned ? "Unpin" : "Pin")}</button>
-                {!deleted ? <>|<button onClick={() => (setMenu(false), onDelete())} className="px-1" style={{ color: "#f06548" }}>{t("Delete")}</button></> : null}
+                {!deleted && until !== 0 && !(until && until < Date.now()) ? <>|<button onClick={() => (setMenu(false), onDelete())} className="px-1">{t("Unsend")}{until ? ` ${leftTxt(until)}` : ""}</button></> : null}
               </span>
             </>
           ) : null}
         </span>
+        {deleted ? <span className="grid size-5 shrink-0 place-items-center rounded-full text-[12px] font-bold text-white" style={{ background: "#f08c48" }}>!</span> : null}
         {body}
       </div>
       <p className="mt-1 flex items-center gap-1 text-[12px]" style={{ color: "var(--of-muted)" }}>
-        {timeTxt(m.message.createdAt)} <CheckCheck className="size-3.5" /> {by ? <span style={{ color: BLUE }}>{by}</span> : null}
+        {deleted ? <span className="mr-1 rounded px-1.5" style={{ background: "rgba(240,140,72,.14)", color: "#f08c48" }}>{withdrawnBy ? `${t("Message withdrawn by")} ${withdrawnBy}` : t("Message withdrawn")}</span> : null}
+        {timeTxt(m.message.createdAt)} {deleted ? null : <CheckCheck className="size-3.5" />} {by ? <span style={{ color: BLUE }}>{by}</span> : null}
       </p>
     </div>
   );

@@ -72,6 +72,9 @@ export function messageView(m, bloomBy = null) {
     tip: !!m.isTip,
     read: !!m.isRead,
     reverted: !!m.reverted,
+    // OnlyFans : secondes restantes pour pouvoir supprimer le message (0 = trop tard) ; qui l'a supprimé chez Substy.
+    cancelSeconds: typeof m.cancelSeconds === 'number' ? m.cancelSeconds : null,
+    revertedBy: m.revertedByEmployee?.name || null,
   };
 }
 
