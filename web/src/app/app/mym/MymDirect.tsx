@@ -126,7 +126,7 @@ export function MymDirect() {
             <p className="mt-2 text-[12px]">S’ouvre dans un nouvel onglet ; il faut y être connecté avec le compte de la modèle.</p>
           </div>
         )}
-        <p className="mt-5 max-w-3xl text-[11.5px] leading-relaxed" style={{ color: "var(--mp-muted)" }}>MyPulse affiche ici le site de MYM dans sa propre page. Bloom ne le fait pas : il agit sur le compte par ses propres pages, ce qui évite de confier la session MYM de la modèle au navigateur de chaque personne. Ce qui n’a pas de page dans Bloom (réglages du compte, stories, lives) se fait sur le site de MYM.</p>
+        <p className="mt-5 max-w-3xl text-[11.5px] leading-relaxed" style={{ color: "var(--mp-muted)" }}>« Site MYM » affiche le vrai site de MYM, relayé par Bloom. Les autres rubriques ouvrent les pages de Bloom qui agissent sur le compte. Les parties récentes du site MYM (nouvelle messagerie, réglages) peuvent ne pas s’afficher dans le cadre.</p>
       </div>
     </div>
   );
