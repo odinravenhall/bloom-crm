@@ -27,9 +27,11 @@ export function MymAccess() {
   const load = useCallback(() => api<Staff>("GET", "/api/staff").then((r) => (setD(r), setErr(""))).catch((e) => setErr((e as Error).message)), []);
   useEffect(() => {
     load();
-    api<Cr[]>("GET", "/api/creators").then(setCrs).catch(() => {});
+    // Page du côté MYM : on ne montre que les modèles MYM. Les accès OnlyFans de chacun ne sont ni affichés ni touchés.
+    api<Cr[]>("GET", "/api/creators").then((l) => setCrs(l.filter((c) => /mym/i.test(c.platform || "")))).catch(() => {});
   }, [load]);
   const name = useCallback((id: string) => crs.find((c) => c.id === id)?.name || id, [crs]);
+  const mine = (e: Emp) => e.creators.filter((id) => crs.some((c) => c.id === id));
   const rows = useMemo(() => (d?.employees ?? []).filter((e) => (!q.trim() || `${e.name} ${e.discord ?? ""}`.toLowerCase().includes(q.trim().toLowerCase())) && (!creator || e.allCreators || e.creators.includes(creator)) && (!role || String(e.roleId) === role)), [d, q, creator, role]);
   const done = (r: { employees: Emp[] }) => (setD((x) => (x ? { ...x, employees: r.employees } : x)), setModal(null), toast("Enregistré"));
   return (
@@ -55,7 +57,7 @@ export function MymAccess() {
               {rows.map((e) => (
                 <tr key={e.id} className="border-b last:border-0" style={{ borderColor: "var(--mp-line)", opacity: e.status === "off" ? 0.5 : 1 }}>
                   <td className="px-4 py-3"><span className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-full text-[13px] font-bold" style={{ background: "var(--mp-card-2)", color: "#9fb0f0" }}>{(e.name || "?")[0].toUpperCase()}</span><span><b style={{ color: "var(--mp-head)" }}>{e.name}</b><span className="block text-[12px]">{e.discord ? `@${e.discord}` : "—"}{e.status === "pending" ? " · pas encore connecté" : e.status === "off" ? " · accès coupé" : ""}</span></span></span></td>
-                  <td className="px-4"><b style={{ color: "var(--mp-head)" }}>{e.allCreators ? "Tous les créateurs" : `${e.creators.length} créateur${e.creators.length > 1 ? "s" : ""}`}</b><span className="block max-w-[320px] truncate text-[12px]">{e.allCreators ? "" : e.creators.map(name).join(", ")}</span></td>
+                  <td className="px-4"><b style={{ color: "var(--mp-head)" }}>{e.allCreators ? "Tous les créateurs" : `${mine(e).length} créateur${mine(e).length > 1 ? "s" : ""} MYM`}</b><span className="block max-w-[320px] truncate text-[12px]">{e.allCreators ? "" : mine(e).map(name).join(", ")}</span></td>
                   <td className="px-4"><span className="rounded px-1.5 py-0.5 text-[11.5px] font-bold" style={{ background: (BASE[e.base] || BASE.chatter)[0], color: (BASE[e.base] || BASE.chatter)[1] }}>{e.roleName}</span></td>
                   <td className="px-4"><span className="flex justify-end gap-1.5">
                     {([["rights", "Rôle et créateurs", <ShieldCheck key="a" className="size-3.5" />], ["stats", "Statistiques", <BarChart3 key="b" className="size-3.5" />], ["rename", "Renommer", <Pencil key="c" className="size-3.5" />], ["remove", "Retirer l’accès à des créateurs", <UserMinus key="d" className="size-3.5" />]] as ["rights" | "stats" | "rename" | "remove", string, React.ReactNode][]).filter(([k]) => k === "stats" || d?.canEdit).map(([k, t, icon]) => <button key={k} title={t} onClick={() => setModal({ kind: k, e })} className="grid size-8 place-items-center rounded-md" style={{ background: "var(--mp-card-2)", color: k === "remove" ? "#f06548" : "var(--mp-text)" }}>{icon}</button>)}
@@ -114,7 +116,10 @@ function Edit({ m, d, crs, onClose, onDone }: { m: Exclude<Modal, null>; d: Staf
   const [discord, setDiscord] = useState("");
   const [roleId, setRoleId] = useState<number>(e?.roleId ?? d.roles.find((r) => r.base === "chatter")?.id ?? d.roles[0]?.id ?? 0);
   const [all, setAll] = useState(e?.allCreators ?? false);
-  const [picked, setPicked] = useState<string[]>(m.kind === "remove" ? [] : e?.creators ?? []);
+  const isMym = (id: string) => crs.some((c) => c.id === id);
+  // Les accès hors MYM (OnlyFans) de la personne : jamais montrés ici, toujours renvoyés tels quels.
+  const others = (e?.creators ?? []).filter((id) => !isMym(id));
+  const [picked, setPicked] = useState<string[]>(m.kind === "remove" ? [] : (e?.creators ?? []).filter(isMym));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const boss = ["admin", "manager"].includes(d.roles.find((r) => r.id === roleId)?.base ?? "");
@@ -122,7 +127,7 @@ function Edit({ m, d, crs, onClose, onDone }: { m: Exclude<Modal, null>; d: Staf
     setBusy(true);
     setErr("");
     try {
-      const creators = m.kind === "remove" ? (e!.creators.filter((c) => !picked.includes(c))) : picked;
+      const creators = m.kind === "remove" ? e!.creators.filter((c) => !picked.includes(c)) : [...others, ...picked];
       const body = m.kind === "invite" ? { name, discord, roleId, creators, all } : m.kind === "rename" ? { id: e!.id, name, roleId: e!.roleId, groupId: e!.groupId } : { id: e!.id, name: e!.name, roleId: m.kind === "remove" ? e!.roleId : roleId, groupId: e!.groupId, creators, all: m.kind === "remove" ? false : all };
       onDone(await api<{ employees: Emp[] }>("POST", "/api/staff/employee", body));
     } catch (x) {
@@ -146,10 +151,10 @@ function Edit({ m, d, crs, onClose, onDone }: { m: Exclude<Modal, null>; d: Staf
       {m.kind === "invite" || m.kind === "rights" ? <label className="mt-4 block text-[13.5px] font-medium" style={{ color: "#f3f4f6" }}>Rôle<select value={roleId} onChange={(x) => setRoleId(Number(x.target.value))} className={inp} style={st}>{d.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select><span className="mt-1 block text-[12px] font-normal" style={{ color: "#aab0bd" }}>Les pages ouvertes à ce rôle se règlent dans « Rôles et droits par page ».</span></label> : null}
       {m.kind !== "rename" ? (
         <>
-          <p className="mt-4 text-[13.5px] font-medium" style={{ color: "#f3f4f6" }}>{m.kind === "remove" ? "Créateurs à retirer" : "Créateurs concernés"}</p>
+          <p className="mt-4 text-[13.5px] font-medium" style={{ color: "#f3f4f6" }}>{m.kind === "remove" ? "Créateurs MYM à retirer" : "Créateurs MYM concernés"}</p>
           {boss && m.kind !== "remove" ? <p className="mt-1.5 text-[12.5px]">Ce rôle voit tous les créateurs.</p> : (
             <>
-              {m.kind !== "remove" ? <label className="mt-1.5 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={all} onChange={() => setAll(!all)} /> Tous les créateurs (y compris les prochains)</label> : null}
+              {m.kind !== "remove" ? <label className="mt-1.5 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={all} onChange={() => setAll(!all)} /> Tous les créateurs, OnlyFans et MYM (y compris les prochains)</label> : null}
               {!all || m.kind === "remove" ? <><p className="mt-2 flex flex-wrap gap-2 rounded-lg p-2" style={st}>{list.map((c) => {
                 const on = picked.includes(c.id);
                 return <button key={c.id} onClick={() => setPicked(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])} className="flex items-center gap-1.5 rounded px-2.5 py-1 text-[13px] font-medium" style={on ? { background: m.kind === "remove" ? "#c8452f" : "#405189", color: "#fff" } : { border: "1px solid #2f343a" }}>{on ? <Check className="size-3" /> : null}{c.name}</button>;
