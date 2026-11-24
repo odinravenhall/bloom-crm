@@ -20,6 +20,7 @@ import type { Lib, LibScript, LibSequence } from "@/rv/inbox/scriptTypes";
 // Bloom v2 : le fil d'une conversation et la zone d'écriture, les mêmes pour OnlyFans et MYM (moteur « /api/rv/… »).
 type Me = { id: number; name: string; admin: boolean };
 type MsgResp = { data: LiveMsg[]; pageInfo: { hasNextPage: boolean; endCursor: string } | null; memberLastReadAt?: string | null; sentBy?: Record<string, string> };
+const DEFAULT_EMOJIS = ["❤️", "😘", "😏", "🔥", "🥰", "😈", "😂", "🙈", "💋", "👀", "🥵", "😇"];
 type By = { kind: string; name: string } | null;
 export type ThreadActions = { pinned: boolean; onPin: () => void; fresh: boolean; onReadToggle: () => void; panelOpen: boolean; onPanel: () => void };
 
@@ -135,7 +136,8 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<null | "vault" | "scripts">(null);
   const [scriptId, setScriptId] = useState<number | null>(null);
-  const quick = useQuickEmojis();
+  const agencyEmojis = useQuickEmojis();
+  const quick = agencyEmojis.length ? agencyEmojis : DEFAULT_EMOJIS;
   const priceCents = Math.round(Number(String(price).replace(",", ".")) * 100) || 0;
   useEffect(() => {
     setText(getDraft(conv.id));
@@ -301,7 +303,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
       {/* En-tête */}
       <header className="flex h-[66px] shrink-0 items-center gap-3 border-b px-3 md:px-5" style={{ borderColor: "var(--color-line)", background: "var(--color-panel)", backdropFilter: "blur(14px)" }}>
         <button onClick={onBack} className={`${icon} md:hidden`} aria-label="Retour"><ArrowLeft className="size-4" /></button>
-        <span className="relative shrink-0">
+        <span className="relative size-10 shrink-0">
           <Avatar src={conv.memberAvatar} name={name} size="size-10" />
           {online ? <span className="absolute right-0 bottom-0 size-3 rounded-full border-2" style={{ background: "#34d399", borderColor: "var(--color-bg)" }} title="En ligne : le fan vient d’écrire" /> : null}
         </span>
@@ -397,7 +399,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
             <button onClick={() => setPanel(panel === "vault" ? null : "vault")} title="Ajouter des photos ou vidéos (message payant ou offert)" className="v2-tool" data-on={panel === "vault"}><ImageIcon className="size-4" /><span className="hidden sm:inline">Médias</span></button>
             <button onClick={() => setPanel(panel === "scripts" ? null : "scripts")} title="Scripts et séquences" className="v2-tool" data-on={panel === "scripts"}><FileText className="size-4" /><span className="hidden sm:inline">Scripts</span>{lib?.scripts.length ? <span className="rounded px-1 text-[10.5px] tabular-nums" style={{ background: "var(--color-card-2)" }} title="Scripts déjà envoyés à ce fan">{lib.scripts.filter((x) => x.usedWithFan).length}/{lib.scripts.length}</span> : null}</button>
             <span className="mx-1 hidden h-5 w-px sm:block" style={{ background: "var(--color-line)" }} />
-            <div className="v2-scroll flex min-w-0 flex-1 items-center overflow-x-auto">
+            <div className="v2-noscroll flex min-w-0 flex-1 items-center overflow-x-auto">
               {quick.map((e, i) => <button key={`${e}-${i}`} type="button" onClick={() => insert(e)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[17px] leading-none transition hover:scale-125 hover:bg-white/[0.06]" title={`Insérer ${e}`}>{e}</button>)}
             </div>
             <span className="hidden shrink-0 pr-1 text-[11px] text-muted xl:block">Entrée pour envoyer</span>

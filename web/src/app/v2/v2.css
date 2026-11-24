@@ -166,3 +166,5 @@ html[data-motion="off"] .v2-backdrop::before, html[data-motion="off"] .v2-backdr
 .v2-orb { background: linear-gradient(135deg, var(--v2-sky), var(--v2-deep)); box-shadow: 0 0 0 10px rgb(var(--v2-glow) / 0.08), 0 0 0 24px rgb(var(--v2-glow) / 0.04), 0 20px 60px -10px rgb(var(--v2-glow) / 0.8); animation: v2-float 5s ease-in-out infinite; }
 @keyframes v2-float { 50% { transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .v2-conv, .v2-msg-in { animation: none; opacity: 1; } .v2-orb, .v2-dots > i { animation: none; } }
+.v2-noscroll { scrollbar-width: none; }
+.v2-noscroll::-webkit-scrollbar { display: none; }

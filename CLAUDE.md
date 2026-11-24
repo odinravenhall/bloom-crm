@@ -361,4 +361,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `V2Home.tsx` : accueil commun (un appel `/api/revenue?pf=all` sur 30 jours). `V2Screen.tsx` : pour chaque écran, le
   composant de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
+- Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
+  « /api/rv/… » (rien de changé au serveur). Liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
+  encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
+  sous-inbox, traduction et envoi programmé de Messages Pro.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).

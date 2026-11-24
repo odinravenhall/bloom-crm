@@ -176,7 +176,7 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
             <span className="flex items-center gap-1.5 text-[11.5px] text-muted"><span className="v2-live" /> en direct</span>
           </div>
           {multi ? (
-            <div className="v2-scroll -mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1">
+            <div className="v2-noscroll -mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1">
               <button onClick={() => setModel("")} className="v2-model" data-on={!model} title="Toutes mes modèles">
                 <span className="grid size-10 place-items-center rounded-full text-[11px] font-bold" style={{ background: "var(--color-card-2)" }}>Tout</span>
                 <span>Toutes</span>
@@ -204,7 +204,7 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
             <button onClick={() => setPaying(!paying)} title="Seulement les fans qui ont déjà acheté" className="v2-sq" data-on={paying}><Flame className="size-4" /></button>
             <button onClick={() => setSort(SORTS[(SORTS.findIndex(([k]) => k === sort) + 1) % SORTS.length][0])} title={`Tri : ${sortLabel}. Clique pour changer.`} className="v2-sq" data-on={sort !== "newest"}><ArrowDownUp className="size-4" /></button>
           </div>
-          <div className="v2-scroll -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-3">
+          <div className="v2-noscroll -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-3">
             {TABS.filter((t) => t.k !== "pinned" || t.n).map((t) => (
               <button key={t.k} onClick={() => setTab(t.k)} title={t.title} className="v2-chip" data-on={tab === t.k}>
                 {t.label}
@@ -231,7 +231,7 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
             const writing = aiWriting.has(c.id);
             return (
               <button key={c.id} onClick={() => open(c)} className="v2-conv" data-on={on} style={i < 14 ? { animationDelay: `${i * 22}ms` } : { animation: "none", opacity: 1 }}>
-                <span className="relative shrink-0">
+                <span className="relative size-11 shrink-0 self-start">
                   <Avatar src={c.memberAvatar} name={c.nickname || c.memberName} size="size-11" />
                   {online ? <span className="absolute right-0 bottom-0 size-3 rounded-full border-2" style={{ background: "#34d399", borderColor: "var(--color-bg)" }} title="En ligne : le fan vient d’écrire" /> : null}
                   {c.pinned ? <span className="absolute -top-1 -left-1 grid size-4 place-items-center rounded-full text-white" style={{ background: "var(--v2-blue)" }}><Pin className="size-2.5" /></span> : null}
