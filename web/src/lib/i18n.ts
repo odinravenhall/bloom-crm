@@ -990,6 +990,7 @@ const D: Record<string, [es: string, fr: string]> = {
   "Steps are sent in order. A conditional step is only sent if the previous PPV was bought (or not).": ["Los pasos se envían en orden. Un paso condicional solo se envía si el PPV anterior se compró (o no).", "Les étapes partent dans l’ordre. Une étape conditionnelle ne part que si le PPV d’avant a été acheté (ou pas)."],
   "Tag creators": ["Etiquetar creadoras", "Taguer des créatrices"],
   Tags: ["Etiquetas", "Tags"],
+  "AI is writing…": ["La IA está escribiendo…", "L’IA écrit…"],
   "The AI writes the caption": ["La IA escribe el texto", "L’IA écrit la légende"],
   "The text and the note are copied into a tag with the same name. Media and price stay with this creator (each vault is separate).": ["El texto y la nota se copian en una etiqueta con el mismo nombre. Medios y precio se quedan (cada vault es propio).", "Le texte et la note sont copiés dans un tag du même nom. Médias et prix restent chez cette créatrice (chaque vault est à part)."],
   "Up to": ["Hasta", "Jusqu’à"],

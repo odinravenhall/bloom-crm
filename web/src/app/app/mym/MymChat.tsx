@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Clock, X, Flame, History, Mail, MessageCircle, Minus, Pin, Plus, Reply, Search, Settings, SlidersHorizontal, UserRound, UsersRound, Zap } from "lucide-react";
 import { api, toast } from "@/rv/lib/client";
-import { debounce, onLive } from "@/rv/lib/liveClient";
+import { debounce, onLive, useAiWriting } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
 import { money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
 import Link from "next/link";
@@ -62,6 +62,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
   const [cfgId, setCfgId] = useState<number | null>(() => (switchboard ? stored<number | null>("sbActive", null) : null));
   const [cfgOpen, setCfgOpen] = useState(false);
   const cfg = switchboard ? configs.find((c) => c.id === cfgId) ?? null : null;
+  const aiWriting = useAiWriting();
   useEffect(() => {
     if (switchboard) (keep("sbConfigs", configs), keep("sbActive", cfgId));
   }, [switchboard, configs, cfgId]);
@@ -319,7 +320,7 @@ function Inner({ me, models, switchboard }: { me: Me; models: Model[]; switchboa
                   {c.nickname && c.memberName && c.nickname !== c.memberName ? <span className="block truncate text-[10.5px]" style={{ color: "var(--mp-muted)" }}>@{c.memberName}</span> : null}
                   <span className="mt-0.5 flex items-center gap-1.5">
                     {c.totalSpent > 0 ? <span className="shrink-0 text-[11.5px] font-bold" style={{ color: "#3cd188" }}>{money(c.totalSpent)}</span> : null}
-                    <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: c.fresh ? "var(--mp-head)" : "var(--mp-muted)", fontWeight: c.fresh ? 600 : 400 }}>{c.lastFromFan ? "" : "Vous : "}{c.preview}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: c.fresh ? "var(--mp-head)" : "var(--mp-muted)", fontWeight: c.fresh ? 600 : 400 }}>{aiWriting.has(c.id) ? <span className="font-semibold" style={{ color: "#a855f7" }}>✦ L’IA écrit…</span> : <>{c.lastFromFan ? "" : "Vous : "}{c.preview}</>}</span>
                     {c.fresh ? <span className="size-2 shrink-0 rounded-full" style={{ background: "#2f6bff" }} /> : null}
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-1 text-[9.5px] font-bold">

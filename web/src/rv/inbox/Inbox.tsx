@@ -7,7 +7,7 @@ import { MiniCard } from "@/rv/components/ScoreCard";
 import { newSubDay } from "@/rv/components/NewSub";
 import { FanAvatar } from "@/rv/components/FanAvatar";
 import { pollMs } from "@/rv/lib/perf";
-import { debounce, onLive } from "@/rv/lib/liveClient";
+import { debounce, onLive, useAiWriting } from "@/rv/lib/liveClient";
 import { hasDraft } from "@/rv/lib/draft";
 import { useNow } from "@/rv/lib/useNow";
 import { defaultBoxName } from "@/rv/lib/box";
@@ -791,6 +791,7 @@ function RailButton({ on, onClick, onMenu, label, count, children }: { on: boole
 /** « 🔥 GROS PAYEUR 189 € » sous l'aperçu, comme sur Moby. */
 
 function QueueItem({ c, on, model, meId, onClick, onToggleUnread, boxLabel, relance }: { c: Conv; on: boolean; model?: Model; meId: number; onClick: () => void; onToggleUnread: () => void; boxLabel?: string | null; relance?: { ppv: number | null; step: string | null; at: string | null } }) {
+  const aiWriting = useAiWriting();
   // Chrono d'attente à la seconde ; point vert quand le fan est connecté (vu il y a moins de 2 min)
   const now = useNow();
   const waiting = c.needsReply && c.waitingSince ? now - Date.parse(c.waitingSince) : null;
@@ -911,8 +912,7 @@ function QueueItem({ c, on, model, meId, onClick, onToggleUnread, boxLabel, rela
         </span>
         {/* blanc = personne de l'équipe n'a encore ouvert ; gris = déjà ouvert (ou c'est nous qui avons écrit en dernier) */}
         <span className={cn("mt-0.5 block truncate text-[13px]", c.fresh ? "font-semibold text-fg" : "text-muted")}>
-          {c.lastFromFan ? "" : c.seen ? <span className="font-semibold text-sky-400" title="Vu par le fan">✓✓ Vu · </span> : <span title="Envoyé, pas encore vu">✓ Vous : </span>}
-          {c.preview}
+          {aiWriting.has(c.id) ? <span className="font-semibold" style={{ color: "#a855f7" }}>✦ L’IA écrit…</span> : <>{c.lastFromFan ? "" : c.seen ? <span className="font-semibold text-sky-400" title="Vu par le fan">✓✓ Vu · </span> : <span title="Envoyé, pas encore vu">✓ Vous : </span>}{c.preview}</>}
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1 empty:hidden">
           {model ? (

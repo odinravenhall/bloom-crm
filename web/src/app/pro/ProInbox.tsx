@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, ChartNoAxesCombined, Check, Flame, Inbox as InboxIcon, ListFilter, MessageSquareText, Pencil, Plus, RefreshCw, Search, Settings, UserRound, X } from "lucide-react";
 import { api, toast } from "@/rv/lib/client";
-import { debounce, onLive } from "@/rv/lib/liveClient";
+import { debounce, onLive, useAiWriting } from "@/rv/lib/liveClient";
 import type { Conv, Model, QueueResp } from "@/rv/inbox/types";
 import { ProNotifications } from "./ProNotifications";
 
@@ -423,6 +423,7 @@ export function ProInbox({ model, me, selected, notif, onOpen, t }: { model: Mod
 
 function Row({ c, on, onClick, onDismiss, onUnread, selecting, picked, t }: { c: Item; on: boolean; onClick: () => void; onDismiss: () => void; onUnread: () => void; selecting: boolean; picked: boolean; t: (s: string) => string }) {
   // Glisser la conversation vers la gauche fait apparaître « Mark as Unread » (comme Infloww).
+  const aiWriting = useAiWriting();
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const OPEN = 150;
@@ -510,7 +511,7 @@ function Row({ c, on, onClick, onDismiss, onUnread, selecting, picked, t }: { c:
         </div>
         <div className="mt-1 flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-[14px]" style={waiting ? { fontWeight: 700 } : { color: "var(--of-muted)" }}>
-            {c.preview || "media attachment"}
+            {aiWriting.has(c.id) ? <span className="font-semibold" style={{ color: "#a855f7" }}>✦ {t("AI is writing…")}</span> : c.preview || "media attachment"}
           </p>
           <span className="flex shrink-0 items-center gap-1.5 text-[13px]" style={{ color: waiting ? RED : "var(--of-muted)" }}>
             {time}
