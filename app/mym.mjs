@@ -251,11 +251,24 @@ db.exec('CREATE TABLE IF NOT EXISTS mym_native (id TEXT PRIMARY KEY, mym_id TEXT
 export const isNative = (cid) => String(cid || '').startsWith('mym-');
 export const nativeCreators = () => all('SELECT * FROM mym_native ORDER BY created_at').map((n) => ({ id: n.id, name: n.name || n.username || 'Modèle MYM', username: n.username || null, platform: 'mym', avatar: n.avatar || null, native: true }));
 const lower = (x) => String(x || '').trim().toLowerCase();
+const flat = (x) => lower(x).normalize('NFD').replace(/[^a-z0-9]/g, '');
+/**
+ * La modèle MYM de Substy qui est ce compte MYM : même identifiant de compte, sinon l'un des noms que Substy connaît
+ * (nom, surnom, pseudo) égal au pseudo MYM (sans tenir compte des majuscules, espaces et ponctuation). Substy ne
+ * remplit pas toujours « username » : le pseudo est souvent dans un autre champ (24/11/2026, cas d'Emmamelons).
+ * Jamais une modèle déjà reliée à un AUTRE compte MYM.
+ */
+function substyTwin(substy, { mymId, username }) {
+  const taken = new Set(all('SELECT creator_id FROM mym_links WHERE mym_id <> ?', String(mymId)).map((l) => l.creator_id));
+  const pool = substy.filter((x) => /mym/i.test(x.platform || '') && !isNative(x.id) && !taken.has(String(x.id)));
+  const u = flat(username);
+  return pool.find((x) => x.pid && x.pid === String(mymId)) || (u.length >= 3 ? pool.find((x) => [x.username, x.name, ...(x.aliases || [])].some((a) => flat(a) === u)) : null) || null;
+}
 /** La modèle de Bloom qui correspond à un profil MYM (voir plus haut). `substy` = les créatrices connues de Substy. */
 function creatorFor(me, substy, by) {
   const known = one('SELECT creator_id FROM mym_links WHERE mym_id = ?', String(me.id)) || one('SELECT id AS creator_id FROM mym_native WHERE mym_id = ?', String(me.id));
   if (known) return known.creator_id;
-  const twin = me.username ? substy.find((x) => /mym/i.test(x.platform || '') && !isNative(x.id) && lower(x.username) === lower(me.username)) : null;
+  const twin = substyTwin(substy, { mymId: me.id, username: me.username });
   if (twin) return String(twin.id);
   const id = `mym-${me.id}`;
   const pic = me.avatar?.url || me.avatarUrl || me.avatar_url || me.profilePicture?.url || me.profile_picture || (typeof me.avatar === 'string' ? me.avatar : null);
@@ -270,7 +283,7 @@ function creatorFor(me, substy, by) {
 export function adoptNatives(substy) {
   let n = 0;
   for (const nat of all('SELECT * FROM mym_native')) {
-    const twin = nat.username ? substy.find((x) => /mym/i.test(x.platform || '') && !isNative(x.id) && lower(x.username) === lower(nat.username)) : null;
+    const twin = substyTwin(substy, { mymId: nat.mym_id, username: nat.username });
     if (!twin) continue;
     const tables = all("SELECT name FROM sqlite_master WHERE type = 'table'").map((t) => t.name).filter((t) => /^[A-Za-z0-9_]+$/.test(t) && all(`PRAGMA table_info("${t}")`).some((col) => col.name === 'creator_id'));
     for (const t of tables) {
@@ -325,7 +338,7 @@ export function mymRoutes({ userFrom, send, body, creators, onLinked }) {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
       const nick = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [m.creator_id, m.nickname]));
-      send(res, 200, { canEdit: seesAll(u), links: mymCreators().filter((c) => canSee({ ...u, pf: null, unlinkedToo: true }, c.id)).map((c) => ({ creatorId: c.id, name: nick.get(c.id) || c.name, username: c.username, ...linkView(c.id) })) });
+      send(res, 200, { canEdit: seesAll(u), links: mymCreators().filter((c) => canSee({ ...u, pf: null, unlinkedToo: true }, c.id)).map((c) => ({ creatorId: c.id, name: nick.get(c.id) || c.name, username: c.username, aliases: c.aliases || [], pid: c.pid || null, ...linkView(c.id) })) });
     },
     /** Code à usage unique pour relier une modèle (à coller dans l'extension). */
     'POST /api/mym/link-code': async (req, res) => {

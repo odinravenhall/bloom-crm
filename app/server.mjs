@@ -137,6 +137,10 @@ const creatorView = (c) => ({
   username: c.username || c.platformUsername || null,
   platform: c.platform || null,
   avatar: c.avatar || c.avatarUrl || null,
+  // Pour retrouver la même modèle côté MYM (mym.mjs) : Substy ne donne pas toujours le pseudo dans « username ».
+  // On garde l'identifiant du compte sur la plateforme et tous les noms que Substy connaît (nom, surnom, pseudo…).
+  pid: c.platformUserId != null ? String(c.platformUserId) : null,
+  aliases: [...new Set(Object.entries(c).filter(([k, v]) => typeof v === 'string' && v && v.length <= 60 && /name|user|handle|slug|nick|pseudo|title/i.test(k) && !/avatar|url|image|time|zone|lang/i.test(k)).map(([, v]) => v))],
 });
 
 // ---------------------------------------------------------------- comptes Bloom
