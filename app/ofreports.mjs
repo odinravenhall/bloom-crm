@@ -37,7 +37,8 @@ export function accountsFor(u, creators) {
       const c = cid ? cr.get(cid) : null;
       return { id: a.id, name: a.name || a.nick || c?.name || a.username || 'Créatrice', avatar: a.avatar || c?.avatar || null, creatorId: cid };
     })
-    .filter((a) => seesAll(u) || (a.creatorId && canSee({ ...u, pf: null }, a.creatorId)));
+    // Seulement les comptes d'une modèle présente chez Substy (25/11/2026) : pas le reste d'Infloww.
+    .filter((a) => a.creatorId && cr.has(a.creatorId) && (seesAll(u) || canSee({ ...u, pf: null }, a.creatorId)));
 }
 
 /** Nouveaux abonnés par créatrice Substy sur la période et celle d'avant (revenue.overview → totalNewSubs). */

@@ -1,7 +1,7 @@
 // Dashboard OnlyFans (comme celui d'Infloww) : « Creator earnings overview » (net ou brut ; hier, aujourd'hui, cette
 // semaine, ce mois), réparti en abonnements, posts, messages, pourboires, parrainages et lives, et « Employee sales »
 // (comme Infloww : ventes de messages et pourboires faites par les employés, en brut, jour par jour).
-// Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, de toutes les modèles OnlyFans d'Infloww, plus les ventes Substy des dernières 24 h pas
+// Source : les ventes OnlyFans lues chez Infloww (rv_sales), en dollars, des modèles OnlyFans présentes chez Substy seulement, plus les ventes Substy des dernières 24 h pas
 // encore confirmées (provisoires). Heure de Paris.
 import { all } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
@@ -46,9 +46,9 @@ export function ofDashRoutes({ userFrom, send, creators }) {
       const only = p.get('creatorId');
       const ids = new Set(ofCreators.filter((c) => !only || c.id === only).map((c) => c.id));
       const maps = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((m) => ids.has(m.creator_id));
-      // Comme Infloww : admins et managers voient toutes les modèles OnlyFans d'Infloww (même pas encore sur Substy) ;
-      // un team leader, seulement ses modèles.
-      const accounts = seesAll(u) && !only ? all("SELECT id FROM rv_accounts WHERE platform = 'onlyfans'").map((a) => a.id) : maps.map((m) => m.account);
+      // Seulement les modèles OnlyFans présentes chez Substy (demande de l'agence, 25/11/2026) : les autres comptes
+      // d'Infloww ne sont plus comptés, le but étant de faire passer toutes les modèles ici.
+      const accounts = maps.map((m) => m.account);
       const blocks = { subscriptions: 0, posts: 0, messages: 0, tips: 0, referrals: 0, streams: 0 };
       // Courbe : un point par jour (un seul pour « aujourd'hui » / « hier », comme Infloww), plus le jour d'avant (pour « Growth »).
       const hourly = false;
@@ -108,7 +108,7 @@ export function ofDashRoutes({ userFrom, send, creators }) {
         hourly,
         creators: ofCreators.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, mapped: maps.some((m) => m.creator_id === c.id) || !ids.has(c.id) })),
         accounts: accounts.length,
-        unmapped: seesAll(u) && !only ? [] : ofCreators.filter((c) => ids.has(c.id) && !maps.some((m) => m.creator_id === c.id)).map((c) => c.name),
+        unmapped: ofCreators.filter((c) => ids.has(c.id) && !maps.some((m) => m.creator_id === c.id)).map((c) => c.name),
       });
     },
   };
