@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, EllipsisVertical, Plus, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { getPf } from "@/lib/platform";
 import { Avatar } from "@/components/ui";
 
 // Employees → Manage employees : copie de la page d'Infloww. Groupes et sous-groupes à gauche, tableau à droite.
@@ -21,6 +22,11 @@ export function ManageEmployees() {
   const { t } = useT();
   const [d, setD] = useState<Data | null>(null);
   const [creators, setCreators] = useState<Cr[]>([]);
+  // Côté OnlyFans on ne donne que des créatrices OnlyFans, côté MYM que des modèles MYM : celles de l'autre plateforme
+  // ne sont ni montrées ni modifiées ici (le serveur les garde, `scope`).
+  const [pf, setPfSide] = useState<"of" | "mym">("of");
+  useEffect(() => setPfSide(getPf()), []);
+  const sideCreators = useMemo(() => creators.filter((c) => (/mym/i.test(c.platform || "") ? "mym" : "of") === pf), [creators, pf]);
   const [group, setGroup] = useState<number | null>(null);
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [draft, setDraft] = useState({ q: "", creator: "", status: "" });
@@ -147,7 +153,7 @@ export function ManageEmployees() {
             <label className="flex items-center gap-2">{t("By creator")}:
               <select value={draft.creator} onChange={(e) => setDraft({ ...draft, creator: e.target.value })} className={`${sel} w-48`} style={{ borderColor: "var(--of-line)" }}>
                 <option value="" style={{ background: "#222" }}>{t("Creator")}</option>
-                {creators.map((c) => <option key={c.id} value={c.id} style={{ background: "#222" }}>{c.name}</option>)}
+                {sideCreators.map((c) => <option key={c.id} value={c.id} style={{ background: "#222" }}>{c.name}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2">{t("By status")}:
@@ -184,8 +190,8 @@ export function ManageEmployees() {
                     <td className="max-w-[300px] px-3">
                       {e.allCreators ? (
                         <span style={{ color: BLUE }}>{t("All creators")}</span>
-                      ) : e.creators.length ? (
-                        <button onClick={() => setModal({ kind: "creators", ids: [e.id], emp: e })} className="line-clamp-2 text-left" style={{ color: BLUE }}>{e.creators.map(crName).join(", ")}</button>
+                      ) : e.creators.some((id) => sideCreators.some((c) => c.id === id)) ? (
+                        <button onClick={() => setModal({ kind: "creators", ids: [e.id], emp: e })} className="line-clamp-2 text-left" style={{ color: BLUE }}>{e.creators.filter((id) => sideCreators.some((c) => c.id === id)).map(crName).join(", ")}</button>
                       ) : (
                         <button onClick={() => setModal({ kind: "creators", ids: [e.id], emp: e })} className="flex items-center gap-1" style={{ color: e.status === "off" ? "var(--of-muted)" : BLUE }}><Plus className="size-3.5" />{t("Click to set")}</button>
                       )}
@@ -227,8 +233,8 @@ export function ManageEmployees() {
           </div>
         </section>
       </div>
-      {modal?.kind === "emp" && d ? <EmployeeModal emp={modal.emp} d={d} group={cur} creators={creators} onClose={() => setModal(null)} onSaved={(emps) => (setD({ ...d, employees: emps }), setModal(null))} t={t} /> : null}
-      {modal?.kind === "creators" ? <CreatorsModal emp={modal.emp} creators={creators} onClose={() => setModal(null)} onSave={(all, list) => batch("creators", modal.ids, { all, creators: list })} t={t} /> : null}
+      {modal?.kind === "emp" && d ? <EmployeeModal emp={modal.emp} d={d} group={cur} creators={sideCreators} onClose={() => setModal(null)} onSaved={(emps) => (setD({ ...d, employees: emps }), setModal(null))} t={t} /> : null}
+      {modal?.kind === "creators" ? <CreatorsModal emp={modal.emp} creators={sideCreators} onClose={() => setModal(null)} onSave={(all, list) => batch("creators", modal.ids, { all, creators: list.filter((id) => sideCreators.some((c) => c.id === id)), scope: pf })} t={t} /> : null}
       {modal?.kind === "group" ? <NameModal title={t(modal.edit ? "Edit group" : "Add sub-group")} value={modal.edit?.name ?? ""} onClose={() => setModal(null)} onSave={(name) => groupAct(modal.edit ? { id: modal.edit.id, name } : { parentId: modal.parentId, name })} t={t} /> : null}
       {modal?.kind === "pick" && d ? (
         <PickModal

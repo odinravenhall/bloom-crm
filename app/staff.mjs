@@ -242,7 +242,12 @@ export function staffRoutes({ userFrom, send, body, creators }) {
           if (!canEditAccess(u, t)) return send(res, 403, { error: 'Un team leader ne peut changer que les accès de ses chatteurs.' });
         }
         if (!seesAll(u) && (b.all || (b.creators || []).some((c) => !canSee({ ...u, pf: null }, c)))) return send(res, 403, { error: 'Tu ne peux donner que tes propres créatrices.' });
-        for (const t of targets) if (!seesAll(t)) setAccess(t.id, { all: !!b.all, creators: (b.creators || []).map(String) });
+        // `scope` (« of » ou « mym ») : la fenêtre ne montrait que les créatrices de cette plateforme. Les accès de la
+        // personne sur l'AUTRE plateforme sont gardés tels quels (sinon ils seraient effacés sans qu'on le voie).
+        const scope = b.scope === 'mym' || b.scope === 'of' ? b.scope : null;
+        const isMym = new Set(creators().filter((c) => /mym/i.test(c.platform || '')).map((c) => String(c.id)));
+        const keep = (id) => (scope ? all('SELECT creator_id FROM user_creators WHERE user_id = ?', id).map((r) => r.creator_id).filter((c) => isMym.has(c) !== (scope === 'mym')) : []);
+        for (const t of targets) if (!seesAll(t)) setAccess(t.id, { all: !!b.all, creators: [...new Set([...keep(t.id), ...(b.creators || []).map(String)])] });
         permsChanged(targets.map((t) => t.id));
         return send(res, 200, { employees: view() });
       }
