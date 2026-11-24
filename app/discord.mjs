@@ -34,6 +34,27 @@ export const botToken = () => {
   }
 };
 export const discordGuild = () => getSetting('discord_guild');
+// Serveurs Discord en plus (25/11/2026) : leurs membres peuvent aussi se connecter à Bloom. Le serveur PRINCIPAL reste
+// celui de l'agence (rôles Discord → rôle de départ, salons, annonces). Sur un serveur en plus, les rôles Discord ne
+// donnent RIEN : la personne doit avoir été ajoutée dans Bloom (Contrôle des accès → Inviter), sinon n'importe qui
+// pourrait créer un rôle « Admin » sur un serveur à lui. Liste choisie à la main par un admin, jamais automatique.
+export const extraGuilds = () => {
+  try {
+    return JSON.parse(getSetting('discord_guilds_extra') || '[]').map(String).filter((g) => g && g !== discordGuild());
+  } catch {
+    return [];
+  }
+};
+const allGuilds = () => [discordGuild(), ...extraGuilds()].filter(Boolean);
+export async function setExtraGuilds(ids) {
+  const known = new Set((await guildsOfBot()).map((g) => g.id));
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(String))].filter((g) => g !== discordGuild());
+  const missing = list.find((g) => !known.has(g));
+  if (missing) throw new LoginError('Le bot n’est pas sur ce serveur : invite-le d’abord.');
+  setSetting('discord_guilds_extra', JSON.stringify(list));
+  await registerCommand();
+  return list;
+}
 const clientSecret = () => {
   const v = getSetting('discord_secret');
   try {
@@ -98,6 +119,7 @@ export function status() {
     ready: discordReady(),
     bot,
     guild: discordGuild(),
+    extra: extraGuilds(),
     live: gw.ready,
     oauth: oauthReady(),
     layout: JSON.parse(getSetting('discord_layout_result') || 'null'),
@@ -168,13 +190,25 @@ export async function oauthFinish(code) {
   }).catch(() => null);
   if (!tr?.ok) throw new LoginError('Discord n’a pas validé la connexion. Réessaie.');
   const { access_token } = await tr.json();
-  const mr = await fetch(`${API}/users/@me/guilds/${discordGuild()}/member`, { headers: { Authorization: `Bearer ${access_token}` }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  // Le serveur principal d'abord, puis les serveurs en plus : le premier où la personne est membre.
+  let mr = null;
+  let guild = null;
+  for (const g of allGuilds()) {
+    mr = await fetch(`${API}/users/@me/guilds/${g}/member`, { headers: { Authorization: `Bearer ${access_token}` }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+    if (mr?.ok) {
+      guild = g;
+      break;
+    }
+    if (mr && mr.status !== 404 && mr.status !== 403) break;
+  }
   if (mr?.status === 404 || mr?.status === 403) throw new LoginError('Tu n’es pas sur le serveur Discord de l’agence. Demande une invitation à un admin.');
   if (!mr?.ok) throw new LoginError('Discord ne répond pas. Réessaie dans une minute.');
   const m = await mr.json();
   const u = m.user || {};
-  const owner = (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id;
-  const role = await bloomRole(m.roles, u.id === owner);
+  const main = guild === discordGuild();
+  const owner = main ? (await discord('GET', `/guilds/${discordGuild()}`).catch(() => null))?.owner_id : null;
+  // Serveur en plus : aucun rôle n'est repris de Discord, il faut avoir été ajouté dans Bloom.
+  const role = main ? await bloomRole(m.roles, u.id === owner) : null;
   try {
     return upsertUser({
       discordId: u.id,
@@ -211,11 +245,11 @@ async function reply(i, content, url) {
 
 async function onInteraction(i) {
   if (i.type !== 2 || i.data?.name !== 'connexion') return;
-  if (i.guild_id !== discordGuild() || !i.member?.user) return reply(i, 'Tape /connexion sur le serveur Discord de l’agence.');
+  if (!allGuilds().includes(i.guild_id) || !i.member?.user) return reply(i, 'Tape /connexion sur le serveur Discord de l’agence.');
   const u = i.member.user;
   try {
     const perms = BigInt(i.member.permissions || '0');
-    const role = await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR);
+    const role = i.guild_id === discordGuild() ? await bloomRole(i.member.roles, (perms & ADMINISTRATOR) === ADMINISTRATOR) : null;
     const d = linkFor({
       discordId: u.id,
       username: u.username,
@@ -398,13 +432,15 @@ async function ensureServer() {
 async function registerCommand() {
   const bot = JSON.parse(getSetting('discord_bot') || 'null');
   if (!bot || !discordGuild()) return;
-  try {
-    await discord('PUT', `/applications/${bot.id}/guilds/${discordGuild()}/commands`, [
-      { name: 'connexion', description: 'Recevoir ton lien de connexion à Bloom (valable 5 min)', type: 1, contexts: [0] },
-    ]);
-    console.log('[bot] commande /connexion prête');
-  } catch (e) {
-    console.warn('[bot] commande /connexion pas enregistrée :', e.message);
+  for (const g of allGuilds()) {
+    try {
+      await discord('PUT', `/applications/${bot.id}/guilds/${g}/commands`, [
+        { name: 'connexion', description: 'Recevoir ton lien de connexion à Bloom (valable 5 min)', type: 1, contexts: [0] },
+      ]);
+      console.log('[bot] commande /connexion prête sur', g);
+    } catch (e) {
+      console.warn('[bot] commande /connexion pas enregistrée :', e.message);
+    }
   }
 }
 
@@ -472,14 +508,23 @@ async function checkMembers() {
   if (!discordReady()) return;
   const users = all('SELECT DISTINCT u.id, u.discord_id FROM users u JOIN sessions s ON s.user_id = u.id WHERE u.discord_id IS NOT NULL AND s.expires_at > ?', Date.now());
   for (const u of users) {
-    try {
-      await discord('GET', `/guilds/${discordGuild()}/members/${u.discord_id}`);
-      run('UPDATE users SET discord_checked = ? WHERE id = ?', Date.now(), u.id);
-    } catch (e) {
-      if (e.status === 404) {
-        run('DELETE FROM sessions WHERE user_id = ?', u.id);
-        console.log('[bot] accès retiré (a quitté le serveur) :', u.id);
+    // Membre d'au moins un des serveurs autorisés ; l'accès n'est retiré que si TOUS répondent « pas membre ».
+    let member = false;
+    let gone = 0;
+    const guilds = allGuilds();
+    for (const g of guilds) {
+      try {
+        await discord('GET', `/guilds/${g}/members/${u.discord_id}`);
+        member = true;
+        break;
+      } catch (e) {
+        if (e.status === 404) gone++;
       }
+    }
+    if (member) run('UPDATE users SET discord_checked = ? WHERE id = ?', Date.now(), u.id);
+    else if (gone === guilds.length) {
+      run('DELETE FROM sessions WHERE user_id = ?', u.id);
+      console.log('[bot] accès retiré (a quitté le serveur) :', u.id);
     }
   }
 }

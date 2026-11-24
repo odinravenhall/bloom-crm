@@ -180,6 +180,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - `/connexion` dans #connexion → le bot répond (en privé) avec un lien à usage unique de 5 min (`/api/auth/link`).
 - Le jeton du bot est collé par un admin dans **Administration → Substy & Discord** : gardé chiffré dans la base,
   jamais dans le dépôt ni dans `.env`. Une fois le bot branché, la connexion par mot de passe est refusée.
+- Serveurs Discord en plus (25/11/2026, `discord_guilds_extra`, cochés par un admin dans Réglages) : leurs membres
+  peuvent se connecter (`/connexion` y est aussi enregistrée), mais leurs rôles Discord ne donnent rien : il faut avoir
+  été ajouté dans Bloom par pseudo. Rôles, salons et annonces restent sur le serveur principal.
 - Chaque déploiement est annoncé dans #mises-a-jour-bloom (`deploy/announce.mjs`, lancé dans le conteneur `app`).
 
 ## Étapes

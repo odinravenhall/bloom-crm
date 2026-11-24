@@ -20,6 +20,7 @@ type Discord = {
   live: boolean;
   invite: string | null;
   guilds: { id: string; name: string }[];
+  extra?: string[];
   oauth: boolean;
   hasSecret: boolean;
   redirect: string;
@@ -113,6 +114,24 @@ export function Settings() {
               Bot : <b>{dc.bot.name}</b>
               {dc.guild ? <> · serveur : <b>{dc.guilds.find((g) => g.id === dc.guild)?.name ?? dc.guild}</b></> : null}
             </p>
+          ) : null}
+          {dc?.bot && dc.guild ? (
+            <div className="mt-3 rounded-lg border border-line p-3">
+              <p className="text-sm font-semibold">Autres serveurs Discord autorisés</p>
+              <p className="mt-1 text-xs text-muted">Leurs membres peuvent se connecter à Bloom, mais leurs rôles Discord ne comptent pas : chaque personne doit d’abord être ajoutée dans Bloom (Contrôle des accès → Inviter, avec son pseudo Discord). Invite d’abord le bot sur le serveur.</p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {dc.guilds.filter((g) => g.id !== dc.guild).map((g) => {
+                  const on = (dc.extra ?? []).includes(g.id);
+                  return (
+                    <label key={g.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={on} disabled={busy} onChange={() => api<Discord>("POST", "/api/discord/guilds", { extra: on ? (dc.extra ?? []).filter((x) => x !== g.id) : [...(dc.extra ?? []), g.id] }).then(setDc).catch((e) => alert((e as Error).message))} />
+                      {g.name}
+                    </label>
+                  );
+                })}
+                {dc.guilds.filter((g) => g.id !== dc.guild).length === 0 ? <p className="text-xs text-muted">Le bot n’est sur aucun autre serveur.{dc.invite ? <> <a className="font-semibold underline" href={dc.invite} target="_blank" rel="noreferrer">Inviter le bot sur un autre serveur</a></> : null}</p> : null}
+              </div>
+            </div>
           ) : null}
           {dc?.bot && !dc.guild ? (
             <div className="mt-3 flex flex-col gap-2">

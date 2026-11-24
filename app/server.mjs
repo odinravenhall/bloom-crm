@@ -42,7 +42,7 @@ import { journalRequest } from './journal.mjs';
 import { mymSiteProxy, mymSiteRoutes } from './mymsite.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
-import { LoginError, discordReady, guildsOfBot, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
+import { LoginError, discordReady, guildsOfBot, setExtraGuilds, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
 
 const COOKIE = 'bloom_session';
 
@@ -409,6 +409,14 @@ const routes = {
     const b = await body(req);
     const st = await setupBot(b.token, b.guild, b.secret);
     send(res, 200, { ...st, guilds: await guildsOfBot().catch(() => []) });
+  },
+  // Serveurs Discord en plus dont les membres peuvent se connecter (admins).
+  'POST /api/discord/guilds': async (req, res) => {
+    const me = userFrom(req);
+    if (me?.role !== 'admin') return send(res, 401, { error: 'Réservé aux admins' });
+    const b = await body(req);
+    await setExtraGuilds(b.extra);
+    send(res, 200, { ...discordStatus(), guilds: await guildsOfBot().catch(() => []) });
   },
 
   // Relier à nouveau (session expirée, autre compte…).
