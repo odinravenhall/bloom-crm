@@ -63,7 +63,8 @@ function convOf(cid, c, m, extra = {}) {
     pinnedBy: m?.pinned && m?.pinned_by ? { id: 0, name: m.pinned_by } : null,
     seen: !!m?.seen_id && m.seen_id === last?.id,
     // Non lu : Substy en signale, sauf si Bloom a déjà vu ce dernier message (OnlyFans n'accepte pas l'accusé de lecture) ; ou remis en non lu.
-    unread: (c.unread > 0 && (!m?.seen_id || m.seen_id !== last?.id)) || !!m?.unread,
+    // Si le dernier message vient de la créatrice (IA ou chatteur), il n'y a plus rien à lire.
+    unread: (c.unread > 0 && fromFan && (!m?.seen_id || m.seen_id !== last?.id)) || !!m?.unread,
     fresh: !!m?.unread || (fromFan && m?.seen_id !== last?.id && waiting(c, m)),
     pinned: !!m?.pinned,
     vip: false,

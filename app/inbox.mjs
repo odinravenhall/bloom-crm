@@ -66,8 +66,13 @@ const WINDOWS = { '6h': 6 * HOUR, '24h': 24 * HOUR, '3j': 72 * HOUR, '7j': 168 *
 const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active', 'manual', 'noai', 'ai', 'unread'];
 export const tagsOf = (s) => String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
 
-/** Le fan attend une réponse : dernier message de lui, non lu chez Substy, « à reprendre » (l'IA a passé la main), ou remis « non lu » dans Bloom. */
-export const waiting = (c, m) => !!c.last && c.canSend !== false && (c.handoff || c.unread > 0 || !c.last.fromCreator || !!m?.unread);
+/**
+ * Le fan attend une réponse : le dernier message vient de lui, ou l'IA a passé la main (« à reprendre »), ou la
+ * conversation a été remise « non lu » dans Bloom. Si le dernier message vient de la créatrice (l'IA ou un chatteur a
+ * déjà répondu), le fan n'attend plus rien, même si Substy compte encore des messages « non lus » : personne n'a ouvert
+ * la conversation, mais elle a bien eu sa réponse (24/11/2026).
+ */
+export const waiting = (c, m) => !!c.last && c.canSend !== false && (c.handoff || !c.last.fromCreator || !!m?.unread);
 
 export function metaMap(cids) {
   if (!cids.length) return new Map();
