@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Eraser, Info, Link2, Pencil, Play, Search, Trash2, X } from "lucide-react";
 import { api, toast } from "@/lib/api";
+import { PlanImport } from "./MymPlanImport";
 import { Avatar } from "@/components/ui";
 
 // MYM → Médias → Planification : copie de MyPulse (Calendrier, À venir, Historique). Bloom garde la planification et
@@ -134,12 +135,7 @@ export function MymPlanning() {
 
       {tab === "next" && d ? <Upcoming d={d} nameOf={nameOf} onEdit={(i) => open(i.at, i)} onCancel={cancel} reload={load} /> : null}
       {tab === "past" && d ? <List items={d.items.filter((i) => i.status === "created" || i.status === "failed")} nameOf={nameOf} /> : null}
-      {tab === "xls" ? (
-        <div className="mt-4 rounded-lg p-5" style={card}>
-          <p className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: "var(--mp-head)" }}><Info className="size-4" /> Programmer tout un planning depuis Excel</p>
-          <p className="py-10 text-center text-[13px]" style={{ color: "var(--mp-muted)" }}>Pas encore disponible dans Bloom. Pour l’instant, les posts se planifient un par un depuis le Calendrier.</p>
-        </div>
-      ) : null}
+      {tab === "xls" ? <PlanImport accounts={accounts} onDone={load} /> : null}
       {draft ? <PlanModal draft={draft} accounts={accounts.filter((a) => a.linked)} onClose={() => setDraft(null)} onSaved={() => (setDraft(null), load())} /> : null}
     </div>
   );

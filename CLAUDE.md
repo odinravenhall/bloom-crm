@@ -218,8 +218,13 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `POST /v1/posts { medias: [idCloud], caption, private, playlists: [], thirdPartyConsent: false }` (styx) ; média choisi
   dans le mym.cloud (`GET /v1/cloud?perPage&status=ready&type=photo|video&offset=<base64 {"page","perPage"}>`).
   ⚠️ Format de publication lu dans le code du site, pas encore vérifié sur un vrai post. Jamais de deuxième essai tout seul.
-- Pas encore fait : stories, « passer en privé après N h » (format d'édition d'un post à relever sur une vraie
-  modification), import Excel, suivi des listes d'amis.
+- Import Excel des POSTS (24/11/2026, onglet « Import Excel », `MymPlanImport.tsx`) : mêmes colonnes que le modèle de
+  MyPulse, lues dans le navigateur (`readRows`), vérifiées puis mises dans `mym_plan` (`POST /api/mym/plan/import`,
+  `simulate` pour vérifier sans programmer). `media_id` = identifiant du mym.cloud (fichier « Mes médias » de Bloom,
+  `GET /api/mym/plan/medias`) : le numéro de média de MyPulse n'existe pas dans l'API du cloud.
+- « L'IA écrit… » dans les listes de conversations : événement `ai_generation_status` de Substy (`useAiWriting`).
+- Pas encore fait : stories, « supprimer / passer en privé après N h » (formats à relever sur une vraie action),
+  suivi des listes d'amis.
 
 ## MYM en direct : temps réel et revenus (23/11/2026) — `app/chat.mjs`, `app/mymincome.mjs`
 

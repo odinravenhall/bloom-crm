@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { all, db, one, run } from './store.mjs';
 import { canSee, isBoss, seesAll } from './team.mjs';
+import { parisDay, parisMidnight } from './revenue.mjs';
 import { API, STYX, isLinked, mym, mymSite } from './mym.mjs';
 
 db.exec(`
@@ -161,6 +162,42 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
     const mymName = new Map(all('SELECT creator_id, username FROM mym_links').map((l) => [l.creator_id, l.username]));
     return creators().filter((c) => /mym/i.test(c.platform || '') && canSee({ ...u, pf: null }, c.id)).map((c) => ({ id: c.id, name: n.get(c.id) || c.name, username: mymName.get(c.id) || c.username || null, avatar: c.avatar || null, linked: isLinked(c.id) }));
   };
+  // --- import Excel : aides
+  const norm = (v) => String(v || '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
+  const VIS = { public: 'public', publique: 'public', private: 'private', prive: 'private', privee: 'private', abonnes: 'private' };
+  const ACT = { none: 'none', rien: 'none', aucun: 'none', aucune: 'none', '': 'none', delete: 'delete', supprimer: 'delete', make_private: 'make_private', 'passer en prive': 'make_private', prive: 'make_private' };
+  /** « 2026-11-25 10:30 » (heure de Paris), ou date d'une cellule Excel (nombre de jours depuis 1900) → millisecondes. */
+  const parisTime = (v) => {
+    let s = String(v ?? '').trim();
+    if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 30000 && Number(s) < 80000) {
+      const d = new Date(Math.round((Number(s) - 25569) * 864e5));
+      s = `${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 16)}`;
+    }
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2})[:h](\d{2})/.exec(s) || /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{1,2})[:h](\d{2})/.exec(s);
+    if (!m) return null;
+    const [y, mo, d] = m[1].length === 4 ? [m[1], m[2], m[3]] : [m[3], m[2], m[1]];
+    const t = parisMidnight(`${y}-${mo}-${d}`) + Number(m[4]) * 3600e3 + Number(m[5]) * 60e3;
+    return Number.isFinite(t) ? t : null;
+  };
+  const cloudCache = new Map(); // cid -> { at, list }
+  /** Photos et vidéos prêtes du mym.cloud (identifiant, type, nom du fichier, date), gardées 5 minutes. */
+  async function cloudAll(cid) {
+    const hit = cloudCache.get(cid);
+    if (hit && Date.now() - hit.at < 5 * 60_000) return hit.list;
+    const list = [];
+    for (const type of ['photo', 'video']) {
+      for (let page = 1; page <= 6; page++) {
+        const qs = new URLSearchParams({ perPage: '50', status: 'ready', type });
+        if (page > 1) qs.set('offset', Buffer.from(JSON.stringify({ page, perPage: 50 })).toString('base64'));
+        const d = await mym(cid, `/v1/cloud?${qs}`, { base: STYX });
+        for (const m of d?.data || []) list.push({ id: String(m.id), type, filename: m.filename || '', description: m.description || '', createdAt: m.created_at || null });
+        if (page >= (Number(d?.meta?.total_pages) || 1) || !(d?.data || []).length) break;
+      }
+    }
+    list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    cloudCache.set(cid, { at: Date.now(), list });
+    return list;
+  }
   const who = (req, res) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
@@ -585,6 +622,68 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       }
       const r = run('INSERT INTO mym_plan (creator_id, kind, at, visibility, caption, media_id, media_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', c.id, 'feed', at, visibility, caption, mediaId, b.mediaType === 'video' ? 'video' : 'photo', u.name, Date.now());
       send(res, 200, { ok: true, id: Number(r.lastInsertRowid) });
+    },
+    // ------------------------------------------------------------ import Excel (posts)
+    // Les médias du mym.cloud avec leur identifiant, pour remplir le fichier (600 au plus, les plus récents d'abord).
+    'GET /api/mym/plan/medias': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      const c = pick(u, res, q(req).get('creatorId'));
+      if (!c) return;
+      try {
+        send(res, 200, { name: c.name, medias: await cloudAll(c.id) });
+      } catch (e) {
+        send(res, 502, { error: e.message });
+      }
+    },
+    // Lignes du fichier → posts planifiés. `simulate` : on vérifie chaque ligne sans rien programmer.
+    'POST /api/mym/plan/import': async (req, res) => {
+      const u = who(req, res);
+      if (!u) return;
+      if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux admins, managers et team leaders' });
+      const b = await body(req);
+      const c = pick(u, res, b.creatorId);
+      if (!c) return;
+      const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 500);
+      if (!rows.length) return send(res, 400, { error: 'Aucune ligne remplie dans le fichier.' });
+      let medias;
+      try {
+        medias = new Map((await cloudAll(c.id)).map((m) => [m.id.toLowerCase(), m]));
+      } catch (e) {
+        return send(res, 502, { error: `Impossible de lire le mym.cloud : ${e.message}` });
+      }
+      const out = [];
+      let okN = 0;
+      const perDay = new Map();
+      for (const r of rows) {
+        const line = Number(r.line) || 0;
+        const fail = (why) => out.push({ line, ok: false, why });
+        const mediaId = String(r.media_id || '').trim().toLowerCase();
+        const m = medias.get(mediaId);
+        if (!mediaId) { fail('media_id manquant'); continue; }
+        if (!m) { fail(/^\d+$/.test(mediaId) ? 'media_id est un numéro de MyPulse : Bloom utilise l’identifiant de l’onglet « Mes médias » de SON modèle' : 'média introuvable dans le mym.cloud de ce compte'); continue; }
+        const at = parisTime(r.date_schedule);
+        if (!at) { fail('date_schedule illisible (attendu : AAAA-MM-JJ HH:MM, heure de Paris)'); continue; }
+        if (at < Date.now() + 60_000) { fail('date déjà passée : ligne ignorée'); continue; }
+        if (at > Date.now() + 366 * 864e5) { fail('date trop lointaine (un an au plus)'); continue; }
+        const vis = VIS[norm(r.feed_visibility)];
+        if (!vis) { fail('feed_visibility : public ou private'); continue; }
+        const action = ACT[norm(r.post_action || 'none')];
+        if (!action) { fail('post_action : none, delete ou make_private'); continue; }
+        // Bloom ne sait pas encore supprimer ni passer en privé un post après coup : on refuse plutôt que de l'oublier.
+        if (action !== 'none') { fail('post_action « delete » / « make_private » pas encore pris en charge par Bloom : mets « none »'); continue; }
+        const caption = String(r.caption || '').trim();
+        if (caption.length > 1500) { fail('caption : 1 500 caractères au plus'); continue; }
+        if (vis === 'public') {
+          const k = parisDay(at);
+          perDay.set(k, (perDay.get(k) || 0) + 1);
+          if (perDay.get(k) > 5) { fail('plus de 5 posts publics ce jour-là (limite de MYM)'); continue; }
+        }
+        if (!b.simulate) run('INSERT INTO mym_plan (creator_id, kind, at, visibility, caption, media_id, media_type, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', c.id, 'feed', at, vis, caption, m.id, m.type, u.name, Date.now());
+        okN++;
+        out.push({ line, ok: true, at, visibility: vis });
+      }
+      send(res, 200, { simulate: !!b.simulate, total: rows.length, ok: okN, lines: out });
     },
     /** Annuler une publication encore planifiée. */
     'POST /api/mym/plan/cancel': async (req, res) => {

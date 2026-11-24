@@ -54,6 +54,34 @@ export async function readColumnA(file: File): Promise<string[]> {
   return out;
 }
 
+/** Toutes les lignes de la 1re feuille (ou de la feuille nommée), cellule par cellule ; les cellules vides donnent "". */
+export async function readRows(file: File, sheetName?: string): Promise<string[][]> {
+  if (file.name.toLowerCase().endsWith(".xls")) throw new Error("Enregistre le fichier en .xlsx puis réessaie");
+  const f = await unzip(await file.arrayBuffer(), (n) => n === "xl/sharedStrings.xml" || n === "xl/workbook.xml" || /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+  // Les feuilles sont rangées dans l'ordre du classeur : la n-ième s'appelle sheet<n>.xml dans les fichiers courants.
+  const names = [...(f["xl/workbook.xml"] ?? "").matchAll(/<sheet\b[^>]*\bname="([^"]*)"/g)].map((m) => unxml(m[1]));
+  const idx = sheetName ? Math.max(0, names.findIndex((n) => n.toLowerCase() === sheetName.toLowerCase())) : 0;
+  const sheet = f[`xl/worksheets/sheet${idx + 1}.xml`] ?? f["xl/worksheets/sheet1.xml"] ?? Object.entries(f).find(([k]) => k.includes("worksheets"))?.[1];
+  if (!sheet) throw new Error("Feuille introuvable dans ce fichier");
+  const shared = [...(f["xl/sharedStrings.xml"] ?? "").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => unxml(m[1].replace(/<rPh[\s\S]*?<\/rPh>/g, "")));
+  const rows: string[][] = [];
+  for (const m of sheet.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const attrs = m[1], inner = m[2] ?? "";
+    const ref = /\br="([A-Z]+)(\d+)"/.exec(attrs);
+    if (!ref) continue;
+    const x = [...ref[1]].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+    const y = Number(ref[2]) - 1;
+    if (x > 30 || y > 5000) continue;
+    const t = /\bt="(\w+)"/.exec(attrs)?.[1];
+    const val = /<v>([\s\S]*?)<\/v>/.exec(inner)?.[1];
+    const text = t === "s" ? shared[Number(val)] ?? "" : t === "inlineStr" ? unxml(inner) : unxml(val ?? "");
+    while (rows.length <= y) rows.push([]);
+    while (rows[y].length < x) rows[y].push("");
+    rows[y][x] = text;
+  }
+  return rows.map((r) => Array.from(r, (v) => v ?? ""));
+}
+
 const CRC = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
