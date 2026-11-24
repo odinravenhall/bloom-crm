@@ -302,8 +302,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   adresse), qui refait chaque requête chez creators.mym.fans avec la session du compte relié (ajoutée côté serveur).
 - Ouverture par ticket à usage unique (`POST /api/mym/site/ticket` → `/__bloom/open?t=`), session de 4 h propre à cette
   adresse, affichage seulement dans un cadre de Bloom, déconnexion et suppression de compte refusées, journal.
-- À faire HORS dépôt pour que ça marche : l'enregistrement DNS de l'adresse (Cloudflare) et son entrée dans le Caddy
-  du VPS, vers `bloom-web:3000` comme bloom.ravencrm.xyz. `GET /api/mym/site/probe` vérifie le relais sans l'adresse.
+- Hors dépôt, fait le 24/11/2026 : enregistrement DNS `mym` (Cloudflare, par l'agence) et bloc `mym.ravencrm.xyz` dans
+  le Caddyfile de /root/zebre vers `bloom-web:3000` (ajouté à la main avec l'accord explicite de l'agence, pour cette
+  seule fois : la règle « on ne touche pas au VPS » tient toujours). `GET /api/mym/site/probe` vérifie le relais.
+- Marche : les pages « classiques » du site (liste des messages, revenus, profil, studio). Ne marche PAS : la nouvelle
+  messagerie et les réglages, une application qui parle à api.mym.fans, lequel n'accepte que l'adresse de MYM. On ne
+  contourne pas : le relais affiche un message à la place (`spa()`).
 - ⚠️ Les pages de MYM contiennent le jeton de la modèle : qui ouvre cette page peut agir sur le compte hors de Bloom.
 
 ## MYM → Pilotage d'équipe : Modération, Activité, En direct (24/11/2026) — `app/mymmod.mjs`, `app/journal.mjs`

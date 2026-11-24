@@ -34,6 +34,15 @@ const page = (res, status, text) => {
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': `frame-ancestors ${BLOOM}`, 'x-robots-tag': 'noindex' });
   res.end(`<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;height:100vh;background:#1a1d21;color:#ced4da;font:15px system-ui"><p style="max-width:460px;text-align:center;line-height:1.5">${text}</p>`);
 };
+// Partie récente du site (nouvelle messagerie, réglages) : une application qui tourne dans le navigateur et parle à
+// api.mym.fans, qui n'accepte que l'adresse de MYM (vérifié le 24/11/2026). Ici elle n'afficherait que la page de
+// connexion de MYM : on le dit clairement à la place, et personne ne tape de mot de passe dans le cadre.
+// On ne contourne pas cette limite (ce serait passer outre une protection de MYM).
+const spa = (res, cid, path) => {
+  const chat = path.startsWith('/app/chat');
+  const link = chat ? `${BLOOM}/app/mym/chatting?c=${encodeURIComponent(cid)}` : `${ORIGIN}${path}`;
+  page(res, 200, `<b style="color:#f1f6e8;font-size:17px">Cette partie du site MYM ne s’affiche pas dans Bloom</b><br><br>${chat ? 'La nouvelle messagerie de MYM' : 'Cette page de MYM (réglages, nouvelle messagerie)'} est une application qui n’accepte de fonctionner que sur l’adresse de MYM.<br><br><a href="${link}" target="${chat ? '_top' : '_blank'}" rel="noreferrer" style="color:#c7ff4a">${chat ? 'Ouvrir Chatting dans Bloom' : 'Ouvrir cette page sur creators.mym.fans'}</a> &nbsp;·&nbsp; <a href="/app/myms" style="color:#9fb0f0">Revenir au site MYM</a>`);
+};
 const sessionOf = (req) => {
   const sid = new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`).exec(req.headers.cookie || '')?.[1];
   const s = sid ? sessions.get(sid) : null;
@@ -87,6 +96,7 @@ export async function mymSiteProxy(req, res) {
   const s = sessionOf(req);
   if (!s) return page(res, 401, 'Cette page s’ouvre depuis Bloom : menu MYM → Accès MYM (Direct).');
   if (!isLinked(s.cid)) return page(res, 409, 'Le compte MYM de cette modèle n’est plus relié à Bloom.');
+  if (path.startsWith('/app/login')) return spa(res, s.cid, '/app/reglages');
   if (FORBIDDEN.test(path)) return page(res, 403, 'Cette action est bloquée depuis Bloom : se déconnecter ici couperait aussi la liaison du compte avec Bloom.');
   try {
     const body = await raw(req);
@@ -104,6 +114,8 @@ export async function mymSiteProxy(req, res) {
     if (/text\/html|javascript|json/.test(type)) {
       // Les liens absolus vers le site de MYM restent sur cette adresse.
       const text = (await r.text()).replaceAll(ORIGIN, '').replaceAll(ORIGIN.replace(/\//g, '\\/'), '');
+      // La coquille de l'application récente : une petite page qui ne charge que « korben-creators ».
+      if (type.includes('text/html') && text.length < 20_000 && text.includes('korben-creators')) return spa(res, s.cid, path);
       res.writeHead(r.status, out);
       return res.end(text);
     }
