@@ -30,7 +30,7 @@ const MymPush = load(() => import("@/app/app/mym/MymPush").then((m) => m.MymPush
 const MymPlanning = load(() => import("@/app/app/mym/MymPlanning").then((m) => m.MymPlanning));
 const MymFeed = load(() => import("@/app/app/mym/MymFeed").then((m) => m.MymFeed));
 const V2Friends = load(() => import("./mym/V2Friends").then((m) => m.V2Friends));
-const MymVouchers = load(() => import("@/app/app/mym/MymVouchers").then((m) => m.MymVouchers));
+const V2Vouchers = load(() => import("./mym/V2Vouchers").then((m) => m.V2Vouchers));
 const MymNotifs = load(() => import("@/app/app/mym/MymNotifs").then((m) => m.MymNotifs));
 const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.MymDirect));
 const V2OfManager = load(() => import("./of/V2OfManager").then((m) => m.V2OfManager));
@@ -64,7 +64,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "planification": return m ? <MymPlanning /> : null;
     case "feed": return m ? <MymFeed /> : null;
     case "amis": return m ? <V2Friends /> : null;
-    case "bons": return m ? <MymVouchers /> : null;
+    case "bons": return m ? <V2Vouchers /> : null;
     case "notifications": return m ? <MymNotifs /> : null;
     case "site-mym": return m ? <MymDirect /> : null;
     case "of-manager": return m ? null : <V2OfManager />;
