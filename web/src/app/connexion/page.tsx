@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Sparkle } from "lucide-react";
 import { getState } from "@/lib/server";
 import { homeOf } from "@/lib/types";
+import { isV2Host } from "@/lib/v2host";
 import { Logo } from "@/components/ui";
+import { jakarta } from "../v2/font";
+import { V2Backdrop } from "../v2/V2Backdrop";
 import { FirstSetup, PasswordLogin } from "./Forms";
+// Les styles de la nouvelle version (tout y est sous « .v2 » : sans effet sur la page de l'adresse principale).
+import "../v2/v2.css";
 
 export const metadata: Metadata = { title: "Connexion" };
 export const dynamic = "force-dynamic";
@@ -25,13 +32,13 @@ function DiscordLogo() {
 // On entre dans Bloom par Discord : bouton (OAuth2) ou /connexion sur le serveur. Les formulaires ne servent qu'à la mise en route.
 export default async function Connexion({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const s = await getState();
-  if (s.me) redirect(homeOf(s.me.role));
+  // bloomcrm.fr : tout le site est la nouvelle version (accueil « / », messagerie « /messagerie »).
+  const v2 = isV2Host((await headers()).get("host"));
+  if (s.me) redirect(v2 ? (s.me.role === "chatter" ? "/messagerie" : "/") : homeOf(s.me.role));
   const e = (await searchParams).e;
   const err = e ? (ERR[e] ?? e.slice(0, 200)) : "";
-  return (
-    <main className="grid min-h-dvh place-items-center px-4 py-10">
-      <div className="card w-full max-w-md rounded-(--radius-card) border bg-card p-7">
-        <Logo href="/connexion" />
+  const body = (
+    <>
         {!s.setup ? (
           <FirstSetup />
         ) : s.discord ? (
@@ -46,13 +53,35 @@ export default async function Connexion({ searchParams }: { searchParams: Promis
               </a>
             ) : null}
             {err ? <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-200">{err}</p> : null}
+            {/* Le lien envoyé par le bot ouvre la session sur l'adresse principale (donc la version actuelle) : sur
+                bloomcrm.fr on ne le propose pas tant que le bouton Discord est là. */}
+            {v2 && s.oauth ? null : (
             <p className="text-sm text-muted">
               {s.oauth ? "Ou bien : " : ""}va dans le salon <b className="text-fg">#connexion</b> du serveur Discord et tape <b className="text-fg">/connexion</b>. Le bot t’envoie un lien rien que pour toi, valable 5 minutes.
             </p>
+            )}
           </div>
         ) : (
           <PasswordLogin />
         )}
+    </>
+  );
+  // Sur bloomcrm.fr, la même page dans l'habillage de la nouvelle version (ciel étoilé, logo, police) : mêmes liens.
+  if (v2)
+    return (
+      <main className={`v2 ${jakarta.variable} relative grid min-h-dvh w-full place-items-center overflow-hidden px-4 py-10`}>
+        <V2Backdrop />
+        <div className="v2-card v2-rise z-[1] w-full max-w-md p-7">
+          <p className="v2-logo" style={{ padding: 0 }}><Sparkle /><span>Bloom</span></p>
+          {body}
+        </div>
+      </main>
+    );
+  return (
+    <main className="grid min-h-dvh place-items-center px-4 py-10">
+      <div className="card w-full max-w-md rounded-(--radius-card) border bg-card p-7">
+        <Logo href="/connexion" />
+        {body}
       </div>
     </main>
   );

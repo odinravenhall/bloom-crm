@@ -381,6 +381,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   dessin. Bloom doit avoir la même identité partout : chaque écran derrière le menu doit être redessiné (plus de copie
   de MyPulse ou d'Infloww, comme les écrans Chiffres aujourd'hui).
 - `v2.css` : tout est sous `.v2` (variables `--color-*`, `--mp-*`, `--of-*`, `--pro-*` repeintes, classes `v2-*`).
+  ⚠️ globals.css calcule `--grad` et `--color-accent-2` sur « html », avec l'accent BLANC de la version actuelle :
+  v2.css les redonne sous `.v2` (bleu uni), sinon tout bouton `bg-primary` d'un composant repris est écrit en blanc
+  sur fond blanc (vu le 25/11/2026 sur « Ouvrir le compte » d'OF Manager).
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
@@ -687,6 +690,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     l'adresse principale) ; tous les écrans passent par `useV2Url()`. `usePathname()` peut rendre « /chiffres » ou
     « /v2/chiffres » selon le moment : le menu enlève un « /v2 » éventuel avant de lire l'écran ouvert.
   - Après la connexion (`/api/auth/link?…&v=2`), on arrive sur « / » (chatteur : « /messagerie »).
+  - Page de connexion (`connexion/page.tsx`) : sur ces adresses, le même contenu dans l'habillage de la nouvelle
+    version (ciel étoilé, logo, police de `v2/font.ts`). Le lien du bot Discord (« /connexion » sur le serveur) n'y
+    est pas proposé : il ouvre la session sur l'adresse principale, donc dans la version actuelle.
   - Présence : `PresencePing` envoie le chemin officiel (« /v2/chiffres ») même ici, pour que « Sur le chat » et
     l'écran En direct n'aient qu'un vocabulaire.
   - Menu sur ces adresses : pas de « Paramètres » (ce sont ceux de la version actuelle : thème, langue,

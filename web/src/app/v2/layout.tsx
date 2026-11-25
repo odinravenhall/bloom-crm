@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import { requireMe } from "@/lib/server";
 import { CreatorsProvider } from "@/lib/creators";
 import { PresencePing } from "@/components/PresencePing";
 import { v2BaseOf } from "@/lib/v2host";
 import { V2Nav } from "./nav";
+import { jakarta } from "./font";
 import { V2Backdrop } from "./V2Backdrop";
 import { V2Shell } from "./V2Shell";
 import "./v2.css";
@@ -13,8 +13,7 @@ import "./v2.css";
 // Bloom v2 : le nouveau design unique (OnlyFans + MYM). Même serveur et mêmes données que la version actuelle (/app).
 // Sur l'adresse principale elle vit sous « /v2 » ; sur bloomcrm.fr elle est le site entier, sans « /v2 » dans l'adresse
 // (next.config.mjs réécrit les adresses, `V2Nav` donne aux écrans le bon début de lien).
-// Police : Plus Jakarta Sans, celle de Raven CRM (la version actuelle de Bloom garde Geist).
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-v2" });
+// Police : Plus Jakarta Sans (font.ts).
 export const metadata: Metadata = { title: { default: "Bloom", template: "%s · Bloom" } };
 export const dynamic = "force-dynamic";
 

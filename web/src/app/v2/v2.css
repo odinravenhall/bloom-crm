@@ -18,6 +18,11 @@
   --color-primary: #3b82f6;
   --color-primary-soft: #93c5fd;
   --color-on-primary: #ffffff;
+  /* Les aplats des composants repris de la version actuelle (boutons « bg-primary », interrupteurs…) : bleu uni. Sans ces
+     deux lignes, ils gardaient le dégradé calculé sur l'accent blanc de la version actuelle (globals.css le calcule sur
+     « html »), donc un texte blanc sur fond blanc : vu le 25/11/2026 sur le bouton « Ouvrir le compte » d'OF Manager. */
+  --color-accent-2: #2563eb;
+  --grad: linear-gradient(0deg, #3b82f6, #3b82f6);
   --color-bubble-fan: #17171a;
   --color-bubble-me: #2563eb;
   /* écrans MYM */
@@ -178,6 +183,8 @@
 
 /* Cadre d'un écran : les écrans « plein écran » de la version actuelle (position fixe) restent dans la zone de droite. */
 .v2-frame { position: relative; min-height: 100%; transform: translateZ(0); }
+/* Pas de halo sous les boutons pleins des composants repris : la nouvelle version n'a pas de boutons lumineux. */
+.v2 .bg-primary.text-white { box-shadow: none; }
 .v2-frame.v2-full { height: 100%; overflow: hidden; }
 
 /* ---------- Messagerie ---------- */
