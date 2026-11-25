@@ -8,19 +8,18 @@ import { useT } from "@/lib/i18n";
 import type { Pf } from "@/lib/platform";
 import type { Media } from "@/lib/types";
 import { Avatar } from "@/rv/components/ui";
-import { CloudPicker } from "@/app/app/mym/MymScripts";
 import { AiAnalytics } from "@/app/app/scripts/AiAnalytics";
 import { AiScripts } from "@/app/app/scripts/AiScripts";
 import { QUICK } from "@/app/pro/emojis";
-import { VaultProPicker } from "@/app/pro/VaultProPicker";
-import { cash, downloadCsv, int, Layer, Modal, PALETTE, pct, Ring, Switch } from "../kit";
+import { cash, downloadCsv, int, Modal, PALETTE, pct, Ring, Switch } from "../kit";
+import { MediaPicker } from "../media/MediaKit";
 
 // Bloom v2 → Scripts : le MÊME écran pour OnlyFans et MYM (25/11/2026, « Constellation »). Il remplace, dans la v2, la
 // copie d'Infloww (Scripts : Tag / Sequence) et celle de MyPulse (MymScripts). La bibliothèque est commune
 // (app/library.mjs) : par modèle, des SCRIPTS qui sont soit une séquence (messages dans l'ordre), soit un dossier
 // (messages prêts, envoyés quand on veut), chacun avec ses messages. Lecture : `GET /api/v2/scripts` ; écriture : les
-// routes « /api/lib/… ». Encore à l'ancien affichage, posés tels quels : le choix des médias (vault OnlyFans, MYM
-// Cloud) et les scripts de l'IA de Substy.
+// routes « /api/lib/… ». Le choix des médias est la fenêtre de la v2 (`MediaPicker`). Encore à l'ancien affichage,
+// posés tels quels : les scripts de l'IA de Substy.
 type Item = {
   id: number; name: string; text: string; note: string | null; price: number; medias: Media[]; groupId: number; tags: number[]; cond: "" | "bought" | "not_bought"; creatorTags: string[];
   uses: number; fans: number; ppvSent: number; sales: number; revenue: number; currency: string | null;
@@ -527,7 +526,6 @@ function ScriptForm({ creatorId, group, onClose, onDone }: { creatorId: string; 
 
 /** Écrire ou modifier un message d'un script : texte, prix, médias, consigne. */
 function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose, onDone }: { pf: Pf; creatorId: string; sym: string; group: Group; item: Item | null; folders: Group[]; others: ModelRow[]; onClose: () => void; onDone: () => void }) {
-  const { t } = useT();
   const [v, setV] = useState({ name: item?.name ?? "", text: item?.text ?? "", note: item?.note ?? "", paid: (item?.price ?? 0) > 0, price: item?.price ? String(item.price) : "", cond: item?.cond ?? "", tags: item?.tags?.length ? item.tags : [group.id], creatorTags: item?.creatorTags ?? [] });
   const [medias, setMedias] = useState<Media[]>(item?.medias ?? []);
   const [vault, setVault] = useState(false);
@@ -615,7 +613,7 @@ function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose
             ))}
           </div>
         ) : null}
-        {mym ? <CloudPicker creatorId={creatorId} selected={medias} onChange={setMedias} /> : <button type="button" onClick={() => setVault(true)} className="v2-btn" data-kind="ghost" style={{ height: 34 }}><ImagePlus className="size-4" />{medias.length ? "Changer les médias" : "Choisir dans le vault"}</button>}
+        <button type="button" onClick={() => setVault(true)} className="v2-btn" data-kind="ghost" style={{ height: 34 }}><ImagePlus className="size-4" />{medias.length ? "Changer les médias" : mym ? "Choisir dans le MYM Cloud" : "Choisir dans le vault"}</button>
 
         <label className="v2-label mt-3" htmlFor="ms-note">Consigne pour l’équipe <span className="font-normal">(facultatif, jamais envoyée au fan)</span></label>
         <input id="ms-note" value={v.note} maxLength={500} onChange={(e) => setV({ ...v, note: e.target.value })} placeholder="Quand l’envoyer, quoi répondre ensuite…" className="v2-field" />
@@ -639,17 +637,8 @@ function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose
           <button onClick={save} disabled={busy || (!v.text.trim() && !medias.length)} className="v2-btn">{busy ? "Enregistrement…" : item ? "Enregistrer" : "Ajouter le message"}</button>
         </div>
       </Modal>
-      {vault ? (
-        <Layer className="pro">
-          <VaultProPicker
-            creatorId={creatorId}
-            selected={medias.map((x) => ({ id: x.id, type: /video/i.test(x.type) ? "video" : /audio/i.test(x.type) ? "audio" : "photo", thumbnailUrl: x.thumb ?? undefined, url: x.full ?? undefined }))}
-            onPick={(list) => (setMedias(list.map((x) => ({ id: x.id, type: x.type, thumb: x.thumbnailUrl || x.smallUrl || null, full: x.url || x.largeUrl || x.mediumUrl || null, duration: null }))), setVault(false))}
-            onClose={() => setVault(false)}
-            t={t}
-          />
-        </Layer>
-      ) : null}
+      {/* Un script GARDE ses médias : la fenêtre rend des adresses qui ne périment pas (`keep`). */}
+      {vault ? <MediaPicker pf={pf} creatorId={creatorId} selected={medias} max={mym ? 5 : undefined} keep onPick={(list) => (setMedias(list), setVault(false))} onClose={() => setVault(false)} /> : null}
     </>
   );
 }

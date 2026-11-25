@@ -41,7 +41,39 @@ db.exec('CREATE TABLE IF NOT EXISTS mym_thumbs (id TEXT PRIMARY KEY, creator_id 
 const THUMBS = `${process.env.DATA_DIR || '/data'}/mymthumbs`;
 mkdirSync(THUMBS, { recursive: true });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const cloudItem = (m) => ({ id: String(m.id), type: /video/i.test(m.type || '') ? 'video' : /audio/i.test(m.type || m.mime_type || '') ? 'audio' : 'photo', thumb: m.preview || m.url || null, full: m.url || null, duration: Number(m.duration) || null, usedPublic: !!m.used_in_public_post, usedPrivate: !!m.used_in_private_post });
+const cloudItem = (m) => ({
+  id: String(m.id), type: /video/i.test(m.type || '') ? 'video' : /audio/i.test(m.type || m.mime_type || '') ? 'audio' : 'photo', thumb: m.preview || m.url || null, full: m.url || null, duration: Number(m.duration) || null,
+  usedPublic: !!m.used_in_public_post, usedPrivate: !!m.used_in_private_post, name: String(m.filename || m.display_name || ''), caption: String(m.description || ''), createdAt: m.created_at || null,
+});
+
+/** Collections du mym.cloud d'une modèle (compte relié). */
+export async function cloudCollections(cid) {
+  const d = await mym(cid, '/v1/cloud/collections?perPage=100', { base: STYX });
+  return (d?.data || d?.collections || []).map((x) => ({ id: String(x.id), name: x.name || '', total: Number(x.items_count ?? x.media_count) || 0, photos: Number(x.images_count) || 0, videos: Number(x.videos_count) || 0 }));
+}
+/**
+ * Une page de médias du mym.cloud (30 au plus) : d'une collection, les vocaux, ou tout le cloud (là, la recherche est
+ * faite par MYM). `cursor` = celui de la page d'avant ; `total` n'est connu que pour « tout le cloud ».
+ */
+export async function cloudPage(cid, { collectionId = '', type = '', search = '', cursor = '' } = {}) {
+  if (collectionId) {
+    if (!UUID.test(collectionId)) throw new Error('Collection inconnue');
+    const d = await mym(cid, `/v1/cloud/collections/${collectionId}/items?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
+    return { items: (d?.data || []).map(cloudItem).filter((m) => !type || m.type === type), nextCursor: d?.next_cursor || null, total: null };
+  }
+  if (type === 'audio') {
+    const d = await mym(cid, `/v1/cloud/audios?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
+    return { items: (d?.data || []).map((a) => ({ id: String(a.id), type: 'audio', thumb: null, full: a.playback_url || null, duration: a.duration_ms ? Math.round(a.duration_ms / 1000) : null, name: a.display_name || '', caption: '', createdAt: a.created_at || null, usedPublic: false, usedPrivate: false })), nextCursor: d?.next_cursor || null, total: null };
+  }
+  const page = Math.max(1, Number(cursor) || 1);
+  const qs = new URLSearchParams({ perPage: '30', status: 'ready' });
+  if (type) qs.set('type', type);
+  const word = String(search || '').trim().slice(0, 80);
+  if (word) qs.set('search', word);
+  if (page > 1) qs.set('offset', Buffer.from(JSON.stringify({ page, perPage: 30 })).toString('base64'));
+  const d = await mym(cid, `/v1/cloud?${qs}`, { base: STYX });
+  return { items: (d?.data || []).map(cloudItem), nextCursor: page < (Number(d?.meta?.total_pages) || 1) ? String(page + 1) : null, total: Number(d?.meta?.total) || null };
+}
 
 const MYM_MEDIA = /^https:\/\/[a-z0-9.-]+\.mym\.fans\//i;
 /** Télécharge une image de MYM (adresse signée, valable une heure) et la garde sous `key`. Vrai si c'est fait. */
@@ -477,8 +509,7 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       const c = pick(u, res, q(req).get('creatorId'));
       if (!c) return;
       try {
-        const d = await mym(c.id, '/v1/cloud/collections?perPage=100', { base: STYX });
-        send(res, 200, { collections: (d?.data || d?.collections || []).map((x) => ({ id: String(x.id), name: x.name || '', total: Number(x.items_count ?? x.media_count) || 0, photos: Number(x.images_count) || 0, videos: Number(x.videos_count) || 0 })) });
+        send(res, 200, { collections: await cloudCollections(c.id) });
       } catch (e) {
         send(res, 502, { error: e.message });
       }
@@ -492,25 +523,10 @@ export function mymMediaRoutes({ userFrom, send, body, creators }) {
       const type = ['photo', 'video', 'audio'].includes(p.get('type')) ? p.get('type') : '';
       const col = String(p.get('collectionId') || '');
       const cursor = String(p.get('cursor') || '');
+      if (col && !UUID.test(col)) return send(res, 400, { error: 'Collection inconnue' });
       try {
-        if (col) {
-          if (!UUID.test(col)) return send(res, 400, { error: 'Collection inconnue' });
-          const d = await mym(c.id, `/v1/cloud/collections/${col}/items?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
-          const items = (d?.data || []).map(cloudItem).filter((m) => !type || m.type === type);
-          return send(res, 200, { items, nextCursor: d?.next_cursor || null });
-        }
-        if (type === 'audio') {
-          const d = await mym(c.id, `/v1/cloud/audios?perPage=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { base: STYX });
-          return send(res, 200, { items: (d?.data || []).map((a) => ({ id: String(a.id), type: 'audio', thumb: null, full: a.playback_url || null, duration: a.duration_ms ? Math.round(a.duration_ms / 1000) : null, name: a.display_name || '', usedPublic: false, usedPrivate: false })), nextCursor: d?.next_cursor || null });
-        }
-        const page = Math.max(1, Number(cursor) || 1);
-        const qs = new URLSearchParams({ perPage: '30', status: 'ready' });
-        if (type) qs.set('type', type);
-        const search = String(p.get('search') || '').trim().slice(0, 80);
-        if (search) qs.set('search', search);
-        if (page > 1) qs.set('offset', Buffer.from(JSON.stringify({ page, perPage: 30 })).toString('base64'));
-        const d = await mym(c.id, `/v1/cloud?${qs}`, { base: STYX });
-        send(res, 200, { items: (d?.data || []).map(cloudItem), nextCursor: page < (Number(d?.meta?.total_pages) || 1) ? String(page + 1) : null });
+        const r = await cloudPage(c.id, { collectionId: col, type, search: String(p.get('search') || ''), cursor });
+        send(res, 200, { items: r.items, nextCursor: r.nextCursor });
       } catch (e) {
         send(res, 502, { error: e.message });
       }

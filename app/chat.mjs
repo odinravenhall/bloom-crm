@@ -1039,7 +1039,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const path = q(req).get('p') || '';
       // Le chemin d'un média contient la créatrice : « /api/creators/<id>/medias/view?… »
       const cid = /^\/api\/creators\/([\w-]+)\//.exec(path)?.[1];
-      if (!u || !cid || !canSee(u, cid)) {
+      // Le droit porte sur la MODÈLE, pas sur la plateforme choisie dans le menu (cookie commun à tous les onglets).
+      if (!u || !cid || !canSee({ ...u, pf: null }, cid)) {
         res.writeHead(u ? 403 : 401);
         return res.end();
       }

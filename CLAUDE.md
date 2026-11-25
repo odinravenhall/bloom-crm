@@ -48,6 +48,9 @@ Procédures relevées sur de vrais envois (21/11/2026) :
 | `creators.fans.getFanAiLogs` | `creatorId, fanId, limit` → `{items: [{action, reason, employee{name}, createdAt}]}` |
 | `creators.trackingLinks.getTrackingLinks` | `creatorId, limit, offset` → `{trackingLinks: [{name, url, clicks, subscribers, revenue (brut), totalRevenue (net), promoCost, source, listId, isActive, lastSyncAt…}], total, hasMore}` (liens de suivi d'OnlyFans, 25/11/2026) |
 | `creators.trackingLinks.getTrackingLinksStats` | `creatorId, startDate, endDate` → `{metrics, chartData: [par jour], comparison: {previousPeriod}}` |
+| `medias.getLists` | `creatorId` → `{lists: [{id, name, photosCount, videosCount, audiosCount}]}` (listes du vault OnlyFans : celles de l'agence + Messages, Posts, Stories, Streams, Uploads) |
+| `medias.getMedias` | `creatorId, limit, sortOrder: "newest"/"oldest", direction: "forward"` + au choix `listId, cursor, type: "PHOTO"/"VIDEO"/"AUDIO", searchTerm, hasScripts, fanId` (un champ absent ne s'envoie PAS à `null`) → `{medias: [{id, type, createdAt, duration, files{thumb, full, preview}, context, contextStatus, tags, scriptNames, messageTemplateNames, purchasedByFan…}], hasMore, nextCursor}` (25/11/2026) |
+| `medias.getMedia` | `creatorId, id` → un média, mêmes champs |
 
 Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`, `messages.markRead|markUnread|unsend`,
 `creators.onMessage` (abonnement temps réel — transport à confirmer), `creators.fans.getHandoffSummaries`,
@@ -376,12 +379,13 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Chiffres, Analytique, Liens de suivi ; les
-  autres sont encore ceux de la version actuelle, à refaire un par un.
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Chiffres, Analytique, Liens de suivi ;
+  les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
-  « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
-  encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
+  « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; le choix des médias est la fenêtre de
+  la v2 (`MediaPicker`, voir « Médias v2 ») ; scripts et fiche du fan sont encore les composants actuels (`rv/inbox`,
+  `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
   sous-inbox, traduction et envoi programmé de Messages Pro.
   - Demandé et validé en image par l'agence le 25/11/2026 :
     - UNE seule liste « À traiter » (onglet `todo` de `computeQueue`, `inbox.mjs`) : d'abord les fans qui attendent une
@@ -470,17 +474,50 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     détail du script (actif ou non, chiffres, messages avec leurs envois / achats / revenus), vue « Performances »
     (tous les messages envoyés, classés par revenus), import / export CSV, fenêtres au nouveau design (script, message,
     dupliquer, copier chez d'autres modèles, supprimer).
-  - Encore à l'ancien affichage, posés tels quels dans l'écran : le choix des médias (`VaultProPicker` côté OnlyFans,
-    dans un `Layer` ; `CloudPicker` du MYM Cloud côté MYM) et les scripts de l'IA de Substy (`AiScripts`,
+  - Le choix des médias d'un message est la fenêtre de la v2 (`MediaPicker` avec `keep`, voir « Médias v2 »).
+  - Encore à l'ancien affichage, posés tels quels dans l'écran : les scripts de l'IA de Substy (`AiScripts`,
     `AiAnalytics`, vue « IA Substy » : ils lisent la modèle « en cours » de `useCreators`, que l'écran met sur la
     sienne ; leur cadre a une hauteur fixe et un `transform` pour garder leurs fenêtres en vue).
+- Médias v2 (`v2/media/V2Medias.tsx`, `v2/media/MediaKit.tsx`, `app/v2medias.mjs`, 25/11/2026) : un écran pour les
+  deux plateformes, à la place des copies d'Infloww (`VaultPro`) et de MyPulse (`MymStudio` + `MymImport`), qui
+  restent dans la version actuelle.
+  - Lecture seule, même forme des deux côtés (toute l'équipe sauf les modèles) :
+    `GET /api/v2/medias?pf&creatorId[&fresh=1]` (modèles, dossiers de la modèle gardés 60 s, catégories),
+    `GET /api/v2/medias/items?pf&creatorId[&folder][&cat][&type][&q][&sort=old][&scripts=with|without][&fanId][&cursor]`
+    (une page de médias) et `GET /api/v2/medias/one?pf&creatorId&id` (la fiche d'un média).
+    - OnlyFans = le vault lu chez Substy (`medias.getLists`, `medias.getMedias`, `medias.getMedia`). Substy donne en
+      plus ce que son IA sait de chaque média : description (`context`), mots-clés (`tags`), scripts et étapes de
+      l'IA qui l'envoient, et avec `fanId` si ce fan l'a déjà acheté. « Avec / sans script » est filtré par Substy
+      page par page (une page peut revenir vide : la route avance de quelques pages). Bloom n'ajoute rien au vault
+      d'OnlyFans (l'envoi de fichiers de Substy demande un réglage, `settings.getVaultUploadFanId`, vide chez nous).
+    - MYM = le mym.cloud du compte relié, en direct (`cloudCollections`, `cloudPage` de mymmedia.mjs : collections,
+      médias, vocaux ; recherche faite par MYM hors collection, par Bloom dans une collection). Pour une modèle
+      aussi chez Substy, la fiche d'un média ajoute ce que l'IA de Substy en sait (mêmes identifiants de médias).
+    - Bloom ajoute des deux côtés la « fiche de l'équipe » (`vault_meta` : note, mots-clés, prix conseillé) et les
+      scripts de Bloom qui utilisent le média (`lib_items.medias`). Les catégories de Bloom (`vault_cats`) n'existent
+      que côté OnlyFans ; côté MYM on range dans les vraies collections du compte.
+  - ⚠️ Les adresses d'un média OnlyFans données dans une liste (« …/medias/view?url=… ») portent une signature qui
+    périme. Ce qu'on GARDE (média d'un script, média d'une catégorie) doit utiliser l'adresse par identifiant, qui
+    ne périme pas : `/media?p=/api/creators/<id>/medias/<idMédia>/thumb|full` (`keepThumb`, `keepFull`, vérifié le
+    25/11/2026). Côté MYM les adresses expirent en une heure : Bloom garde une copie de la vignette
+    (`/api/mym/cloud/keep`) et jamais l'adresse du fichier.
+  - Écrire : fiche et catégories par « /api/vaultpro/meta|cats » (team leaders et plus ; le droit porte sur la
+    MODÈLE, plus sur la plateforme du menu, comme pour l'image relayée « /media ») ; côté MYM
+    « /api/mym/cloud/upload » (vérifié le 23/11/2026) et « collections », « collections/add » (⚠️ jamais vérifiés
+    sur un vrai compte), ouverts à toute l'équipe comme avant.
+  - `MediaKit.tsx` = les pièces communes : `useMediaHead`, `useMediaItems`, `MediaFolders`, `MediaFilters`,
+    `MediaGrid`, `MediaTile`, `MediaView` (vidéos MYM en HLS par « /api/mym/hls ») et `MediaPicker`, LA fenêtre de
+    choix des médias de la v2 (messagerie : `fanId` côté OnlyFans → pastille « Déjà acheté » ; scripts : `keep`).
+    Encore avec leurs anciennes fenêtres : Envoi groupé, Push, Planification.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
-  formulaire), `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ;
+  formulaire, `width` pour une grande fenêtre), `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ;
   l'accueil a encore ses copies.
   ⚠️ Une fenêtre par-dessus l'écran se fait avec `Modal` (posée à la racine `.v2`) : dans `.v2-frame`, une position
   fixe suit le contenu qui défile. ⚠️ Une photo entourée se fait avec `Ring` (anneau DANS la boîte) : un anneau en
   ombre extérieure est rogné par les conteneurs qui défilent.
+- Lire le site de Substy pour connaître une procédure : ses appels partent en POST (rien dans l'adresse) ; on les
+  voit en enveloppant `fetch` dans la page, et les champs « null » y sont en réalité absents (superjson).
 - Vérifier un écran refait sur l'autre plateforme sans toucher au menu : `?pf=of|mym` dans l'adresse
   (`OWN_PF` de `V2Screen.tsx`, seulement pour les écrans qui envoient leur plateforme au serveur).
 - ⚠️ `deno check` ne voit pas toutes les fautes d'écriture d'un fichier `.mjs` (« a?.b++ » est passé le 25/11/2026) :

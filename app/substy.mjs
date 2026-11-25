@@ -171,10 +171,23 @@ export class SubstySession {
     return this.call('agency.bannedWords.validateContent', { content });
   }
   vaultLists(creatorId) { return this.call('medias.getLists', { creatorId }); }
-  /** `type` : 'PHOTO' | 'VIDEO' | 'AUDIO' (filtre fait par Substy, vérifié le 23/11/2026). */
-  vaultMedias(creatorId, { listId, cursor, limit = 40, type } = {}) {
-    return this.call('medias.getMedias', { creatorId, limit, sortOrder: 'newest', direction: 'forward', ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}), ...(type ? { type } : {}) });
+  /**
+   * `type` : 'PHOTO' | 'VIDEO' | 'AUDIO' (filtre fait par Substy, vérifié le 23/11/2026). Relevé le 25/11/2026 sur
+   * app.substy.ai/vault : `searchTerm` (recherche), `sortOrder` 'newest' | 'oldest', `hasScripts` (médias utilisés
+   * ou non par un script de l'IA — filtré page par page, une page peut revenir vide), `fanId` (remplit
+   * `purchasedByFan`). Un champ absent ne doit PAS être envoyé à `null` (refusé par Substy).
+   * Chaque média : { id, type, createdAt, duration, files{thumb, full, preview}, context, contextStatus, tags,
+   * scriptNames, messageTemplateNames, messageTemplates[{id, name}], price, basePrice, maxPrice, purchasedByFan }.
+   */
+  vaultMedias(creatorId, { listId, cursor, limit = 40, type, search, oldest, hasScripts, fanId } = {}) {
+    return this.call('medias.getMedias', {
+      creatorId, limit, sortOrder: oldest ? 'oldest' : 'newest', direction: 'forward',
+      ...(listId ? { listId } : {}), ...(cursor ? { cursor } : {}), ...(type ? { type } : {}), ...(search ? { searchTerm: search } : {}),
+      ...(typeof hasScripts === 'boolean' ? { hasScripts } : {}), ...(fanId ? { fanId } : {}),
+    });
   }
+  /** Un média du vault par son identifiant (mêmes champs que dans la liste, adresses fraîches). */
+  vaultMedia(creatorId, id) { return this.call('medias.getMedia', { creatorId, id: String(id) }); }
   /** Image / vidéo via le relais de Substy (chemins « /api/creators/<id>/medias/… » fournis par leur API). */
   async media(path) {
     // Deux formes : « …/medias/view?url=… » (messages, vault) et « …/medias/<id>/thumb|full|preview » (étapes des scripts).

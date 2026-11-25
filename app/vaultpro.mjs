@@ -26,7 +26,7 @@ const J = (s, d) => {
     return d;
   }
 };
-const metaOf = (cid, ids) => {
+export const metaOf = (cid, ids) => {
   const m = new Map();
   for (let i = 0; i < ids.length; i += 400) {
     const part = ids.slice(i, i + 400);
@@ -36,21 +36,25 @@ const metaOf = (cid, ids) => {
 };
 const withMeta = (item, r) => ({ ...item, catId: r?.cat_id ?? null, hashtags: J(r?.hashtags, []), notes: r?.notes ?? '', price: r?.price ?? null, updatedBy: r?.updated_by ?? null, updatedAt: r?.updated_at ?? null });
 
+/** Catégories de Bloom d'une modèle, avec le nombre de médias rangés dans chacune. */
+export const vaultCats = (cid) =>
+  all('SELECT c.*, (SELECT COUNT(*) FROM vault_meta m WHERE m.cat_id = c.id) AS n FROM vault_cats c WHERE c.creator_id = ? ORDER BY c.position, c.id', cid).map((c) => {
+    const snaps = all('SELECT snapshot FROM vault_meta WHERE cat_id = ?', c.id).map((r) => J(r.snapshot, {}));
+    const k = (t) => snaps.filter((s) => s.type === t).length;
+    return { id: c.id, name: c.name, count: c.n, photos: k('photo'), videos: k('video'), audios: k('audio'), createdBy: c.created_by };
+  });
+
 export function vaultProRoutes({ substy, userFrom, send, body }) {
   const auth = (req, res, cid, edit = false) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
-    if (!cid || !canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
+    // Le droit porte sur la MODÈLE, pas sur la plateforme choisie dans le menu (cookie commun à tous les onglets).
+    if (!cid || !canSee({ ...u, pf: null }, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
     if (edit && !isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' }), null;
     return u;
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
-  const cats = (cid) =>
-    all('SELECT c.*, (SELECT COUNT(*) FROM vault_meta m WHERE m.cat_id = c.id) AS n FROM vault_cats c WHERE c.creator_id = ? ORDER BY c.position, c.id', cid).map((c) => {
-      const snaps = all('SELECT snapshot FROM vault_meta WHERE cat_id = ?', c.id).map((r) => J(r.snapshot, {}));
-      const k = (t) => snaps.filter((s) => s.type === t).length;
-      return { id: c.id, name: c.name, count: c.n, photos: k('photo'), videos: k('video'), audios: k('audio'), createdBy: c.created_by };
-    });
+  const cats = vaultCats;
 
   return {
     'GET /api/vaultpro/cats': async (req, res) => {

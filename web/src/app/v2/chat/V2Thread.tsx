@@ -13,9 +13,9 @@ import { Avatar } from "@/rv/components/ui";
 import { MediaTile } from "@/rv/components/MediaTile";
 import { AI_EVENT } from "@/rv/inbox/SubstyCard";
 import { LibraryPicker, SequenceBar } from "@/rv/inbox/LibraryPicker";
-import { VaultPicker } from "@/rv/inbox/VaultPicker";
 import type { Conv, LiveMsg, Media, Model } from "@/rv/inbox/types";
 import type { Lib, LibScript, LibSequence } from "@/rv/inbox/scriptTypes";
+import { MediaPicker } from "../media/MediaKit";
 
 // Bloom v2 : le fil d'une conversation et la zone d'écriture, les mêmes pour OnlyFans et MYM (moteur « /api/rv/… »).
 type Me = { id: number; name: string; admin: boolean };
@@ -419,7 +419,16 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
         </div>
       </div>
 
-      {panel === "vault" ? <VaultPicker modelId={conv.modelId} memberId={conv.memberId} selected={medias} onClose={() => setPanel(null)} onPick={(m) => setMedias(m)} /> : null}
+      {panel === "vault" ? (
+        <MediaPicker
+          pf={mym ? "mym" : "of"}
+          creatorId={conv.modelId}
+          fanId={conv.memberId ?? undefined}
+          selected={medias.map((x) => ({ id: x.id, type: x.type, thumb: mediaThumb(x) || null, full: x.url ?? null, duration: x.durationSeconds ?? null }))}
+          onClose={() => setPanel(null)}
+          onPick={(list) => (setMedias(list.map((x): Media => ({ id: x.id, type: x.type === "video" ? "video" : x.type === "audio" ? "audio" : "photo", url: x.full ?? x.thumb ?? undefined, smallUrl: x.thumb ?? undefined, thumbnailUrl: x.thumb ?? undefined, durationSeconds: x.duration }))), setPanel(null))}
+        />
+      ) : null}
       {panel === "scripts" ? <LibraryPicker lib={lib} onClose={() => setPanel(null)} onScript={applyScript} onSequence={startSequence} /> : null}
     </div>
   );
