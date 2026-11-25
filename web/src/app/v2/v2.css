@@ -165,10 +165,27 @@
 .v2-frame { position: relative; min-height: 100%; transform: translateZ(0); }
 .v2-frame.v2-full { height: 100%; overflow: hidden; }
 
-/* ---------- Messagerie (à refaire d'après la proposition retenue sur /styles) ---------- */
-.v2-mtab { display: inline-flex; align-items: center; gap: 7px; height: 30px; flex-shrink: 0; padding: 0 10px 0 4px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--color-muted); white-space: nowrap; transition: color 0.15s ease, background-color 0.15s ease; }
-.v2-mtab:hover { color: var(--color-fg); background: rgb(255 255 255 / 0.04); }
-.v2-mtab[data-on="true"] { color: #fff; background: var(--color-card-2); }
+/* ---------- Messagerie ---------- */
+/* La colonne des modèles (proposition retenue le 25/11/2026) : « Tout » en haut, puis les modèles où des fans attendent,
+   les autres grisées. Elle défile quand il y en a beaucoup. Clic droit sur « Tout » : choisir celles qu'on affiche. */
+.v2-rail { width: 70px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; overflow-y: auto; padding: 12px 0 8px; border-right: 1px solid var(--color-line); background: rgb(5 5 6 / 0.45); }
+.v2-rail-all { position: relative; display: grid; place-items: center; width: 46px; height: 42px; flex-shrink: 0; margin-bottom: 6px; border-radius: 13px; border: 1px solid var(--color-line); font-size: 11.5px; font-weight: 700; color: var(--color-muted); transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
+.v2-rail-all:hover { color: var(--color-fg); border-color: rgb(255 255 255 / 0.18); }
+.v2-rail-all[data-on="true"] { color: #fff; border-color: var(--v2-blue); background: rgb(59 130 246 / 0.12); }
+.v2-rail-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 62px; flex-shrink: 0; padding: 5px 0 3px; border-radius: 12px; font-size: 10px; font-weight: 600; color: var(--color-muted); transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease; }
+.v2-rail-item[data-idle="true"] { opacity: 0.45; }
+.v2-rail-item:hover { color: var(--color-fg); background: rgb(255 255 255 / 0.04); opacity: 1; }
+.v2-rail-item[data-on="true"] { color: #fff; background: rgb(59 130 246 / 0.12); opacity: 1; }
+.v2-rail-av { display: grid; border-radius: 999px; }
+.v2-rail-item[data-on="true"] .v2-rail-av { box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--v2-blue); }
+.v2-rail-badge { position: absolute; top: 1px; right: 6px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--v2-blue); color: #fff; font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--color-bg); }
+.v2-rail-all .v2-rail-badge { top: -6px; right: -8px; }
+.v2-rail-name { max-width: 58px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Titre d'un groupe dans la liste (« Attendent une réponse », « Non lus · déjà répondus »). */
+.v2-group { display: flex; align-items: center; gap: 6px; padding: 9px 9px 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #6f6f79; }
+.v2-group i { flex: 1; height: 1px; background: var(--color-line); }
+.v2-check { display: grid; place-items: center; width: 16px; height: 16px; flex-shrink: 0; border-radius: 5px; border: 1px solid rgb(255 255 255 / 0.22); color: #fff; }
+.v2-check[data-on="true"] { border-color: var(--v2-blue); background: var(--v2-blue); }
 .v2-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; flex-shrink: 0; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--color-muted); white-space: nowrap; transition: color 0.15s ease, background-color 0.15s ease; }
 .v2-chip:hover { color: var(--color-fg); background: rgb(255 255 255 / 0.04); }
 .v2-chip[data-on="true"] { color: #fff; background: var(--v2-blue); }

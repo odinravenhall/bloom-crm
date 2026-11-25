@@ -78,9 +78,10 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
     document.addEventListener("keydown", esc);
     return () => (document.removeEventListener("mousedown", close), document.removeEventListener("keydown", esc));
   }, [pfOpen]);
-  // Pastille de la messagerie : les fans qui attendent une réponse sur la plateforme choisie.
+  // Pastille de la messagerie : les conversations « à traiter » (à répondre + non lus) de la plateforme choisie, sans les
+  // modèles que la personne a cachées. « count=1 » : le serveur ne renvoie que les nombres.
   useEffect(() => {
-    const load = () => api<{ allReply?: number }>("GET", "/api/rv/inbox?tab=reply").then((r) => setReply(r.allReply ?? 0)).catch(() => {});
+    const load = () => api<{ allTodo?: number; allReply?: number }>("GET", "/api/rv/inbox?tab=todo&window=72&count=1").then((r) => setReply(r.allTodo ?? r.allReply ?? 0)).catch(() => {});
     load();
     const t = setInterval(() => document.visibilityState === "visible" && load(), 60_000);
     return () => clearInterval(t);
@@ -118,7 +119,7 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
 
   const side = (m: boolean, inDrawer = false) => {
     const item = (key: string, href: string, label: string, Icon: LucideIcon, n = 0) => (
-      <Link key={key} href={href} data-on={cur === key} title={m ? `${label}${n ? ` · ${n} à répondre` : ""}` : undefined} className="v2-nav-item">
+      <Link key={key} href={href} data-on={cur === key} title={m ? `${label}${n ? ` · ${n} à traiter` : ""}` : undefined} className="v2-nav-item">
         <Icon />
         {m ? null : <span className="min-w-0 flex-1 truncate">{label}</span>}
         {n ? <span className="v2-badge" style={m ? { position: "absolute", top: 2, right: 0, minWidth: 16, height: 16, fontSize: 9.5, padding: "0 4px" } : undefined}>{n > 99 ? "99+" : n}</span> : null}

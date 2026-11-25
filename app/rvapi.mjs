@@ -245,11 +245,11 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
       const u = me(req, res);
       if (!u) return;
       const p = new URL(req.url, 'http://x').searchParams;
-      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply', handoff: 'manual', noai: 'noai', ai: 'ai', unread: 'unread' }[p.get('tab')] || 'reply';
+      const tab = { all: 'all', pinned: 'pinned', online: 'active', new: 'new', relance: 'relance', reply: 'reply', handoff: 'manual', noai: 'noai', ai: 'ai', unread: 'unread', todo: 'todo' }[p.get('tab')] || 'reply';
       const w = Number(p.get('window'));
       const hidden = hiddenOf(u);
       const model = p.get('model') || '';
-      const { keep, counts, perCreator, manualPerCreator, rel, boxes, mine } = computeQueue(u, creators(), {
+      const { keep, counts, perCreator, manualPerCreator, todoPerCreator, rel, boxes, mine } = computeQueue(u, creators(), {
         hide: model ? [] : hidden,
         scope: model || 'all',
         tab,
@@ -261,12 +261,17 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         only: ['handoff', 'unread'].includes(p.get('only')) ? p.get('only') : undefined,
         list: p.get('list') ? listMembers(p.get('list')) || { creatorId: '', fans: new Set() } : undefined,
       });
+      const sum = (per) => Object.entries(per).filter(([k]) => !hidden.includes(k)).reduce((a, [, n]) => a + n, 0);
+      // « count=1 » (pastille du menu de la v2) : seulement les nombres, sans construire la liste.
+      if (p.get('count') === '1') return send(res, 200, { allReply: sum(perCreator), allTodo: sum(todoPerCreator), hidden });
       // « limit=all » (Messages Pro) : toutes les conversations ; sinon 300 comme avant.
       const lim = p.get('limit') === 'all' ? keep.length : Math.min(Number(p.get('limit')) || 300, 20000);
       const items = keep.slice(0, lim).map((r) =>
         convOf(r.cid, r.c, r.m, {
           ...mymRow(r.cid, r.c),
           box: r.boxIdx != null ? r.boxIdx + 1 : null,
+          // « À traiter » sans attendre de réponse : non lu, déjà répondu (par l'IA ou quelqu'un).
+          unreadOnly: !!r.todo && !r.reply,
           relance: r.relCand && rel.has(r.c.last.id) ? { ppv: cents(rel.get(r.c.last.id).price), step: rel.get(r.c.last.id).script, at: iso(rel.get(r.c.last.id).at) } : undefined,
         }),
       );
@@ -284,14 +289,17 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
         }
         bx = { modelId: model, config: { enabled: !!cfg, count: cfg?.count || 2, names: [] }, mine: (mine.get(model) || []).map((i) => i + 1), perBox };
       }
-      const allReply = Object.entries(perCreator).filter(([k]) => !hidden.includes(k)).reduce((a, [, n]) => a + n, 0);
+      const allReply = sum(perCreator);
       send(res, 200, {
         items,
         counts: perCreator,
+        // « À traiter » (à répondre + non lus) par modèle, et au total sans les modèles cachées : colonne des modèles de la v2.
+        todoCounts: todoPerCreator,
+        allTodo: sum(todoPerCreator),
         // « À reprendre » (fans sans IA qui attendent) par créatrice : pour l'Accueil.
         handoffCounts: manualPerCreator,
         allReply,
-        totals: { reply: counts.reply, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active, handoff: counts.manual, ai: counts.ai, noai: counts.noai },
+        totals: { reply: counts.reply, todo: counts.todo, unread: counts.unread, all: counts.all, newSubs: counts.new, relances: counts.relance, pinned: counts.pinned, pinnedReply: counts.pinnedReply, online: counts.active, handoff: counts.manual, ai: counts.ai, noai: counts.noai },
         boxes: bx,
         hidden,
       });

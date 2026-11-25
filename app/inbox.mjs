@@ -63,7 +63,9 @@ function myBoxes(userId) {
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const WINDOWS = { '6h': 6 * HOUR, '24h': 24 * HOUR, '3j': 72 * HOUR, '7j': 168 * HOUR, tout: 0 };
-const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active', 'manual', 'noai', 'ai', 'unread'];
+// « todo » (messagerie v2, 25/11/2026) : À TRAITER = les fans qui attendent une réponse + les conversations non lues que
+// personne de l'équipe n'a encore ouvertes (l'IA ou quelqu'un a déjà répondu). Demande de l'agence : tout au même endroit.
+const TABS = ['reply', 'all', 'pinned', 'new', 'relance', 'active', 'manual', 'noai', 'ai', 'unread', 'todo'];
 export const tagsOf = (s) => String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 /**
@@ -112,7 +114,7 @@ export function computeQueue(u, list, o = {}) {
   const scope = o.scope && o.scope !== 'all' && visible.includes(o.scope) ? [o.scope] : visible;
   const tab = TABS.includes(o.tab) ? o.tab : 'reply';
   const win = o.winMs ?? WINDOWS['3j'];
-  const sort = ['old', 'recent', 'spent'].includes(o.sort) ? o.sort : tab === 'reply' ? 'old' : 'recent';
+  const sort = ['old', 'recent', 'spent'].includes(o.sort) ? o.sort : tab === 'reply' || tab === 'todo' ? 'old' : 'recent';
   const s = String(o.q || '').trim().toLowerCase();
   const paying = !!o.paying;
   const now = Date.now();
@@ -122,7 +124,8 @@ export function computeQueue(u, list, o = {}) {
 
   const perCreator = {};
   const manualPerCreator = {};
-  const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0, unread: 0, pinnedReply: 0, manual: 0, ai: 0, noai: 0 };
+  const todoPerCreator = {};
+  const counts = { reply: 0, pinned: 0, new: 0, relance: 0, active: 0, all: 0, unread: 0, pinnedReply: 0, manual: 0, ai: 0, noai: 0, todo: 0 };
   const rows = [];
   const relCands = [];
   let loading = false;
@@ -131,6 +134,7 @@ export function computeQueue(u, list, o = {}) {
     if (!inb.complete) loading = true;
     let n = 0;
     let nm = 0;
+    let nt = 0;
     const inScope = scope.includes(cid);
     const cfg = boxes.get(cid);
     const sel = cfg ? (mine.get(cid) || []).filter((i) => i < cfg.count) : [];
@@ -147,19 +151,25 @@ export function computeQueue(u, list, o = {}) {
       const reply = isReply(c);
       const box = split?.get(c.fanId) ?? null;
       if (reply && sel.length && sel.length < cfg.count && !sel.includes(box)) continue;
+      // Non lu « à traiter » : Substy compte des non lus (ou remis en non lu dans Bloom) et personne de l'équipe n'a ouvert
+      // la conversation depuis son dernier message (l'ouvrir pose `seen_id`). Même fenêtre de temps que « à répondre ».
+      const seen = !!m?.seen_id && m.seen_id === c.last?.id;
+      const todo = reply || (((c.unread > 0 && !seen) || !!m?.unread) && !!c.last && (!win || at >= now - win));
       if (reply) n++;
       if (reply && (!c.ai || c.handoff)) nm++;
+      if (todo) nt++;
       if (!inScope) continue;
       if (paying && !(c.spent > 0)) continue;
       // Filtre par liste (smart list OnlyFans / groupe MYM) : seulement ses fans.
       if (o.list && (o.list.creatorId !== cid || !o.list.fans.has(c.fanId))) continue;
       if (s && !`${c.name} ${c.username || ''} ${m?.tags || ''}`.toLowerCase().includes(s)) continue;
-      const row = { c, m, cid, at, reply, boxIdx: box, box: box != null ? boxName(box) : null };
+      const row = { c, m, cid, at, reply, todo, boxIdx: box, box: box != null ? boxName(box) : null };
       row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
       // MYM en direct : le fan est en ligne sur MYM ; sinon (Substy) : il a écrit il y a moins de 10 minutes.
       row.active = c.mym ? !!c.online : !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
       counts.all++;
       if (reply) counts.reply++;
+      if (todo) counts.todo++;
       if (m?.pinned) counts.pinned++;
       if (m?.pinned && reply) counts.pinnedReply++;
       if (c.unread > 0 || m?.unread) counts.unread++;
@@ -183,17 +193,21 @@ export function computeQueue(u, list, o = {}) {
     }
     perCreator[cid] = n;
     manualPerCreator[cid] = nm;
+    todoPerCreator[cid] = nt;
   }
   const rel = relances(relCands);
   counts.relance = rows.filter((r) => r.relCand && rel.has(r.c.last.id)).length;
 
   const keep = rows.filter((r) =>
-    tab === 'reply' ? r.reply : tab === 'noai' ? !r.ai : tab === 'ai' ? r.ai : tab === 'unread' ? r.unread : tab === 'manual' ? r.manual : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
+    tab === 'reply' ? r.reply : tab === 'todo' ? r.todo : tab === 'noai' ? !r.ai : tab === 'ai' ? r.ai : tab === 'unread' ? r.unread : tab === 'manual' ? r.manual : tab === 'pinned' ? !!r.m?.pinned : tab === 'new' ? r.isNew : tab === 'active' ? r.active : tab === 'relance' ? r.relCand && rel.has(r.c.last.id) : true,
   );
   keep.sort((a, b) => (sort === 'spent' ? (b.c.spent || 0) - (a.c.spent || 0) || a.at - b.at : sort === 'old' ? a.at - b.at : b.at - a.at));
   // Épinglés toujours en haut (sauf tri par dépense).
   if (sort !== 'spent') keep.sort((a, b) => (b.m?.pinned || 0) - (a.m?.pinned || 0));
-  return { keep, counts, perCreator, manualPerCreator, rel, loading, boxes, mine, visible, scope };
+  // « À traiter » : d'abord ceux qui attendent une réponse (dans l'ordre choisi, épinglés en tête), puis les non lus
+  // déjà répondus, du plus récent au plus ancien.
+  if (tab === 'todo' && sort !== 'spent') keep.sort((a, b) => Number(b.reply) - Number(a.reply) || (a.reply ? 0 : b.at - a.at));
+  return { keep, counts, perCreator, manualPerCreator, todoPerCreator, rel, loading, boxes, mine, visible, scope };
 }
 
 export function inboxRoutes({ userFrom, send, body, creators }) {

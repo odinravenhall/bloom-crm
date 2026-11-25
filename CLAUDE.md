@@ -377,14 +377,19 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
-  « /api/rv/… » (rien de changé au serveur). Liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
+  « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
   encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
   sous-inbox, traduction et envoi programmé de Messages Pro.
-  - Demandé le 25/11/2026 : « à répondre » et « non lus » RÉUNIS au même endroit (une seule liste « À traiter »), et un
-    choix de la modèle qui tienne avec 15 modèles (les pastilles en ligne ne suffisent pas). Trois propositions en image
-    sur la page provisoire `/styles` (`web/src/app/styles/`, admins / managers / team leaders) : 1. colonne des
-    modèles, 2. liste déroulante avec recherche, 3. pastilles des plus urgentes + bouton pour les autres. En attente du
-    choix ; ensuite refaire la messagerie, puis supprimer `/styles`.
+  - Demandé et validé en image par l'agence le 25/11/2026 :
+    - UNE seule liste « À traiter » (onglet `todo` de `computeQueue`, `inbox.mjs`) : d'abord les fans qui attendent une
+      réponse, puis les conversations non lues déjà répondues (Substy les compte en non lu et personne de l'équipe ne
+      les a ouvertes : les ouvrir pose `seen_id` et les retire). Plus d'onglets « À répondre » / « Non lus » séparés.
+      Les autres vues (en ligne, à reprendre, sans IA, IA, épinglés) et le tri sont derrière le bouton de filtres.
+    - la COLONNE DES MODÈLES à gauche de la liste (tient avec beaucoup de modèles, elle défile) : « Tout » en haut,
+      puis les modèles où il y a à traiter (les plus chargées d'abord, `todoCounts`), les autres grisées.
+    - clic droit sur « Tout » (ou l'œil en bas de la colonne) : cocher les modèles affichées. Une modèle cachée sort
+      de la colonne et de « Tout » ; réglage par personne, côté serveur (`rv_hidden:<id>`, `PUT /api/rv/me`).
+    - pastille « Messagerie » du menu = nombre à traiter sans les modèles cachées (`/api/rv/inbox?tab=todo&count=1`).
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`
