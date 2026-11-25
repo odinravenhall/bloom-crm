@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes de l’équipe, Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -581,8 +581,29 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   - Messages automatiques (OnlyFans, `smart_auto`) : seul « après un achat » est proposé. ⚠️ « Bienvenue aux
     nouveaux abonnés » ne peut pas partir côté OnlyFans : le moteur lit `since` dans la liste des conversations,
     que Substy ne remplit pas (voir Fans v2). Aucun message automatique n'a jamais été activé.
+- Équipe v2 (`v2/team/`, `app/v2team.mjs`, 25/11/2026) : la rubrique Équipe refaite écran par écran, les mêmes
+  écrans pour les deux plateformes. Sources : les ventes de Chiffres (`rowsOf`) et les messages que Bloom a vus
+  passer (`msg_log`) — jamais les rapports d'employés d'Infloww (`ifw_emp_*`) ni MyPulse, qui ne servent plus qu'aux
+  anciens écrans.
+  - « Qui » (`whoOf` de v2stats.mjs → `{ key, name, type }`) : la même clé pour l'auteur d'un message et pour le
+    vendeur d'une vente, sur tous les écrans de l'équipe : `n:<nom>` (une personne, connue seulement quand elle écrit
+    depuis Bloom), `team` (parti de Bloom, nom inconnu), `ai` (OnlyFans : IA de Substy, certain ; MYM : « Hors
+    Bloom », type `ext`, DÉDUIT), `auto` (automatisation, script, Mass DM), `creator` (compte de la modèle : écrit
+    hors de Bloom) ; pour les ventes seulement : `s:<id>` (le chatteur qu'Infloww attribue à une vente OnlyFans dont
+    Bloom n'a pas vu l'auteur, type `platform`), `push` (média push MYM) et `none`. `rowsOf` porte ce vendeur (`s`)
+    sur chaque vente ; avec `detail`, aussi l'identifiant de la vente, du fan et du message acheté.
+  - Ventes de l'équipe (`V2TeamSales.tsx`, `GET /api/v2/team/sales?pf&from&to[&creatorId][&mode=gross][&seller]`,
+    team leaders et plus), à la place de `MymTeamSales` et `EmployeeReports` : ce qu'un chatteur vend = contenus
+    payants envoyés en message + pourboires (`SELL` ; abonnements, publications et lives restent dans Chiffres ; les
+    montants sont ceux de Chiffres au centime). Classement avec le rang d'avant, efficacité d'après `msg_log`
+    (messages, fans, contenus proposés / achetés, temps de réponse = moyenne des réponses données en moins de
+    30 min), ventes par jour par famille de vendeurs ou en comparant trois vendeurs, détail des 500 dernières ventes,
+    fiche d'un vendeur. ⚠️ Côté MYM l'auteur d'une vente n'est cherché que sur 14 jours (`attributedSince`).
+  - `GET /api/v2/team/thread?id=<message>` (ou `creator`, `fan`, `at`, puis `dir=before|after`) : le fil autour d'un
+    message ou d'une vente d'après `msg_log`, pour les deux plateformes (`ThreadModal`).
+  - `TeamKit.tsx` : `WhoTag` (nom + pastille IA / Infloww / Auto / Hors Bloom), `ModelMenu`, `ThreadModal`.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
-  `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
+  `usePeriod` + `PeriodBar` (avec les raccourcis semaine et quinzaine, les périodes de paie), `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
   formulaire, `width` pour une grande fenêtre), `Confirm`, `RowMenu`, `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`,
   `downloadCsv`). Tout nouvel écran de la v2 part de là ;
   l'accueil a encore ses copies.

@@ -72,6 +72,23 @@ export function rangeOf(p: Preset, custom: [string, string]): [string, string] {
   if (p === "12m") return [addDay(t, -364), t];
   return custom;
 }
+/** Semaine du lundi au dimanche : celle en cours (`back` = 0, jusqu'à aujourd'hui) ou une d'avant. */
+export function weekRange(back = 0): [string, string] {
+  const t = paris();
+  const mon = addDay(t, -((noon(t).getUTCDay() + 6) % 7) - 7 * back);
+  return [mon, back ? addDay(mon, 6) : t];
+}
+/** Quinzaine (du 1 au 15, puis du 16 à la fin du mois : les périodes de paie) : celle en cours ou la précédente. */
+export function fortnightRange(back = 0): [string, string] {
+  const t = paris();
+  const month = t.slice(0, 8);
+  const first = Number(t.slice(8)) <= 15;
+  if (!back) return [month + (first ? "01" : "16"), t];
+  if (!first) return [month + "01", month + "15"];
+  const end = addDay(month + "01", -1);
+  return [end.slice(0, 8) + "16", end];
+}
+const SHORTCUTS: [string, () => [string, string]][] = [["Cette semaine", () => weekRange(0)], ["Semaine dernière", () => weekRange(1)], ["Quinzaine en cours", () => fortnightRange(0)], ["Quinzaine d’avant", () => fortnightRange(1)]];
 const PERIOD_KEY = "bloom.v2.stats.period";
 /**
  * La période des écrans de chiffres. Elle suit la personne d'un écran à l'autre (gardée dans le navigateur ; des dates
@@ -225,7 +242,10 @@ export function PeriodBar({ period, i = 1 }: { period: Period; i?: number }) {
       <div data-pop="period" className="relative">
         <button onClick={() => (setDraft([period.from, period.to]), setOpen(!open))} className="v2-tab flex items-center gap-1.5" data-on={period.preset === "custom"} aria-expanded={open}><CalendarDays className="size-3.5" />{period.preset === "custom" ? period.label : "Dates"}</button>
         {open ? (
-          <div className="v2-menu w-[252px] p-3" style={{ left: 0, top: "calc(100% + 4px)" }}>
+          <div className="v2-menu w-[264px] p-3" style={{ left: 0, top: "calc(100% + 4px)" }}>
+            <div className="mb-3 grid grid-cols-2 gap-1.5 border-b pb-3" style={{ borderColor: "rgb(255 255 255 / 0.08)" }}>
+              {SHORTCUTS.map(([label, range]) => <button key={label} type="button" onClick={() => (period.setRange(...range()), setOpen(false))} className="h-8 rounded-lg border text-[11.5px] font-semibold text-muted transition-colors hover:border-white/20 hover:text-(--color-fg)" style={{ borderColor: "var(--color-line)" }}>{label}</button>)}
+            </div>
             <p className="text-[11.5px] font-semibold text-muted">Du</p>
             <input type="date" value={draft[0]} max={draft[1]} onChange={(e) => setDraft([e.target.value || draft[0], draft[1]])} className={field} style={{ borderColor: "var(--color-line)", colorScheme: "dark" }} />
             <p className="mt-2.5 text-[11.5px] font-semibold text-muted">Au</p>

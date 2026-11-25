@@ -25,11 +25,31 @@ const PAID = { of: new Set(['ppv']), mym: new Set(['ppv', 'mod', 'push']) };
 export const SLOT = { of: new Set(['ppv', 'tip', 'post']), mym: new Set(['ppv', 'mod', 'push', 'tip']) };
 
 /**
- * Toutes les ventes de [pStart, end) ramenées à une même forme : { cid, at, cat, v (centimes), fan, name, who, wait,
- * renew }. `fan` = clé stable du fan pour compter les acheteurs, `name` = son nom affiché, `renew` = abonnement
- * OnlyFans renouvelé (la catégorie reste « sub » ; côté MYM le renouvellement est une catégorie à part).
+ * Qui a écrit un message ou fait une vente → { key, name, type }, la même clé sur tous les écrans de l'équipe.
+ * `kind` = celui de `msg_log` (ou l'origine d'une vente) : « bloom » / « employee » (une personne, connue par son nom
+ * seulement quand elle écrit depuis Bloom), « ai », « auto » / « script », sinon le compte de la modèle.
+ * ⚠️ Côté OnlyFans « ai » est certain (Substy le dit). Côté MYM il est DÉDUIT (message pas parti de Bloom, sur un fan
+ * dont l'IA est active) : ce peut être l'IA de Substy ou un autre outil, d'où « Hors Bloom » et le type « ext ».
  */
-export function rowsOf(pf, list, pStart, start, end, gross) {
+export function whoOf(pf, kind, name) {
+  const human = kind === 'bloom' || kind === 'employee';
+  if (human && name && name !== 'Bloom' && name !== 'Employé') return { key: `n:${name}`, name, type: 'human' };
+  if (human) return { key: 'team', name: 'Équipe (sans nom)', type: 'human' };
+  if (kind === 'ai') return pf === 'of' ? { key: 'ai', name: 'IA Substy', type: 'ai' } : { key: 'ai', name: 'Hors Bloom', type: 'ext' };
+  if (kind === 'auto' || kind === 'script' || kind === 'substy') return { key: 'auto', name: 'Automatisation', type: 'auto' };
+  return { key: 'creator', name: pf === 'of' ? 'Compte OnlyFans' : 'Compte MYM', type: 'creator' };
+}
+const NOBODY = { of: { key: 'none', name: 'Sans chatteur', type: 'none' }, mym: { key: 'none', name: 'Non attribué', type: 'none' } };
+const PUSH = { key: 'push', name: 'Push MYM', type: 'auto' };
+
+/**
+ * Toutes les ventes de [pStart, end) ramenées à une même forme : { cid, at, cat, v (centimes), fan, name, who, wait,
+ * renew, s }. `fan` = clé stable du fan pour compter les acheteurs, `name` = son nom affiché, `renew` = abonnement
+ * OnlyFans renouvelé (la catégorie reste « sub » ; côté MYM le renouvellement est une catégorie à part).
+ * `s` = qui a fait la vente (`whoOf`, ou le chatteur qu'Infloww lui attribue : clé « s:<id> », type « platform »).
+ * `detail` : ajoute `id`, `fid` (identifiant du fan, pour retrouver sa conversation) et `mid` (message acheté).
+ */
+export function rowsOf(pf, list, pStart, start, end, gross, detail = false) {
   const rows = [];
   let refunds = 0;
   const unmapped = [];
@@ -40,31 +60,40 @@ export function rowsOf(pf, list, pStart, start, end, gross) {
     for (const c of list) if (![...acc.values()].includes(String(c.id))) unmapped.push(c.name);
     if (acc.size) {
       const ph = [...acc.keys()].map(() => '?').join(',');
-      for (const r of all(`SELECT account, type, raw_type, gross, net, status, seller, origin, at, fan_id, fan_name FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`, ...acc.keys(), pStart, end)) {
+      const sellers = new Map(all('SELECT id, name FROM rv_sellers').map((x) => [x.id, x.name]));
+      const sql = detail
+        ? `SELECT s.id, s.account, s.type, s.raw_type, s.gross, s.net, s.status, s.seller, s.origin, s.origin_by, s.at, s.fan_id, s.fan_name, l.message_id FROM rv_sales s LEFT JOIN rv_live l ON l.id = s.substy_id WHERE s.account IN (${ph}) AND s.at >= ? AND s.at < ?`
+        : `SELECT account, type, raw_type, gross, net, status, seller, origin, origin_by, at, fan_id, fan_name FROM rv_sales WHERE account IN (${ph}) AND at >= ? AND at < ?`;
+      for (const r of all(sql, ...acc.keys(), pStart, end)) {
         const v = gross ? r.gross : r.net;
         if (REFUND.test(r.status || '')) {
           if (r.at >= start) refunds += Math.abs(v);
           continue;
         }
         const cat = ['sub', 'ppv', 'tip', 'post', 'stream'].includes(r.type) ? r.type : /refer|parrain/i.test(r.raw_type || '') ? 'ref' : 'other';
-        rows.push({ cid: acc.get(r.account), at: r.at, cat, v, fan: r.fan_id || r.fan_name || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' || r.seller ? 'team' : 'other', wait: false, renew: cat === 'sub' && /recurr|renew|rebill/i.test(r.raw_type || '') });
+        // Vente rapprochée d'une vente Substy : on sait qui a envoyé le message acheté (IA, quelqu'un dans Bloom, une
+        // automatisation) ; sinon on garde le chatteur qu'Infloww lui attribue.
+        const s = r.origin === 'ai' || r.origin === 'bloom' || r.origin === 'substy' ? whoOf('of', r.origin, r.origin_by) : r.seller ? { key: `s:${r.seller}`, name: sellers.get(r.seller) || 'Chatteur inconnu', type: 'platform' } : NOBODY.of;
+        rows.push({ cid: acc.get(r.account), at: r.at, cat, v, fan: r.fan_id || r.fan_name || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' || r.seller ? 'team' : 'other', wait: false, renew: cat === 'sub' && /recurr|renew|rebill/i.test(r.raw_type || ''), s, ...(detail ? { id: r.id, fid: r.fan_id || null, mid: r.message_id || null } : null) });
       }
     }
     // Ventes Substy des dernières 24 h pas encore confirmées par Infloww (comme le dashboard actuel).
     if (ids.length) {
       const ph = ids.map(() => '?').join(',');
-      for (const l of all(`SELECT creator_id, type, gross, at, message_id, fan_id, fan_name FROM rv_live WHERE matched IS NULL AND creator_id IN (${ph}) AND at >= ? AND at < ? AND at > ?`, ...ids, start, end, Date.now() - DAY)) {
+      for (const l of all(`SELECT id, creator_id, type, gross, at, message_id, fan_id, fan_name FROM rv_live WHERE matched IS NULL AND creator_id IN (${ph}) AND at >= ? AND at < ? AND at > ?`, ...ids, start, end, Date.now() - DAY)) {
         if (/sub/i.test(l.type || '')) continue;
         const cat = /tip/i.test(l.type || '') ? 'tip' : /post/i.test(l.type || '') ? 'post' : 'ppv';
-        const k = cat === 'ppv' && l.message_id ? one('SELECT kind FROM msg_log WHERE id = ?', l.message_id)?.kind : null;
-        rows.push({ cid: String(l.creator_id), at: l.at, cat, v: gross ? l.gross : Math.round(l.gross * 0.8), fan: l.fan_id || l.fan_name || null, name: l.fan_name || null, who: k === 'ai' ? 'ai' : k === 'bloom' || k === 'employee' ? 'team' : 'other', wait: true, renew: false });
+        const m = cat === 'ppv' && l.message_id ? one('SELECT kind, by_name FROM msg_log WHERE id = ?', l.message_id) : null;
+        const k = m?.kind;
+        const s = k === 'ai' || k === 'bloom' || k === 'employee' || k === 'auto' || k === 'script' ? whoOf('of', k, m.by_name) : NOBODY.of;
+        rows.push({ cid: String(l.creator_id), at: l.at, cat, v: gross ? l.gross : Math.round(l.gross * 0.8), fan: l.fan_id || l.fan_name || null, name: l.fan_name || null, who: k === 'ai' ? 'ai' : k === 'bloom' || k === 'employee' ? 'team' : 'other', wait: true, renew: false, s, ...(detail ? { id: `live:${l.id}`, fid: l.fan_id || null, mid: l.message_id || null } : null) });
       }
     }
   } else {
     for (const c of list) {
       const cid = String(c.id);
       const first = firstSubs(cid);
-      for (const r of all("SELECT type, raw, at, gross, fan_id, fan_name, origin FROM rv_live WHERE creator_id = ? AND src = 'mym' AND at >= ? AND at < ? AND type <> 'payout'", cid, pStart, end)) {
+      for (const r of all("SELECT id, type, raw, at, gross, fan_id, fan_name, origin, origin_by, attr_at, message_id FROM rv_live WHERE creator_id = ? AND src = 'mym' AND at >= ? AND at < ? AND type <> 'payout'", cid, pStart, end)) {
         if (r.type === 'refund' || r.gross < 0) {
           if (r.at >= start) refunds += Math.abs(r.gross);
           continue;
@@ -72,7 +101,10 @@ export function rowsOf(pf, list, pStart, start, end, gross) {
         let cat = catOf(r);
         // Renouvellement = un abonnement d'un fan qui s'était déjà abonné avant (MYM ne fait pas la différence).
         if (cat === 'sub' && (first.get(String(r.fan_name || r.fan_id || '').toLowerCase()) ?? r.at) < r.at) cat = 'renew';
-        rows.push({ cid, at: r.at, cat, v: r.gross, fan: r.fan_name || r.fan_id || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' ? 'team' : 'other', wait: false, renew: false });
+        // Bloom ne cherche l'auteur que des contenus privés et des pourboires des 14 derniers jours (mymincome.mjs) ;
+        // un média push est vendu par le push lui-même, pas par un chatteur.
+        const s = cat === 'push' ? PUSH : r.attr_at == null || !r.origin ? NOBODY.mym : whoOf('mym', r.origin, r.origin_by);
+        rows.push({ cid, at: r.at, cat, v: r.gross, fan: r.fan_name || r.fan_id || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' ? 'team' : 'other', wait: false, renew: false, s, ...(detail ? { id: String(r.id), fid: /-/.test(r.fan_id || '') ? r.fan_id : null, mid: r.message_id || null } : null) });
       }
     }
   }
