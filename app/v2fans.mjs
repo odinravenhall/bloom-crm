@@ -349,6 +349,8 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
           status: s.status || null, since: t(s.subscribedAt), expires: t(s.expiresAt), renews: s.isCanceledAtPeriodEnd ? null : t(s.renewsAt), canceled: !!s.isCanceledAtPeriodEnd,
           price: money(s.price), purchases: Number(f.spend?.purchases) || 0, lastPurchase: t(f.spend?.lastPurchaseAt || f.lastPpvPurchaseAt),
           link: f.acquisition?.link?.name ? String(f.acquisition.link.name) : null, channel: f.acquisition?.channel ? String(f.acquisition.channel) : null,
+          // Les listes d'OnlyFans où est ce fan (lecture seule : Substy ne permet pas de les changer).
+          ofLists: (Array.isArray(f.lists) ? f.lists : []).filter((l) => l?.isMember).map((l) => ({ id: String(l.id), name: String(l.name || 'Sans nom') })),
         },
       });
     },

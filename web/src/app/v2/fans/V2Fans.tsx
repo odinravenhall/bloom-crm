@@ -40,7 +40,7 @@ type Data = {
   views: { id: string; name: string; count: number }[]; groups: Group[];
   all?: number; dated?: boolean; ofList?: { id: string; read: number; partial: boolean; unsupported?: boolean; error: string | null } | null; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
 };
-type Live = { status: string | null; since: number | null; expires: number | null; renews: number | null; canceled: boolean; price: number | null; purchases: number; lastPurchase: number | null; link: string | null; channel: string | null };
+type Live = { status: string | null; since: number | null; expires: number | null; renews: number | null; canceled: boolean; price: number | null; purchases: number; lastPurchase: number | null; link: string | null; channel: string | null; ofLists?: { id: string; name: string }[] };
 type Official = { active: number; old: number; interested: number };
 type SortKey = "spent" | "recent" | "last" | "name" | "rate";
 type One = {
@@ -333,7 +333,11 @@ export function V2Fans({ pf }: { pf: Pf }) {
                   </div>
                   {!mym ? (
                     <>
-                      <p className="px-2 pt-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">Listes OnlyFans</p>
+                      <p className="flex items-center justify-between px-2 pt-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">
+                        <span>Listes OnlyFans</span>
+                        {/* Renommer, supprimer, ordonner, ajouter ou retirer des fans : seulement dans OnlyFans (Substy ne le permet pas). */}
+                        <a href={link(`/of-manager?p=collections&c=${encodeURIComponent(mid)}`)} className="tracking-normal normal-case" style={{ color: "var(--v2-sky)" }} title="Renommer, supprimer, ordonner les listes, ajouter ou retirer des fans : sur la page Collections d’OnlyFans">Gérer</a>
+                      </p>
                       <div className="space-y-0.5">
                         {(ofl?.lists ?? []).map((l) => <FolderRow key={l.id} on={group === `of:${l.id}`} icon={<UsersRound className="size-3.5" />} name={l.name} sub={plural(l.fans, "fan")} onClick={() => pickGroup(`of:${l.id}`)} />)}
                         {!ofl ? <p className="px-2 py-1.5 text-[12px] text-muted">Chargement des listes…</p> : ofl.error ? <p className="px-2 py-1.5 text-[12px] leading-relaxed" style={{ color: "var(--v2-down)" }}>{ofl.error}</p> : !ofl.lists.length ? <p className="px-2 py-1.5 text-[12px] text-muted">Aucune liste sur ce compte OnlyFans.</p> : null}
@@ -540,6 +544,14 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
                 {live?.link ? line("Arrivé par le lien", live.link) : null}
                 {line("Dernier message", f.lastAt ? `${ago(f.lastAt)} · ${f.lastFromFan ? "de lui" : "de nous"}` : "—")}
               </div>
+              {pf === "of" && live?.ofLists ? (
+                <>
+                  <p className="v2-label mt-4 flex items-center justify-between gap-2"><span>Listes OnlyFans</span><a href={link(`/of-manager?p=collections&c=${encodeURIComponent(creatorId)}`)} className="font-semibold" style={{ color: "var(--v2-sky)" }} title="Ajouter ou retirer ce fan d’une liste : dans OnlyFans (Substy ne le permet pas)">Gérer dans OnlyFans</a></p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {live.ofLists.length ? live.ofLists.map((l) => <span key={l.id} className="v2-tag">{l.name}</span>) : <span className="text-[12.5px] text-muted">Dans aucune liste.</span>}
+                  </div>
+                </>
+              ) : null}
               <p className="v2-label mt-4">Derniers achats</p>
               {d.buys.length ? (
                 <div className="space-y-1">

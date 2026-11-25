@@ -561,6 +561,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   - Listes d'OnlyFans (« Collections », 25/11/2026, lecture seule) : `GET /api/v2/fans/oflists` (`fans.lists.list`,
     60 s) dans la colonne ; `group=of:<id>` sur `GET /api/v2/fans` filtre les fans par les conversations de Substy de
     cette liste (`chats.list` avec `listId`, pages de 30, 1 500 fans au plus → `ofList.partial`, gardé 5 min).
+    ⚠️ Substy ne donne les membres que de certaines listes (son site affiche « Unable to load conversations » pour
+    les autres → `ofList.unsupported`) ; il semble que ce soient les listes « épinglées » dans sa messagerie
+    (`creators.pinList { creatorId, listId, pinned }`, lu dans son code le 25/11/2026, jamais appelé par Bloom).
+    Substy ne permet PAS de renommer, supprimer, ordonner une liste ni d'y ajouter / retirer un fan (aucune procédure
+    dans son code, son panneau ne fait qu'afficher) : l'écran envoie vers OF Manager → Collections (le vrai site
+    OnlyFans). La fiche d'un fan montre ses listes (`fans.get` → `lists[].isMember`, dans `/api/v2/fans/live`).
 - Envois groupés v2 (`v2/bulk/V2Bulk.tsx`, `v2/bulk/BulkForms.tsx`, `app/v2bulk.mjs`, 25/11/2026) : un écran pour les
   deux plateformes, à la place des copies d'Infloww (`SmartMessages`) et de MyPulse (`MymMassDm`), qui restent dans la
   version actuelle. Les deux plateformes n'envoient pas de la même façon, et ça ne change pas :
