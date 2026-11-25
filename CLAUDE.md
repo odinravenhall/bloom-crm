@@ -389,6 +389,16 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
   de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe (Messages, Ventes, Shifts, Activité, En direct, Modération, Accès), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
+- Écrans propres à MYM (`v2/mym/`, 25/11/2026), tous refaits, sur les routes d'avant (aucune nouvelle route) :
+  `V2Friends` (« /api/mym/friends… » : par compte dans l'ordre du profil, toutes les amies, promo croisée),
+  `V2Vouchers` (« /api/mym/vouchers… », création en deux temps), `V2Notifs` (`/api/mym/notifs`, par jour),
+  `V2Feed` (`/api/mym/feed`, grille + fiche), `V2Planning` (« /api/mym/plan… », calendrier, à venir, historique ;
+  média par `MediaPicker` MYM ; l'import Excel garde l'ancien `PlanImport`), `V2Push` (« /api/mym/push… », liste +
+  MoDs, nouveau push en 5 étapes puis `Confirm`, médias et teaser par `MediaPicker`), `V2SiteMym` (relais du site,
+  même règle cadre / nouvel onglet que `MymDirect`). La colonne des comptes vient de `GET /api/mym/links`.
+  Toutes les écritures restent derrière une confirmation ; ⚠️ aucune n'a été essayée sur un vrai compte depuis ces
+  écrans (créer un bon, un push, planifier, changer une liste d'amis). Les anciens composants (`MymPush`,
+  `MymPlanning`, `MymFeed`, `MymFriends`, `MymVouchers`, `MymNotifs`, `MymDirect`) restent pour la version actuelle.
 - OF Manager (`v2/of/V2OfManager.tsx`, écran `of-manager`, 25/11/2026) : l'écran de la version actuelle posé tel quel
   dans le cadre de la v2, ses pages (Home, Vault, Queue…) en onglets au-dessus (« ?p=vault »). Avant, le menu de la v2
   renvoyait vers `/app/of-manager`, donc vers l'ancien menu. Admins et managers (`manage` de screens.ts, comme Site
