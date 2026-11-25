@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
-// Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Pour l'instant ce
-// sont les écrans de la version actuelle, repeints en bleu par les variables de v2.css ; ils seront refaits un par un.
+// Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
+// (un seul écran pour les deux plateformes) : Messagerie, Chiffres. Les autres sont encore ceux de la version actuelle,
+// repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
 
@@ -19,8 +20,7 @@ const Lists = load(() => import("@/app/app/listes/Lists").then((m) => m.Lists));
 const MymFans = load(() => import("@/app/app/mym/MymFans").then((m) => m.MymFans));
 const Vault = load(() => import("@/app/app/vault/Vault").then((m) => m.Vault));
 const MymStudio = load(() => import("@/app/app/mym/MymStudio").then((m) => m.MymStudio));
-const OfDashboard = load(() => import("@/app/app/of/OfDashboard").then((m) => m.OfDashboard));
-const MymStats = load(() => import("@/app/app/mym/MymStats").then((m) => m.MymStats));
+const V2Stats = load(() => import("./stats/V2Stats").then((m) => m.V2Stats));
 const CreatorReports = load(() => import("@/app/app/analytics/creators/CreatorReports").then((m) => m.CreatorReports));
 const MymAnalytics = load(() => import("@/app/app/mym/MymAnalytics").then((m) => m.MymAnalytics));
 const TrackingLinks = load(() => import("@/app/app/tracking/TrackingLinks").then((m) => m.TrackingLinks));
@@ -54,7 +54,8 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "envois": return m ? <MymMassDm /> : <SmartMessages />;
     case "fans": return m ? <MymFans tab="active" /> : <Lists canEdit={canEdit} />;
     case "medias": return m ? <MymStudio /> : <Vault canEdit={canEdit} />;
-    case "chiffres": return m ? <MymStats /> : <OfDashboard />;
+    // Refait pour la v2 : le même écran pour les deux plateformes (il lit la plateforme choisie côté serveur).
+    case "chiffres": return <V2Stats />;
     case "analytique": return m ? <MymAnalytics /> : <CreatorReports />;
     case "liens": return m ? <MymTrack /> : <TrackingLinks />;
     case "equipe-messages": return m ? <MymMessages /> : <MessageDashboard />;

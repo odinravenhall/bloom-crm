@@ -35,6 +35,7 @@ import { mySalesRoutes } from './mysales.mjs';
 import { mymIncomeRoutes, startMymIncome } from './mymincome.mjs';
 import { mymBulkRoutes, startMymBulk } from './mymbulk.mjs';
 import { mymStatsRoutes, startMymStats } from './mymstats.mjs';
+import { v2StatsRoutes } from './v2stats.mjs';
 import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
 import { mymTeamRoutes } from './mymteam.mjs';
 import { mymModRoutes, startMymMod } from './mymmod.mjs';
@@ -476,6 +477,7 @@ Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.crea
 Object.assign(routes, mymIncomeRoutes({ userFrom, send, creators: () => state.creators || [], live: mymLiveState }));
 Object.assign(routes, mymBulkRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymStatsRoutes({ userFrom, send, creators: () => state.creators || [] }));
+Object.assign(routes, v2StatsRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymModRoutes({ userFrom, send, body, creators: () => state.creators || [] }));

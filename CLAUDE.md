@@ -374,7 +374,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Chiffres ; les autres sont encore ceux de la version
+  actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
@@ -390,6 +391,20 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     - clic droit sur « Tout » (ou l'œil en bas de la colonne) : cocher les modèles affichées. Une modèle cachée sort
       de la colonne et de « Tout » ; réglage par personne, côté serveur (`rv_hidden:<id>`, `PUT /api/rv/me`).
     - pastille « Messagerie » du menu = nombre à traiter sans les modèles cachées (`/api/rv/inbox?tab=todo&count=1`).
+- Chiffres v2 (`v2/stats/V2Stats.tsx`, `app/v2stats.mjs`, 25/11/2026) : UN écran pour les deux plateformes, à la place
+  des copies de MyPulse (`MymStats`) et d'Infloww (`OfDashboard`), qui restent dans la version actuelle.
+  - `GET /api/v2/stats?from&to[&creatorId][&mode=gross]` (team leaders et plus ; plateforme = celle du menu) : la même
+    forme de réponse des deux côtés, montants en CENTIMES dans la devise de la plateforme ($ OnlyFans, € MYM). Les
+    sources ne changent pas : `rv_sales` (Infloww, net ou brut) + ventes Substy des dernières 24 h « en attente » côté
+    OnlyFans ; `rv_live` (src = 'mym', net seulement) côté MYM. Remboursements comptés à part, jamais retirés du total.
+  - Types de vente dans le vocabulaire de la plateforme (`CATS`) ; « Vendeurs » (IA / chatteurs / autre) ne porte que
+    sur les contenus payants envoyés en message (estimé côté MYM) ; « Abonnés actifs » seulement côté MYM ; « Brut »
+    seulement côté OnlyFans. Au-delà de 180 jours, pas de comparaison avec la période d'avant (historique ≈ 1 an).
+  - L'écran : trois grandes cartes (chiffre d'affaires, ventes, moyenne par jour), une carte par type de vente,
+    graphique par jour (Types / Modèles / Comparer ; par mois au-delà de 62 jours ; 14 jours de contexte si la période
+    fait moins de 7 jours), anneau « Répartition », comparatif des modèles (clic = filtrer), meilleurs créneaux, export.
+- `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, `Count`, `Delta`,
+  `Spark`, `Donut`, `Bars`, `Lines`, `PALETTE`). Tout nouvel écran de la v2 part de là ; l'accueil a encore ses copies.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`

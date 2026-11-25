@@ -53,11 +53,11 @@ async function siteNotifs(creators) {
 }
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const CATS = ['sub', 'renew', 'ppv', 'mod', 'push', 'tip', 'other'];
-const catOf = (r) => (r.type === 'ppv' ? (/on demand|mod\b/i.test(r.raw || '') ? 'mod' : 'ppv') : r.type === 'sub' ? 'sub' : r.type === 'push' ? 'push' : r.type === 'tip' ? 'tip' : 'other');
+export const catOf = (r) => (r.type === 'ppv' ? (/on demand|mod\b/i.test(r.raw || '') ? 'mod' : 'ppv') : r.type === 'sub' ? 'sub' : r.type === 'push' ? 'push' : r.type === 'tip' ? 'tip' : 'other');
 
 /** Premier abonnement connu de chaque fan d'une créatrice (pseudo en minuscules → heure), gardé 2 minutes. */
 const firstCache = new Map();
-function firstSubs(cid) {
+export function firstSubs(cid) {
   const hit = firstCache.get(cid);
   if (hit && Date.now() - hit.at < 120_000) return hit.m;
   const m = new Map();
@@ -66,7 +66,7 @@ function firstSubs(cid) {
   return m;
 }
 
-function statsOf(cid, from, to) {
+export function statsOf(cid, from, to) {
   const start = parisMidnight(from);
   const end = parisMidnight(addDay(to, 1));
   const first = firstSubs(cid);
