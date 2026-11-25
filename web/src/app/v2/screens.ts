@@ -24,7 +24,7 @@ export const SCREENS: Screen[] = [
   { key: "liens", label: "Liens de suivi", group: "stats", boss: true },
   { key: "equipe-messages", label: "Messages de l’équipe", nav: "Messages", group: "team", boss: true },
   { key: "equipe-ventes", label: "Ventes de l’équipe", nav: "Ventes", group: "team", boss: true },
-  { key: "shifts", label: "Shifts", group: "team", boss: true, pf: "mym" },
+  { key: "shifts", label: "Shifts", group: "team", boss: true },
   { key: "activite", label: "Activité", group: "team", boss: true },
   { key: "en-direct", label: "En direct", group: "team", boss: true },
   { key: "moderation", label: "Modération", group: "team", boss: true, pf: "mym" },

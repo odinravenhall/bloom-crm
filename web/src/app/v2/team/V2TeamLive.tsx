@@ -153,7 +153,7 @@ export function V2TeamLive() {
                     <Avatar src={p.avatar} name={p.name} size="size-10" />
                     <div className="min-w-0 flex-1">
                       <p className="flex items-center gap-2"><b className="min-w-0 truncate text-[14px]">{p.name}</b>{p.role ? <span className="v2-tag shrink-0">{p.role}</span> : null}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: p.active ? "var(--v2-up)" : "var(--color-muted)" }}><i className="size-1.5 rounded-full" style={{ background: "currentColor" }} />{p.active ? "Sur le chat" : "Sur une autre page"}<span className="text-muted">· connecté depuis {span((d?.now ?? Date.now()) - p.since)}</span></p>
+                      <p className="mt-0.5 text-[11.5px] leading-snug text-muted"><span className="font-semibold" style={{ color: p.active ? "var(--v2-up)" : undefined }}><i className="mr-1.5 inline-block size-1.5 rounded-full align-middle" style={{ background: "currentColor" }} />{p.active ? "Sur le chat" : "Sur une autre page"}</span> · depuis {span((d?.now ?? Date.now()) - p.since)}</p>
                     </div>
                   </div>
                   <p className="mt-3 text-[12.5px] leading-relaxed">

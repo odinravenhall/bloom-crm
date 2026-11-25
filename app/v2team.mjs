@@ -15,6 +15,7 @@ import { canSee, isBoss, liveView, seesAll } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
 import { inboxChat, plain } from './chat.mjs';
 import { askOf, cached, CATS, rowsOf, whoOf } from './v2stats.mjs';
+import { vacations } from './mymteam.mjs';
 
 const DAY = 864e5;
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -328,6 +329,74 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
           id: a.id, at: a.at, user: a.user_name, model: x.names.get(a.creator_id)?.name || '', mym: !!x.names.get(a.creator_id)?.mym, fan: a.creator_id && a.fan_id ? inboxChat(a.creator_id, a.fan_id)?.name || 'Fan' : null, action: a.action, details: a.details,
         })),
         since: one('SELECT MIN(at) AS t FROM bl_actions')?.t || null,
+      });
+    },
+
+    // Shifts : les heures de travail de chacun, déduites des messages qu'il a envoyés DEPUIS Bloom (les seuls dont
+    // Bloom connaît l'auteur), sur toutes les modèles que la personne voit, les deux plateformes ensemble.
+    // Un « shift » = une suite de messages sans trou de plus de `cut` minutes ; le temps actif additionne les écarts
+    // de moins de `idle` minutes (1 minute comptée à chaque reprise). ?from=&to= (60 jours au plus), &idle=, &cut=,
+    // &creatorId=, &person=<nom> (ajoute son activité minute par minute).
+    'GET /api/v2/team/shifts': (req, res) => {
+      const x = people(req, res);
+      if (!x) return;
+      const today = parisDay(Date.now());
+      const ok = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : null);
+      let to = ok(x.p.get('to')) || today;
+      if (to > today) to = today;
+      let from = ok(x.p.get('from')) || addDay(to, -6);
+      if (from > to) from = to;
+      if (from < addDay(to, -59)) from = addDay(to, -59);
+      const idle = Math.min(60, Math.max(1, Math.round(Number(x.p.get('idle')) || 3)));
+      const cut = Math.min(600, Math.max(idle, Math.round(Number(x.p.get('cut')) || 60)));
+      const start = parisMidnight(from);
+      const end = parisMidnight(addDay(to, 1));
+      const only = x.p.get('creatorId') || '';
+      const ids = [...x.names.keys()].filter((id) => !only || id === only);
+      const base = { from, to, today, idle, cut, start, end, models: x.models, people: [], totals: { people: 0, shifts: 0, activeMin: 0, messages: 0, models: 0, of: ids.length }, unnamed: 0 };
+      if (!ids.length) return send(res, 200, base);
+      const ph = ids.map(() => '?').join(',');
+      const rows = all(`SELECT m.creator_id AS cid, m.at, m.by_name AS name, m.price, m.medias, m.reply_ms FROM msg_log m WHERE m.from_fan = 0 AND m.deleted = 0 AND m.kind IN ('bloom', 'employee') AND m.by_name IS NOT NULL AND m.by_name NOT IN ('Bloom', 'Employé') AND m.creator_id IN (${ph}) AND m.at >= ? AND m.at < ? ORDER BY m.at`, ...ids, start, end);
+      const users = new Map(all('SELECT id, name, avatar FROM users WHERE deleted = 0').map((u) => [u.name, u]));
+      // Temps passé dans Bloom sur la période (team.mjs) : « sur le chat » et « Bloom ouvert ailleurs ».
+      const work = new Map(all('SELECT user_id, SUM(active) AS a, SUM(idle) AS i, COUNT(*) AS d FROM work_log WHERE day >= ? AND day <= ? GROUP BY user_id', from, to).map((w) => [w.user_id, w]));
+      const by = new Map();
+      for (const r of rows) (by.get(r.name) || by.set(r.name, []).get(r.name)).push(r);
+      const worked = new Set();
+      const hm = (t) => new Date(t).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+      const model = (id, n) => ({ id, name: x.names.get(id)?.name || id, mym: !!x.names.get(id)?.mym, n });
+      const median = (l) => {
+        const s = [...l].sort((a, b) => a - b);
+        return s.length % 2 ? s[(s.length - 1) / 2] : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
+      };
+      const person = x.p.get('person') || '';
+      const list = [...by].map(([name, msgs]) => {
+        const vs = vacations(msgs, idle, cut).map((v) => ({ day: parisDay(v.start), start: hm(v.start), end: hm(v.end), endDay: parisDay(v.end), startAt: v.start, endAt: v.end, activeMin: v.activeMin, messages: v.messages, models: v.models.map((m) => model(m.id, m.n)) }));
+        const models = new Map();
+        for (const r of msgs) models.set(r.cid, (models.get(r.cid) || 0) + 1), worked.add(r.cid);
+        // Temps de réponse : seulement les réponses données pendant que la personne était là (moins de 30 min).
+        const rep = msgs.map((r) => r.reply_ms).filter((ms) => ms != null && ms <= REPLY_OK);
+        const u = users.get(name);
+        const w = u ? work.get(u.id) : null;
+        let minutes;
+        if (person === name) {
+          const m = new Map();
+          for (const r of msgs) m.set(Math.floor(r.at / 60_000), (m.get(Math.floor(r.at / 60_000)) || 0) + 1);
+          minutes = [...m].map(([k, n]) => [k * 60_000, n]);
+        }
+        return {
+          name, id: u?.id ?? null, avatar: u?.avatar ?? null, messages: msgs.length, activeMin: vs.reduce((a, v) => a + v.activeMin, 0), shifts: vs.length, vacations: vs,
+          models: [...models].map(([id, n]) => model(id, n)).sort((a, b) => b.n - a.n),
+          replyAvg: rep.length ? Math.round(rep.reduce((a, b) => a + b, 0) / rep.length) : null, replyMedian: rep.length ? median(rep) : null,
+          first: msgs[0].at, last: msgs[msgs.length - 1].at, ppvPaid: msgs.filter((r) => r.price > 0).length, ppvFree: msgs.filter((r) => r.medias > 0 && !(r.price > 0)).length,
+          bloomActiveMin: Math.round((w?.a || 0) / 60_000), bloomIdleMin: Math.round((w?.i || 0) / 60_000), bloomDays: w?.d || 0, minutes,
+        };
+      }).sort((a, b) => b.activeMin - a.activeMin || b.messages - a.messages);
+      send(res, 200, {
+        ...base, people: list,
+        totals: { people: list.length, shifts: list.reduce((a, c) => a + c.shifts, 0), activeMin: list.reduce((a, c) => a + c.activeMin, 0), messages: rows.length, models: worked.size, of: ids.length },
+        // Ce que Bloom a vu passer sans nom sur la même période (IA, autre outil, appli) : pour comprendre un relevé vide.
+        unnamed: one(`SELECT COUNT(*) AS n FROM msg_log m WHERE m.from_fan = 0 AND m.deleted = 0 AND NOT (m.kind IN ('bloom', 'employee') AND m.by_name IS NOT NULL AND m.by_name NOT IN ('Bloom', 'Employé')) AND m.creator_id IN (${ph}) AND m.at >= ? AND m.at < ?`, ...ids, start, end)?.n || 0,
       });
     },
 

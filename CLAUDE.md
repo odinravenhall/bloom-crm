@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Activité et En direct (Équipe), Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Shifts, Activité et En direct (Équipe), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -616,6 +616,11 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     qui écrit doit avoir sa ligne dans `ACTIONS` de journal.mjs (ajoutées le 25/11/2026 : fiche et groupes de
     l'écran Fans, fiches de médias, médias MYM). En direct ajoute ce que chacun a fait aujourd'hui (`work_log`,
     `sent_log`).
+  - Shifts (`V2TeamShifts.tsx`, `GET /api/v2/team/shifts?from&to&idle&cut[&creatorId][&person]`), à la place de
+    `MymShifts` (MYM seulement) : un écran sur les personnes, donc les deux plateformes ensemble (l'entrée du menu
+    n'est plus réservée à MYM). Même calcul qu'avant (`vacations` de mymteam.mjs) sur les messages envoyés depuis
+    Bloom par une personne nommée ; 60 jours au plus ; `person` ajoute son activité minute par minute ; temps de
+    réponse en millisecondes.
   - Présence : `PresencePing` envoie l'adresse de la page toutes les 30 s (v2, version actuelle et, depuis le
     25/11/2026, Messages Pro et `/app/messagerie`, qui n'envoyaient rien) ; la messagerie de la v2 envoie elle-même
     la conversation ouverte toutes les 20 s (`V2Messaging`). « Sur le chat » (`CHAT_PAGE` de team.mjs) compte
