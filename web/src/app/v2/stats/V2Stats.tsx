@@ -1,11 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronDown, Download, Users } from "lucide-react";
+import { Check, ChevronDown, Download, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Pf } from "@/lib/platform";
 import { Avatar } from "@/rv/components/ui";
-import { addDay, Bars, cash, Count, daysBetween, Delta, Donut, fmtDay, int, Lines, PALETTE, paris, pct, Spark, type BarPt, type Slice } from "../kit";
+import { addDay, Bars, CAT_COLOR, cash, Count, Delta, Donut, downloadCsv, fmtDay, int, Lines, PALETTE, paris, pct, PeriodBar, Ring, Spark, useDismiss, usePeriod, type BarPt, type Slice } from "../kit";
 
 // Bloom v2 → Chiffres : le MÊME écran pour OnlyFans et MYM (25/11/2026, design « Constellation »). Il remplace, dans la
 // v2, la copie de MyPulse (MymStats) et celle du dashboard d'Infloww (OfDashboard). Chiffres : `GET /api/v2/stats`
@@ -21,26 +21,9 @@ type Stats = {
   cats: Cat[]; days: DayRow[]; models: ModelRow[]; who: { ai: number; team: number; other: number }; slots: { d: number; h: number; sum: number; n: number }[]; unmapped: string[];
   all: { id: string; name: string; avatar: string | null }[];
 };
-type Preset = "today" | "yesterday" | "7d" | "month" | "prev" | "30d" | "12m" | "custom";
 type Pt = { key: string; label: string; title: string; total: number; prev: number; n: number; cats: Record<string, number>; models: Record<string, number>; dim?: boolean };
 
-const PRESETS: [Preset, string][] = [["today", "Aujourd’hui"], ["yesterday", "Hier"], ["7d", "7 jours"], ["month", "Ce mois"], ["prev", "Mois dernier"], ["30d", "30 jours"], ["12m", "12 mois"]];
-const CAT_COLOR: Record<string, string> = { sub: "#38bdf8", renew: "#22d3ee", ppv: "#3b82f6", mod: "#818cf8", push: "#a78bfa", tip: "#f472b6", post: "#34d399", stream: "#fbbf24", ref: "#fb923c", other: "#6b7280" };
 const WEEK: [number, string, string][] = [[1, "Lun", "lundi"], [2, "Mar", "mardi"], [3, "Mer", "mercredi"], [4, "Jeu", "jeudi"], [5, "Ven", "vendredi"], [6, "Sam", "samedi"], [0, "Dim", "dimanche"]];
-function rangeOf(p: Preset, custom: [string, string]): [string, string] {
-  const t = paris();
-  if (p === "today") return [t, t];
-  if (p === "yesterday") return [addDay(t, -1), addDay(t, -1)];
-  if (p === "7d") return [addDay(t, -6), t];
-  if (p === "month") return [t.slice(0, 8) + "01", t];
-  if (p === "prev") {
-    const end = addDay(t.slice(0, 8) + "01", -1);
-    return [end.slice(0, 8) + "01", end];
-  }
-  if (p === "30d") return [addDay(t, -29), t];
-  if (p === "12m") return [addDay(t, -364), t];
-  return custom;
-}
 
 /** Meilleurs créneaux : une case par heure de Paris et par jour de la semaine, d'autant plus bleue qu'on y a vendu. */
 function Heat({ slots, fmt }: { slots: Stats["slots"]; fmt: (v: number, digits?: number) => string }) {
@@ -79,36 +62,21 @@ function Heat({ slots, fmt }: { slots: Stats["slots"]; fmt: (v: number, digits?:
 
 /** `pf` = la plateforme affichée par cet onglet (elle est envoyée au serveur : le cookie du menu est commun aux onglets). */
 export function V2Stats({ pf }: { pf: Pf }) {
-  const [preset, setPreset] = useState<Preset>("month");
-  const [custom, setCustom] = useState<[string, string]>(() => [addDay(paris(), -6), paris()]);
-  const [draft, setDraft] = useState<[string, string]>(custom);
+  const period = usePeriod();
+  const { from, to } = period;
   const [model, setModel] = useState("");
   const [gross, setGross] = useState(false);
   const [view, setView] = useState<"types" | "models" | "compare">("types");
   const [ringBy, setRingBy] = useState<"type" | "model" | "who">("type");
   const [menu, setMenu] = useState(false);
-  const [dates, setDates] = useState(false);
   const [data, setData] = useState<{ key: string; s: Stats; ctx: Stats | null } | null>(null);
   const [err, setErr] = useState("");
-  const [from, to] = rangeOf(preset, custom);
   const key = `${from}|${to}|${model}|${gross}`;
-  useEffect(() => {
-    try {
-      const p = localStorage.getItem("bloom.v2.stats.period") as Preset | null;
-      if (p && PRESETS.some(([k]) => k === p)) setPreset(p);
-    } catch {}
-  }, []);
-  const pickPreset = (p: Preset) => {
-    setPreset(p);
-    setDates(false);
-    try {
-      if (p !== "custom") localStorage.setItem("bloom.v2.stats.period", p);
-    } catch {}
-  };
+  useDismiss(menu, () => setMenu(false), "model");
   useEffect(() => {
     let stop = false;
     const q = `&pf=${pf}${model ? `&creatorId=${encodeURIComponent(model)}` : ""}${gross ? "&mode=gross" : ""}`;
-    const len = daysBetween(from, to) + 1;
+    const len = period.len;
     const load = () =>
       Promise.all([
         api<Stats>("GET", `/api/v2/stats?from=${from}&to=${to}${q}`),
@@ -125,15 +93,8 @@ export function V2Stats({ pf }: { pf: Pf }) {
       stop = true;
       if (t) clearInterval(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, model, gross, pf]);
-  useEffect(() => {
-    if (!menu && !dates) return;
-    const close = (e: MouseEvent) => !(e.target as Element).closest?.("[data-pop]") && (setMenu(false), setDates(false));
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && (setMenu(false), setDates(false));
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", esc);
-    return () => (document.removeEventListener("mousedown", close), document.removeEventListener("keydown", esc));
-  }, [menu, dates]);
 
   const s = data?.s ?? null;
   const busy = !!data && data.key !== key;
@@ -185,18 +146,13 @@ export function V2Stats({ pf }: { pf: Pf }) {
     if (!s) return;
     const num = (c: number) => (c / 100).toFixed(2).replace(".", ",");
     const withSubs = !!v?.subs;
-    const head = ["Jour", `Total ${s.mode === "gross" ? "brut" : "net"} (${cur})`,...s.cats.map((c) => c.label), "Ventes", ...(withSubs ? ["Abonnés actifs"] : [])];
-    const lines = s.days.map((d) => [d.day, num(d.total), ...s.cats.map((c) => num(d.cats[c.key] || 0)), String(d.n), ...(withSubs ? [d.subs == null ? "" : String(d.subs)] : [])].join(";"));
-    const blob = new Blob(["﻿" + [head.join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `bloom-chiffres-${s.platform === "mym" ? "mym" : "onlyfans"}-${s.from}_${s.to}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    const head = ["Jour", `Total ${s.mode === "gross" ? "brut" : "net"} (${cur})`, ...s.cats.map((c) => c.label), "Ventes", ...(withSubs ? ["Abonnés actifs"] : [])];
+    const lines = s.days.map((d) => [d.day, num(d.total), ...s.cats.map((c) => num(d.cats[c.key] || 0)), String(d.n), ...(withSubs ? [d.subs == null ? "" : String(d.subs)] : [])]);
+    downloadCsv(`bloom-chiffres-${s.platform === "mym" ? "mym" : "onlyfans"}-${s.from}_${s.to}.csv`, head, lines);
   };
 
   const pfName = s ? (s.platform === "mym" ? "MYM" : "OnlyFans") : "";
-  const periodLabel = preset === "custom" ? `${fmtDay(from, { day: "numeric", month: "short" })} → ${fmtDay(to, { day: "numeric", month: "short" })}` : PRESETS.find(([k]) => k === preset)?.[1] ?? "";
+  const periodLabel = period.label;
   const picked = model ? s?.all.find((m) => m.id === model)?.name ?? "Modèle" : "Toutes les modèles";
   const compare = view === "compare" && !!v?.canCompare;
   const byModel = view === "models" && (s?.models.length ?? 0) > 1;
@@ -227,8 +183,8 @@ export function V2Stats({ pf }: { pf: Pf }) {
           <h1 className="v2-h1 mt-1">Chiffres</h1>
         </div>
         <div className="flex max-w-full flex-wrap items-center gap-2">
-          <div data-pop className="relative">
-            <button onClick={() => (setDates(false), setMenu(!menu))} aria-haspopup="listbox" aria-expanded={menu} className="v2-select">
+          <div data-pop="model" className="relative">
+            <button onClick={() => setMenu(!menu)} aria-haspopup="listbox" aria-expanded={menu} className="v2-select">
               <Users className="size-4 text-muted" /><span className="max-w-[170px] truncate">{picked}</span><ChevronDown className="size-3.5 text-muted" />
             </button>
             {menu && s ? (
@@ -251,23 +207,7 @@ export function V2Stats({ pf }: { pf: Pf }) {
           <button onClick={exportCsv} disabled={!s} className="v2-select" title="Télécharger les chiffres jour par jour (fichier pour Excel)"><Download className="size-4 text-muted" />Exporter</button>
         </div>
       </div>
-      <div className="v2-rise relative z-20 mt-4 flex flex-wrap items-center gap-x-5 gap-y-2" style={{ ["--i" as string]: 1 }}>
-        <div className="v2-tabs v2-noscroll max-w-full overflow-x-auto">
-          {PRESETS.map(([k, l]) => <button key={k} onClick={() => pickPreset(k)} className="v2-tab" data-on={preset === k}>{l}</button>)}
-        </div>
-        <div data-pop className="relative">
-          <button onClick={() => (setMenu(false), setDraft([from, to]), setDates(!dates))} className="v2-tab flex items-center gap-1.5" data-on={preset === "custom"} aria-expanded={dates}><CalendarDays className="size-3.5" />{preset === "custom" ? periodLabel : "Dates"}</button>
-          {dates ? (
-            <div className="v2-menu w-[252px] p-3" style={{ left: 0, top: "calc(100% + 4px)" }}>
-              <p className="text-[11.5px] font-semibold text-muted">Du</p>
-              <input type="date" value={draft[0]} max={draft[1]} onChange={(e) => setDraft([e.target.value || draft[0], draft[1]])} className="mt-1 h-9 w-full rounded-lg border bg-transparent px-2 text-[13px] outline-none focus:border-(--v2-blue)" style={{ borderColor: "var(--color-line)", colorScheme: "dark" }} />
-              <p className="mt-2.5 text-[11.5px] font-semibold text-muted">Au</p>
-              <input type="date" value={draft[1]} min={draft[0]} max={paris()} onChange={(e) => setDraft([draft[0], e.target.value || draft[1]])} className="mt-1 h-9 w-full rounded-lg border bg-transparent px-2 text-[13px] outline-none focus:border-(--v2-blue)" style={{ borderColor: "var(--color-line)", colorScheme: "dark" }} />
-              <button onClick={() => (setCustom(draft[0] <= draft[1] ? draft : [draft[1], draft[0]]), pickPreset("custom"))} className="v2-btn mt-3 w-full" style={{ height: 34 }}>Afficher</button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+      <PeriodBar period={period} />
       {err ? <p className="mt-4 rounded-xl border px-4 py-3 text-[13px]" style={{ borderColor: "rgb(244 63 94 / 0.35)", background: "rgb(244 63 94 / 0.08)", color: "var(--v2-down)" }}>{err}</p> : null}
       {s?.unmapped.length ? <p className="mt-4 rounded-xl border px-4 py-3 text-[12.5px] text-muted" style={{ borderColor: "rgb(245 158 11 / 0.3)", background: "rgb(245 158 11 / 0.06)" }}>Pas de chiffres pour {s.unmapped.join(", ")} : aucun compte Infloww n’est relié à {s.unmapped.length > 1 ? "ces modèles" : "cette modèle"} (Paramètres → Branchements).</p> : null}
 
@@ -358,7 +298,7 @@ export function V2Stats({ pf }: { pf: Pf }) {
                 <tbody>
                   {(s?.models ?? []).map((m) => (
                     <tr key={m.id} onClick={() => setModel(model === m.id ? "" : m.id)} className="cursor-pointer border-t transition hover:bg-white/[0.03]" style={{ borderColor: "rgb(255 255 255 / 0.05)" }} title={model === m.id ? "Revenir à toutes les modèles" : `Voir seulement ${m.name}`}>
-                      <td className="py-2.5"><span className="flex items-center gap-2.5"><span className="grid rounded-full" style={{ boxShadow: `0 0 0 2px var(--color-card), 0 0 0 4px ${v?.colorOf(m.id) ?? "#3b82f6"}` }}><Avatar src={m.avatar} name={m.name} size="size-7" /></span><b className="truncate text-[13.5px]">{m.name}</b></span></td>
+                      <td className="py-2.5"><span className="flex items-center gap-2.5"><Ring color={v?.colorOf(m.id) ?? "#3b82f6"}><Avatar src={m.avatar} name={m.name} size="size-7" /></Ring><b className="truncate text-[13.5px]">{m.name}</b></span></td>
                       <td className="v2-num py-2.5 text-right text-[13.5px] font-bold">{fmt(m.total)}</td>
                       <td className="py-2.5 pl-4"><span className="flex items-center gap-2"><span className="h-1 w-[72px] overflow-hidden rounded-full" style={{ background: "rgb(255 255 255 / 0.06)" }}><i className="v2-grow block h-full rounded-full" style={{ width: `${pct(m.total, s!.total)}%`, background: v?.colorOf(m.id) }} /></span><span className="v2-num text-[11.5px] text-muted">{pct(m.total, s!.total)} %</span></span></td>
                       <td className="v2-num py-2.5 text-right">{int(m.sales)}</td>

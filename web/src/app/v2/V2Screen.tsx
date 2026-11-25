@@ -6,7 +6,7 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Chiffres. Les autres sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Chiffres, Analytique. Les autres sont encore ceux de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
@@ -21,8 +21,7 @@ const MymFans = load(() => import("@/app/app/mym/MymFans").then((m) => m.MymFans
 const Vault = load(() => import("@/app/app/vault/Vault").then((m) => m.Vault));
 const MymStudio = load(() => import("@/app/app/mym/MymStudio").then((m) => m.MymStudio));
 const V2Stats = load(() => import("./stats/V2Stats").then((m) => m.V2Stats));
-const CreatorReports = load(() => import("@/app/app/analytics/creators/CreatorReports").then((m) => m.CreatorReports));
-const MymAnalytics = load(() => import("@/app/app/mym/MymAnalytics").then((m) => m.MymAnalytics));
+const V2Analytics = load(() => import("./stats/V2Analytics").then((m) => m.V2Analytics));
 const TrackingLinks = load(() => import("@/app/app/tracking/TrackingLinks").then((m) => m.TrackingLinks));
 const MymTrack = load(() => import("@/app/app/mym/MymTrack").then((m) => m.MymTrack));
 const MessageDashboard = load(() => import("@/app/app/analytics/messages/MessageDashboard").then((m) => m.MessageDashboard));
@@ -45,6 +44,8 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
+// Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
@@ -56,7 +57,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "medias": return m ? <MymStudio /> : <Vault canEdit={canEdit} />;
     // Refait pour la v2 : le même écran pour les deux plateformes (il demande les chiffres de la plateforme affichée).
     case "chiffres": return <V2Stats pf={pf} />;
-    case "analytique": return m ? <MymAnalytics /> : <CreatorReports />;
+    case "analytique": return <V2Analytics pf={pf} />;
     case "liens": return m ? <MymTrack /> : <TrackingLinks />;
     case "equipe-messages": return m ? <MymMessages /> : <MessageDashboard />;
     case "equipe-ventes": return m ? <MymTeamSales /> : <EmployeeReports />;
@@ -78,7 +79,13 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
 
 export function V2Screen({ screen, label, only, canEdit }: { screen: ScreenKey; label: string; only: Pf | null; canEdit: boolean }) {
   const [pf, setPf] = useState<Pf | null>(null);
-  useEffect(() => setPf(getPf()), []);
+  // Un écran refait demande lui-même les données de SA plateforme : on peut donc l'ouvrir sur l'autre plateforme sans
+  // toucher au menu, avec « ?pf=of » ou « ?pf=mym » dans l'adresse (pour vérifier un écran sans changer le cookie du
+  // menu, qui est commun à tous les onglets ouverts). Les anciens écrans suivent toujours le menu.
+  useEffect(() => {
+    const asked = OWN_PF.includes(screen) ? new URLSearchParams(window.location.search).get("pf") : null;
+    setPf(asked === "of" || asked === "mym" ? asked : getPf());
+  }, [screen]);
   if (!pf) return <Wait />;
   const node = pick(screen, pf, canEdit);
   if (!node)

@@ -16,16 +16,20 @@ const DAY = 864e5;
 const REFUND = /refund|chargeback|revers|rembours|annul|^undo$/i; // Infloww : « undo » = remboursée
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 // Les types de vente de chaque plateforme, dans l'ordre d'affichage. Mêmes cartes à l'écran, vocabulaire de la plateforme.
-const CATS = {
+export const CATS = {
   of: [['sub', 'Abonnements'], ['ppv', 'Messages payants'], ['tip', 'Pourboires'], ['post', 'Publications'], ['stream', 'Lives'], ['ref', 'Parrainages'], ['other', 'Autres']],
   mym: [['sub', 'Abonnements'], ['renew', 'Renouvellements'], ['ppv', 'Médias privés'], ['mod', 'Media on demand'], ['push', 'Médias push'], ['tip', 'Pourboires'], ['other', 'Autres']],
 };
 // « Qui a vendu » ne vaut que pour les contenus payants envoyés en message ; « meilleurs créneaux » y ajoute les pourboires.
 const PAID = { of: new Set(['ppv']), mym: new Set(['ppv', 'mod', 'push']) };
-const SLOT = { of: new Set(['ppv', 'tip', 'post']), mym: new Set(['ppv', 'mod', 'push', 'tip']) };
+export const SLOT = { of: new Set(['ppv', 'tip', 'post']), mym: new Set(['ppv', 'mod', 'push', 'tip']) };
 
-/** Toutes les ventes de [pStart, end) ramenées à une même forme : { cid, at, cat, v (centimes), fan, who, wait }. */
-function rowsOf(pf, list, pStart, start, end, gross) {
+/**
+ * Toutes les ventes de [pStart, end) ramenées à une même forme : { cid, at, cat, v (centimes), fan, name, who, wait,
+ * renew }. `fan` = clé stable du fan pour compter les acheteurs, `name` = son nom affiché, `renew` = abonnement
+ * OnlyFans renouvelé (la catégorie reste « sub » ; côté MYM le renouvellement est une catégorie à part).
+ */
+export function rowsOf(pf, list, pStart, start, end, gross) {
   const rows = [];
   let refunds = 0;
   const unmapped = [];
@@ -43,7 +47,7 @@ function rowsOf(pf, list, pStart, start, end, gross) {
           continue;
         }
         const cat = ['sub', 'ppv', 'tip', 'post', 'stream'].includes(r.type) ? r.type : /refer|parrain/i.test(r.raw_type || '') ? 'ref' : 'other';
-        rows.push({ cid: acc.get(r.account), at: r.at, cat, v, fan: r.fan_id || r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' || r.seller ? 'team' : 'other', wait: false });
+        rows.push({ cid: acc.get(r.account), at: r.at, cat, v, fan: r.fan_id || r.fan_name || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' || r.seller ? 'team' : 'other', wait: false, renew: cat === 'sub' && /recurr|renew|rebill/i.test(r.raw_type || '') });
       }
     }
     // Ventes Substy des dernières 24 h pas encore confirmées par Infloww (comme le dashboard actuel).
@@ -53,7 +57,7 @@ function rowsOf(pf, list, pStart, start, end, gross) {
         if (/sub/i.test(l.type || '')) continue;
         const cat = /tip/i.test(l.type || '') ? 'tip' : /post/i.test(l.type || '') ? 'post' : 'ppv';
         const k = cat === 'ppv' && l.message_id ? one('SELECT kind FROM msg_log WHERE id = ?', l.message_id)?.kind : null;
-        rows.push({ cid: String(l.creator_id), at: l.at, cat, v: gross ? l.gross : Math.round(l.gross * 0.8), fan: l.fan_id || l.fan_name || null, who: k === 'ai' ? 'ai' : k === 'bloom' || k === 'employee' ? 'team' : 'other', wait: true });
+        rows.push({ cid: String(l.creator_id), at: l.at, cat, v: gross ? l.gross : Math.round(l.gross * 0.8), fan: l.fan_id || l.fan_name || null, name: l.fan_name || null, who: k === 'ai' ? 'ai' : k === 'bloom' || k === 'employee' ? 'team' : 'other', wait: true, renew: false });
       }
     }
   } else {
@@ -68,7 +72,7 @@ function rowsOf(pf, list, pStart, start, end, gross) {
         let cat = catOf(r);
         // Renouvellement = un abonnement d'un fan qui s'était déjà abonné avant (MYM ne fait pas la différence).
         if (cat === 'sub' && (first.get(String(r.fan_name || r.fan_id || '').toLowerCase()) ?? r.at) < r.at) cat = 'renew';
-        rows.push({ cid, at: r.at, cat, v: r.gross, fan: r.fan_name || r.fan_id || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' ? 'team' : 'other', wait: false });
+        rows.push({ cid, at: r.at, cat, v: r.gross, fan: r.fan_name || r.fan_id || null, name: r.fan_name || null, who: r.origin === 'ai' ? 'ai' : r.origin === 'bloom' ? 'team' : 'other', wait: false, renew: false });
       }
     }
   }
@@ -184,18 +188,44 @@ export function v2Stats({ pf, list, from, to, gross }) {
   };
 }
 
+// Les calculs relisent toutes les ventes de la période (et de celle d'avant) : chaque résultat est gardé 20 s, pour que
+// plusieurs personnes sur un écran — ou son rafraîchissement automatique — ne le refassent pas à chaque fois.
+const cache = new Map();
+export function cached(key, make) {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 20_000) return hit.data;
+  const data = make();
+  if (cache.size > 400) cache.clear();
+  cache.set(key, { at: Date.now(), data });
+  return data;
+}
+/** `v2Stats` avec sa mémoire de 20 s (clé = plateforme, brut ou net, période, modèles). */
+export const statsCached = ({ pf, list, from, to, gross }) => cached(`stats|${pf}|${!!gross}|${from}|${to}|${list.map((c) => c.id).join(',')}`, () => v2Stats({ pf, list, from, to, gross }));
+
+/**
+ * Ce que toutes les routes de chiffres de la v2 lisent dans l'adresse : la plateforme que l'écran AFFICHE (« pf », sinon
+ * celle du menu : le cookie est commun à tous les onglets, un deuxième onglet resté sur l'autre plateforme recevrait
+ * sinon les mauvais chiffres sous le bon titre), la période (jours de Paris, 400 jours au plus), les modèles que la
+ * personne voit sur cette plateforme (avec leur surnom), et « brut » (OnlyFans seulement).
+ */
+export function askOf(u, req, creators) {
+  const p = new URL(req.url, 'http://x').searchParams;
+  const today = parisDay(Date.now());
+  const ok = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : null);
+  let to = ok(p.get('to')) || today;
+  let from = ok(p.get('from')) || to;
+  if (to > today) to = today;
+  if (from > to) from = to;
+  if (Date.parse(to) - Date.parse(from) > 400 * DAY) from = addDay(to, -400);
+  const asked = p.get('pf');
+  const pf = asked === 'of' || asked === 'mym' ? asked : u.pf === 'mym' ? 'mym' : 'of';
+  // `canSee` ne garde que les modèles de la plateforme choisie (et, côté MYM, les comptes reliés).
+  const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [String(m.creator_id), m.nickname]));
+  const mine = creators().filter((c) => canSee({ ...u, pf }, c.id)).map((c) => ({ ...c, name: meta.get(String(c.id)) || c.name }));
+  return { p, pf, from, to, today, mine, gross: pf === 'of' && p.get('mode') === 'gross' };
+}
+
 export function v2StatsRoutes({ userFrom, send, creators }) {
-  // Le calcul relit toutes les ventes de la période (et de celle d'avant) : le résultat est gardé 20 s, pour que
-  // plusieurs personnes sur l'écran — ou son rafraîchissement automatique — ne le refassent pas à chaque fois.
-  const cache = new Map();
-  const cached = (key, make) => {
-    const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < 20_000) return hit.data;
-    const data = make();
-    if (cache.size > 300) cache.clear();
-    cache.set(key, { at: Date.now(), data });
-    return data;
-  };
   return {
     // Chiffres d'une plateforme : ?pf=of|mym (sinon celle du menu), ?from=&to= (jours de Paris), &creatorId= (une seule
     // modèle), &mode=gross (OnlyFans).
@@ -203,27 +233,10 @@ export function v2StatsRoutes({ userFrom, send, creators }) {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
       if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
-      const p = new URL(req.url, 'http://x').searchParams;
-      const today = parisDay(Date.now());
-      const ok = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : null);
-      let to = ok(p.get('to')) || today;
-      let from = ok(p.get('from')) || to;
-      if (to > today) to = today;
-      if (from > to) from = to;
-      if (Date.parse(to) - Date.parse(from) > 400 * DAY) from = addDay(to, -400);
-      // La plateforme est celle que l'écran AFFICHE (« pf » dans l'adresse) : le cookie du menu est commun à tous les
-      // onglets, un deuxième onglet resté sur l'autre plateforme recevrait sinon les mauvais chiffres sous le bon titre.
-      const asked = p.get('pf');
-      const pf = asked === 'of' || asked === 'mym' ? asked : u.pf === 'mym' ? 'mym' : 'of';
-      // `canSee` ne garde que les modèles de la plateforme choisie (et, côté MYM, les comptes reliés).
-      const mine = creators().filter((c) => canSee({ ...u, pf }, c.id));
+      const { p, pf, from, to, today, mine, gross } = askOf(u, req, creators);
       const only = p.get('creatorId') || '';
       const list = mine.filter((c) => !only || String(c.id) === only);
-      const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [String(m.creator_id), m.nickname]));
-      const named = (c) => ({ ...c, name: meta.get(String(c.id)) || c.name });
-      const gross = pf === 'of' && p.get('mode') === 'gross';
-      const stats = cached(`${pf}|${gross}|${from}|${to}|${list.map((c) => c.id).join(',')}`, () => v2Stats({ pf, list: list.map(named), from, to, gross }));
-      send(res, 200, { ...stats, today, all: mine.map(named).map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })) });
+      send(res, 200, { ...statsCached({ pf, list, from, to, gross }), today, all: mine.map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })) });
     },
   };
 }

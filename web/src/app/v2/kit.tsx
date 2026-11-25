@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays } from "lucide-react";
 
-// Bloom v2 — les briques communes des écrans redessinés (direction « Constellation ») : dates, montants, pastille de
-// variation, petite courbe, anneau, barres et courbes. Tout nouvel écran de la v2 part d'ici, pour que le CRM ait le même
-// visage partout. (L'accueil, écrit avant, a encore ses propres copies : à faire passer ici.)
+// Bloom v2 — les briques communes des écrans redessinés (direction « Constellation ») : dates, montants, période
+// (onglets + dates au choix), pastille de variation, petite courbe, anneau, barres et courbes, export. Tout nouvel écran
+// de la v2 part d'ici, pour que le CRM ait le même visage partout. (L'accueil, écrit avant, a encore ses propres copies :
+// à faire passer ici.)
 
 // ---------------------------------------------------------------- dates (jours de Paris) et nombres
 export const paris = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(d);
@@ -30,6 +31,114 @@ export const niceMax = (v: number) => {
 };
 /** Une couleur par modèle (courbes, anneau, tableau) : toujours la même pour une même place dans la liste. */
 export const PALETTE = ["#3b82f6", "#a78bfa", "#34d399", "#fbbf24", "#f472b6", "#22d3ee", "#fb923c", "#818cf8", "#f87171", "#2dd4bf", "#c084fc", "#facc15"];
+/** Une couleur par type de vente, la même sur tous les écrans (clés de `CATS`, app/v2stats.mjs). */
+export const CAT_COLOR: Record<string, string> = { sub: "#38bdf8", renew: "#22d3ee", ppv: "#3b82f6", mod: "#818cf8", push: "#a78bfa", tip: "#f472b6", post: "#34d399", stream: "#fbbf24", ref: "#fb923c", other: "#6b7280" };
+/** Durée lisible : « 45 s », « 4 min 05 », « 2 h 10 ». */
+export const fmtDuration = (ms: number | null | undefined) => {
+  if (ms == null) return "—";
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec} s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ${String(sec % 60).padStart(2, "0")}`;
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
+};
+/** Fait télécharger un tableau pour Excel (séparateur « ; », accents lisibles). */
+export function downloadCsv(name: string, head: string[], lines: string[][]) {
+  const esc = (x: string) => (/[";\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x);
+  const blob = new Blob(["\ufeff" + [head, ...lines].map((l) => l.map(esc).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ---------------------------------------------------------------- période
+export type Preset = "today" | "yesterday" | "7d" | "month" | "prev" | "30d" | "12m" | "custom";
+export const PRESETS: [Preset, string][] = [["today", "Aujourd’hui"], ["yesterday", "Hier"], ["7d", "7 jours"], ["month", "Ce mois"], ["prev", "Mois dernier"], ["30d", "30 jours"], ["12m", "12 mois"]];
+export function rangeOf(p: Preset, custom: [string, string]): [string, string] {
+  const t = paris();
+  if (p === "today") return [t, t];
+  if (p === "yesterday") return [addDay(t, -1), addDay(t, -1)];
+  if (p === "7d") return [addDay(t, -6), t];
+  if (p === "month") return [t.slice(0, 8) + "01", t];
+  if (p === "prev") {
+    const end = addDay(t.slice(0, 8) + "01", -1);
+    return [end.slice(0, 8) + "01", end];
+  }
+  if (p === "30d") return [addDay(t, -29), t];
+  if (p === "12m") return [addDay(t, -364), t];
+  return custom;
+}
+const PERIOD_KEY = "bloom.v2.stats.period";
+/**
+ * La période des écrans de chiffres. Elle suit la personne d'un écran à l'autre (gardée dans le navigateur ; des dates
+ * au choix ne sont pas gardées). À n'utiliser que dans un écran chargé côté navigateur (c'est le cas de V2Screen).
+ */
+export function usePeriod() {
+  const [preset, setPreset] = useState<Preset>(() => {
+    try {
+      const p = localStorage.getItem(PERIOD_KEY) as Preset | null;
+      if (p && PRESETS.some(([k]) => k === p)) return p;
+    } catch {}
+    return "month";
+  });
+  const [custom, setCustom] = useState<[string, string]>(() => [addDay(paris(), -6), paris()]);
+  const [from, to] = rangeOf(preset, custom);
+  const pick = (p: Preset) => {
+    setPreset(p);
+    try {
+      if (p !== "custom") localStorage.setItem(PERIOD_KEY, p);
+    } catch {}
+  };
+  return {
+    preset, from, to, pick,
+    len: daysBetween(from, to) + 1,
+    label: preset === "custom" ? `${fmtDay(from, { day: "numeric", month: "short" })} → ${fmtDay(to, { day: "numeric", month: "short" })}` : PRESETS.find(([k]) => k === preset)?.[1] ?? "",
+    setRange: (a: string, b: string) => (setCustom(a <= b ? [a, b] : [b, a]), setPreset("custom")),
+  };
+}
+export type Period = ReturnType<typeof usePeriod>;
+
+/** Ferme un menu ouvert quand on clique ailleurs que dans « [data-pop=nom] », ou sur Échap. */
+export function useDismiss(open: boolean, close: () => void, name: string) {
+  useEffect(() => {
+    if (!open) return;
+    const out = (e: MouseEvent) => !(e.target as Element).closest?.(`[data-pop="${name}"]`) && close();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("mousedown", out);
+    document.addEventListener("keydown", esc);
+    return () => (document.removeEventListener("mousedown", out), document.removeEventListener("keydown", esc));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, name]);
+}
+
+/** Les onglets de période et le choix de dates : la même ligne sur tous les écrans de chiffres. */
+export function PeriodBar({ period, i = 1 }: { period: Period; i?: number }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<[string, string]>([period.from, period.to]);
+  useDismiss(open, () => setOpen(false), "period");
+  const field = "mt-1 h-9 w-full rounded-lg border bg-transparent px-2 text-[13px] outline-none focus:border-(--v2-blue)";
+  return (
+    <div className="v2-rise relative z-20 mt-4 flex flex-wrap items-center gap-x-5 gap-y-2" style={{ ["--i" as string]: i }}>
+      <div className="v2-tabs v2-noscroll max-w-full overflow-x-auto">
+        {PRESETS.map(([k, l]) => <button key={k} onClick={() => (period.pick(k), setOpen(false))} className="v2-tab" data-on={period.preset === k}>{l}</button>)}
+      </div>
+      <div data-pop="period" className="relative">
+        <button onClick={() => (setDraft([period.from, period.to]), setOpen(!open))} className="v2-tab flex items-center gap-1.5" data-on={period.preset === "custom"} aria-expanded={open}><CalendarDays className="size-3.5" />{period.preset === "custom" ? period.label : "Dates"}</button>
+        {open ? (
+          <div className="v2-menu w-[252px] p-3" style={{ left: 0, top: "calc(100% + 4px)" }}>
+            <p className="text-[11.5px] font-semibold text-muted">Du</p>
+            <input type="date" value={draft[0]} max={draft[1]} onChange={(e) => setDraft([e.target.value || draft[0], draft[1]])} className={field} style={{ borderColor: "var(--color-line)", colorScheme: "dark" }} />
+            <p className="mt-2.5 text-[11.5px] font-semibold text-muted">Au</p>
+            <input type="date" value={draft[1]} min={draft[0]} max={paris()} onChange={(e) => setDraft([draft[0], e.target.value || draft[1]])} className={field} style={{ borderColor: "var(--color-line)", colorScheme: "dark" }} />
+            <button onClick={() => (period.setRange(draft[0], draft[1]), setOpen(false))} className="v2-btn mt-3 w-full" style={{ height: 34 }}>Afficher</button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- tracés
 /** Courbe lissée passant par les points. */
@@ -85,18 +194,31 @@ export function Count({ value, format }: { value: number; format: (n: number) =>
   return <>{format(v)}</>;
 }
 
-/** Pastille de variation par rapport à la période d'avant. `quiet` : pas de « nouveau » quand l'historique manque. */
-export function Delta({ now, before, quiet }: { now: number; before: number; quiet?: boolean }) {
-  if (!(before > 0)) return now > 0 && !quiet ? <span className="v2-delta" data-dir="up">nouveau</span> : <span className="v2-delta" data-dir="flat">—</span>;
+/**
+ * Pastille de variation par rapport à la période d'avant. `quiet` : pas de « nouveau » quand l'historique manque.
+ * `invert` : quand baisser est une bonne nouvelle (temps de réponse) — la flèche suit le sens, la couleur le résultat.
+ */
+export function Delta({ now, before, quiet, invert }: { now: number; before: number; quiet?: boolean; invert?: boolean }) {
+  if (!(before > 0)) return now > 0 && !quiet ? <span className="v2-delta" data-dir={invert ? "flat" : "up"}>nouveau</span> : <span className="v2-delta" data-dir="flat">—</span>;
   const p = ((now - before) / before) * 100;
-  const dir = Math.abs(p) < 0.5 ? "flat" : p > 0 ? "up" : "down";
+  const way = Math.abs(p) < 0.5 ? "flat" : p > 0 ? "up" : "down";
+  const dir = way === "flat" || !invert ? way : way === "up" ? "down" : "up";
   const a = Math.abs(p);
   return (
     <span className="v2-delta" data-dir={dir}>
-      {dir === "up" ? <ArrowUpRight className="size-3" /> : dir === "down" ? <ArrowDownRight className="size-3" /> : null}
+      {way === "up" ? <ArrowUpRight className="size-3" /> : way === "down" ? <ArrowDownRight className="size-3" /> : null}
       {a >= 100 ? Math.round(a) : a.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %
     </span>
   );
+}
+
+/**
+ * Photo d'une modèle entourée de SA couleur (la même que ses courbes). L'anneau est dessiné DANS la boîte : rien ne
+ * dépasse, donc rien n'est rogné par un conteneur qui défile (défaut signalé le 25/11/2026 dans un tableau, où
+ * l'anneau en ombre extérieure était coupé à gauche).
+ */
+export function Ring({ color, children }: { color: string; children: React.ReactNode }) {
+  return <span className="grid shrink-0 rounded-full p-[3.5px]" style={{ boxShadow: `inset 0 0 0 2px ${color}` }}>{children}</span>;
 }
 
 /** Petite courbe au bas d'une grande carte. */
@@ -150,15 +272,17 @@ const TIP = { background: "#121215", borderColor: "rgb(255 255 255 / 0.12)", box
 export type BarPt = { key: string; label: string; title: string; parts: { v: number; color: string; label: string }[]; prev?: number | null; dim?: boolean };
 /**
  * Barres par jour (ou par mois). Sans `compare` : une barre empilée par point (une couleur par part). Avec `compare` :
- * le total à côté de celui de la période d'avant (`prev`), en gris.
+ * le total à côté de celui de la période d'avant (`prev`), en gris. `whole` : l'axe compte des unités (abonnés,
+ * messages), ses graduations restent des nombres entiers.
  */
-export function Bars({ pts, compare = false, fmt, color = "#3b82f6", height = 250 }: { pts: BarPt[]; compare?: boolean; fmt: (v: number, digits?: number) => string; color?: string; height?: number }) {
+export function Bars({ pts, compare = false, fmt, color = "#3b82f6", height = 250, whole = false }: { pts: BarPt[]; compare?: boolean; fmt: (v: number, digits?: number) => string; color?: string; height?: number; whole?: boolean }) {
   const [ref, w] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const H = height, L = 52, R = 6, T = 12, B = 26;
   const n = pts.length;
   const tot = (p: BarPt) => p.parts.reduce((a, x) => a + x.v, 0);
-  const max = niceMax(Math.max(1, ...pts.map((p) => Math.max(tot(p), compare ? p.prev ?? 0 : 0))));
+  const top = niceMax(Math.max(1, ...pts.map((p) => Math.max(tot(p), compare ? p.prev ?? 0 : 0))));
+  const max = whole ? Math.max(4, Math.ceil(top / 4) * 4) : top;
   const iw = Math.max(0, w - L - R);
   const band = n ? iw / n : 0;
   const base = H - B;

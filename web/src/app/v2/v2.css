@@ -109,6 +109,10 @@
 .v2-menu-item:hover:not(:disabled) { background: rgb(255 255 255 / 0.06); }
 .v2-menu-item[data-on="true"] { background: rgb(59 130 246 / 0.14); }
 .v2-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Colonne de choix (la modèle analysée) : une ligne par élément, trait bleu sur celle qui est choisie */
+.v2-pick { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; text-align: left; transition: background-color 0.12s ease; }
+.v2-pick:hover { background: rgb(255 255 255 / 0.05); }
+.v2-pick[data-on="true"] { background: rgb(59 130 246 / 0.13); box-shadow: inset 2px 0 0 var(--v2-blue); }
 .v2-menu-label { padding: 8px 8px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #5d5d66; }
 .v2-dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; }
 .v2-dot[data-pf="of"] { background: #38bdf8; }

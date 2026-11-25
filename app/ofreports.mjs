@@ -57,7 +57,7 @@ async function subsCount(substy, cid, from, to) {
     return null;
   }
 }
-async function newSubsFor(substy, cids, from, to) {
+export async function newSubsFor(substy, cids, from, to) {
   const out = new Map();
   const days = daysBetween(from, to);
   const pFrom = addDay(from, -days);
