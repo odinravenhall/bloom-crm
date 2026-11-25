@@ -77,10 +77,13 @@ export function V2Links({ pf }: { pf: Pf }) {
   const [showOff, setShowOff] = useState(false);
   const [sort, setSort] = useState<{ key: string; up: boolean }>({ key: "revenue", up: false });
   const [win, setWin] = useState<Win>(null);
+  // Beaucoup de liens (une modèle en a vite une centaine) : le tableau s'allonge par tranches de 50.
+  const [limit, setLimit] = useState(50);
   const key = `${from}|${to}|${model}|${gross}`;
   const pickModel = (id: string) => {
     setModel(id);
     setQ("");
+    setLimit(50);
     try {
       localStorage.setItem(modelKey, id);
     } catch {}
@@ -323,6 +326,7 @@ export function V2Links({ pf }: { pf: Pf }) {
                     {stat(`Revenus${s.canGross ? (s.mode === "gross" ? " bruts" : " nets") : ""}`, fmt(v.life.revenue), `+${fmt(s.period.revenue)}`, s.period.revenue, s.prev.revenue, s.daily.map((d) => d[2]), "#fbbf24", 6)}
                   </div>
                   {mym && !s.covered ? <p className="mt-3 rounded-xl border px-4 py-3 text-[12.5px] text-muted" style={{ borderColor: "rgb(59 130 246 / 0.3)", background: "rgb(59 130 246 / 0.06)" }}>MYM ne donne que le total de chaque lien. Bloom relève ces totaux chaque jour depuis le {s.since ? longDay(s.since) : "début de ses relevés"} : {v.known ? `le détail par jour n’existe qu’à partir du ${v.known}, les chiffres « sur la période » ne comptent donc que depuis cette date.` : "le détail par jour arrivera avec le prochain relevé."}</p> : null}
+                  {!mym && !s.covered && s.since && !s.error ? <p className="mt-3 rounded-xl border px-4 py-3 text-[12.5px] text-muted" style={{ borderColor: "rgb(59 130 246 / 0.3)", background: "rgb(59 130 246 / 0.06)" }}>Substy suit les liens de cette modèle depuis le {longDay(s.since)}. Les clics et les abonnés gagnés avant cette date sont comptés d’un coup sur les premiers jours du suivi : sur cette période, seuls les revenus sont vraiment répartis jour par jour.</p> : null}
 
                   <section className="v2-card v2-rise mt-3 min-w-0 p-4" style={{ ["--i" as string]: 7 }}>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -356,7 +360,7 @@ export function V2Links({ pf }: { pf: Pf }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {rows.map((l) => (
+                          {rows.slice(0, limit).map((l) => (
                             <tr key={l.id} className="border-t" style={{ borderColor: "rgb(255 255 255 / 0.05)" }}>
                               <td className="sticky left-0 z-[1] py-2.5 pr-3" style={{ background: "var(--color-card)" }}>
                                 <span className="flex items-center gap-2.5" style={{ opacity: l.active ? 1 : 0.5 }}>
@@ -385,6 +389,7 @@ export function V2Links({ pf }: { pf: Pf }) {
                         </tbody>
                       </table>
                     </div>
+                    {rows.length > limit ? <p className="mt-3 text-center"><button onClick={() => setLimit(limit + 50)} className="v2-btn" data-kind="ghost" style={{ height: 34 }}>Afficher {Math.min(50, rows.length - limit)} liens de plus ({rows.length - limit} restants)</button></p> : null}
                     {!rows.length ? <p className="py-6 text-center text-[13px] text-muted">Aucun lien ne correspond.</p> : null}
                     <p className="mt-3 text-[11.5px] text-muted">{mym ? "Chiffres donnés par MYM pour chaque lien de son compte. Créer ou supprimer un lien agit directement sur le compte MYM de la modèle." : "Ce sont les liens de suivi d’OnlyFans (les mêmes que dans Infloww), que Substy relit une à deux fois par heure. Ils se créent sur OnlyFans, dans Substy ou dans Infloww ; le coût d’une promo est celui saisi dans Substy. Substy ne donne ni les « fans qui ont dépensé » ni les tags d’Infloww."}</p>
                   </section>

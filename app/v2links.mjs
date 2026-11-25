@@ -74,10 +74,16 @@ async function ofLinks(substy, cid, cur, gross, fresh) {
   });
   const trio = (m) => ({ clicks: Number(m?.clicks) || 0, subs: Number(m?.subscribers) || 0, revenue: Math.round(cents(m?.revenue) * k) });
   const before = stats?.comparison?.previousPeriod || null;
+  // Substy ne suit les liens d'une modèle que depuis un certain jour (`since` = le premier lien qu'il a vu). Constaté le
+  // 25/11/2026 : les clics et abonnés gagnés AVANT sont comptés d'un coup sur les deux ou trois premiers jours du suivi
+  // (seul le revenu a un vrai historique par jour). Une période qui touche ces jours-là n'est donc pas comparable.
+  const since = links.reduce((m, l) => (l.created && (!m || l.created < m) ? l.created : m), null);
+  const solid = since ? addDay(since, 3) : null;
+  const covered = !!stats && (!solid || cur[0] >= solid);
   return {
     links, daily, error,
     period: stats?.metrics ? trio(stats.metrics) : daily.reduce((x, d) => ({ clicks: x.clicks + d[0], subs: x.subs + d[1], revenue: x.revenue + d[2] }), zero()),
-    prev: trio(before), since: null, covered: !!stats, prevCovered: !!before,
+    prev: trio(before), since, covered, prevCovered: covered && !!before && (!solid || addDay(cur[0], -cur.length) >= solid),
     at: links.reduce((m, l) => Math.max(m, l.lastSync || 0), 0) || null,
   };
 }
