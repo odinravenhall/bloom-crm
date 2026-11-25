@@ -38,7 +38,7 @@ type Data = {
   list: { id: string; name: string; avatar: string | null; fans: number }[];
   model: { id: string; name: string; avatar: string | null } | null;
   views: { id: string; name: string; count: number }[]; groups: Group[];
-  all?: number; dated?: boolean; ofList?: { id: string; read: number; partial: boolean; error: string | null } | null; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
+  all?: number; dated?: boolean; ofList?: { id: string; read: number; partial: boolean; unsupported?: boolean; error: string | null } | null; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
 };
 type Live = { status: string | null; since: number | null; expires: number | null; renews: number | null; canceled: boolean; price: number | null; purchases: number; lastPurchase: number | null; link: string | null; channel: string | null };
 type Official = { active: number; old: number; interested: number };
@@ -350,7 +350,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                   <div className="px-1 pb-3">
                     <h2 className="truncate text-[16px] font-bold tracking-[-0.01em]">{title}</h2>
                     <p className="mt-0.5 text-[12.5px] text-muted">
-                      {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : group.startsWith("of:") ? (d.ofList?.error ? d.ofList.error : `Liste du compte OnlyFans${ofCur ? ` (${int(ofCur.fans)} fans selon OnlyFans)` : ""}, lue chez Substy. Ici, ceux avec qui une conversation existe${d.ofList?.partial ? ` : lecture arrêtée après ${int(d.ofList.read)} fans, la liste est trop grande pour être lue en entier` : ""}.`) : `Les fans de ${m.name} avec qui une conversation existe.`}
+                      {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : group.startsWith("of:") ? (d.ofList?.error ? d.ofList.error : d.ofList?.unsupported ? `Substy ne donne pas les fans de cette liste d’OnlyFans${ofCur ? ` (${int(ofCur.fans)} fans selon OnlyFans)` : ""} : son propre site ne l’affiche pas non plus. Il ne les donne que pour certaines listes, celles qu’il suit dans sa messagerie.` : `Liste du compte OnlyFans${ofCur ? ` (${int(ofCur.fans)} fans selon OnlyFans)` : ""}, lue chez Substy. Ici, ceux avec qui une conversation existe${d.ofList?.partial ? ` : lecture arrêtée après ${int(d.ofList.read)} fans, la liste est trop grande pour être lue en entier` : ""}.`) : `Les fans de ${m.name} avec qui une conversation existe.`}
                       {!group && off ? ` Compteurs de MYM : ${int(off.active)} abonnés, ${int(off.old)} anciens, ${int(off.interested)} intéressés (MYM compte aussi les fans avec qui aucune conversation n’existe).` : ""}
                     </p>
                   </div>

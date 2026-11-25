@@ -177,7 +177,10 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
         try {
           r = await substy.chats(cid, { limit: 30, cursor, listId });
         } catch (e) {
-          if (/not found/i.test(String(e?.message || e))) return { ids, partial: false };
+          // Dès la première page : Substy ne donne pas les membres de cette liste (son propre site affiche alors
+          // « Unable to load conversations », vu le 25/11/2026 sur la liste « Fans » de Lena) ; il ne les donne que
+          // pour certaines listes (celles qu'il suit dans sa messagerie, semble-t-il).
+          if (/not found/i.test(String(e?.message || e))) return { ids, partial: false, unsupported: !ids.size };
           if (ids.size) return { ids, partial: true };
           throw e;
         }
@@ -221,7 +224,7 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
       if (g.startsWith('of:') && pf === 'of' && substy && !cid.startsWith('mym-')) {
         try {
           const m = await ofMembers(cid, g.slice(3));
-          ofList = { id: g, members: m.ids, partial: m.partial, read: m.ids.size };
+          ofList = { id: g, members: m.ids, partial: m.partial, read: m.ids.size, unsupported: !!m.unsupported };
         } catch (e) {
           ofErr = `Liste d’OnlyFans illisible pour l’instant (${String(e?.message || e).slice(0, 120)}).`;
           ofList = { id: g, members: new Set(), partial: false, read: 0 };
@@ -260,7 +263,7 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
         }),
         all: set.rows.length,
         // La liste d'OnlyFans choisie : fans lus chez Substy (`read`), lecture arrêtée avant la fin (`partial`).
-        ofList: ofList ? { id: ofList.id, read: ofList.read, partial: ofList.partial, error: ofErr } : null,
+        ofList: ofList ? { id: ofList.id, read: ofList.read, partial: ofList.partial, unsupported: !!ofList.unsupported, error: ofErr } : null,
         // Aucune date d'abonnement connue (OnlyFans : Substy ne la donne que fan par fan) : l'écran cache la colonne.
         dated: set.rows.some((r) => r.since),
         stats, total: rows.length, page, per: PER, sort,
