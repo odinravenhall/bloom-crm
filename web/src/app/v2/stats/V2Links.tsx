@@ -188,11 +188,12 @@ export function V2Links({ pf }: { pf: Pf }) {
     }
   };
 
-  const stat = (label: string, value: React.ReactNode, now: number, before: number, total: string, spark: number[], color: string, i: number, hi = false) => (
+  // Le total depuis la création en grand (ce que les deux plateformes savent donner), la période choisie en dessous.
+  const stat = (label: string, total: React.ReactNode, onPeriod: string, now: number, before: number, spark: number[], color: string, i: number, hi = false) => (
     <div className={`v2-card v2-rise p-4 ${hi ? "hi" : ""}`} style={{ ["--i" as string]: i }}>
       <p className="text-[12.5px] font-medium text-muted">{label}</p>
-      <p className="v2-big mt-1" style={{ fontSize: 25 }}>{value}</p>
-      <p className="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-muted">{v?.comparable ? <><Delta now={now} before={before} /><span>vs période d’avant</span></> : <span>sur la période</span>}<span>· {total} au total</span></p>
+      <p className="v2-big mt-1" style={{ fontSize: 25 }}>{total}</p>
+      <p className="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-muted"><span><b className="v2-num font-semibold" style={{ color: "var(--color-fg)" }}>{onPeriod}</b> sur la période</span>{v?.comparable ? <Delta now={now} before={before} quiet /> : null}</p>
       {spark.length > 1 ? <div className="mt-2"><Spark key={`${data?.key}|${label}`} v={spark} color={color} h={38} /></div> : null}
     </div>
   );
@@ -257,7 +258,7 @@ export function V2Links({ pf }: { pf: Pf }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[19px] leading-tight font-bold tracking-[-0.02em]">{m.name}</p>
                   <p className="mt-0.5 text-[12px] text-muted">
-                    {mym ? `${plural(s.links.length, "lien")} sur son compte MYM${s.at ? ` · lus à ${new Date(s.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : ""}` : `${plural(s.links.filter((l) => l.active).length, "lien actif", "liens actifs")} faits par Bloom${off ? ` · ${plural(off, "désactivé")}` : ""}`}
+                    {mym ? `${s.links.length ? plural(s.links.length, "lien") : "Aucun lien"} sur son compte MYM${s.at ? ` · lus à ${new Date(s.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : ""}` : `${s.links.length - off ? plural(s.links.length - off, "lien Bloom actif", "liens Bloom actifs") : "Aucun lien Bloom actif"}${off ? ` · ${plural(off, "désactivé")}` : ""}`}
                   </p>
                 </div>
               </div>
@@ -271,12 +272,13 @@ export function V2Links({ pf }: { pf: Pf }) {
                 </div>
               ) : (
                 <>
-                  {/* La période : ce que les liens ont rapporté, avec le total depuis leur création */}
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {stat("Clics", int(s.period.clicks), s.period.clicks, s.prev.clicks, int(v.life.clicks), v.perDay.map((d) => d[0]), "#3b82f6", 3, true)}
-                    {stat("Abonnés gagnés", int(s.period.subs), s.period.subs, s.prev.subs, int(v.life.subs), v.perDay.map((d) => d[1]), "#a78bfa", 4)}
-                    {stat("Taux de conversion", rate(s.period.subs, s.period.clicks), s.period.clicks ? s.period.subs / s.period.clicks : 0, s.prev.clicks ? s.prev.subs / s.prev.clicks : 0, rate(v.life.subs, v.life.clicks), v.perDay.map((d) => (d[0] ? d[1] / d[0] : 0)), "#34d399", 5)}
-                    {stat(`Revenus${s.canGross ? (s.mode === "gross" ? " bruts" : " nets") : ""}`, fmt(s.period.revenue), s.period.revenue, s.prev.revenue, fmt(v.life.revenue, 0), v.perDay.map((d) => d[2]), "#fbbf24", 6)}
+                  {/* Ce que tous ses liens ont rapporté depuis leur création, et sur la période choisie */}
+                  <p className="v2-rise mt-4 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase" style={{ ["--i" as string]: 3 }}>Tous ses liens, depuis leur création</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {stat("Clics", int(v.life.clicks), `+${int(s.period.clicks)}`, s.period.clicks, s.prev.clicks, v.perDay.map((d) => d[0]), "#3b82f6", 3, true)}
+                    {stat("Abonnés gagnés", int(v.life.subs), `+${int(s.period.subs)}`, s.period.subs, s.prev.subs, v.perDay.map((d) => d[1]), "#a78bfa", 4)}
+                    {stat("Taux de conversion", rate(v.life.subs, v.life.clicks), rate(s.period.subs, s.period.clicks), s.period.clicks ? s.period.subs / s.period.clicks : 0, s.prev.clicks ? s.prev.subs / s.prev.clicks : 0, v.perDay.map((d) => (d[0] ? d[1] / d[0] : 0)), "#34d399", 5)}
+                    {stat(`Revenus${s.canGross ? (s.mode === "gross" ? " bruts" : " nets") : ""}`, fmt(v.life.revenue), `+${fmt(s.period.revenue)}`, s.period.revenue, s.prev.revenue, v.perDay.map((d) => d[2]), "#fbbf24", 6)}
                   </div>
                   {mym && !s.covered ? <p className="mt-3 rounded-xl border px-4 py-3 text-[12.5px] text-muted" style={{ borderColor: "rgb(59 130 246 / 0.3)", background: "rgb(59 130 246 / 0.06)" }}>MYM ne donne que le total de chaque lien. Bloom relève ces totaux chaque jour depuis le {s.since ? longDay(s.since) : "début de ses relevés"} : {v.known ? `le détail par jour n’existe qu’à partir du ${v.known}, les chiffres « sur la période » ne comptent donc que depuis cette date.` : "le détail par jour arrivera avec le prochain relevé."}</p> : null}
 
@@ -287,9 +289,8 @@ export function V2Links({ pf }: { pf: Pf }) {
                     </div>
                     <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted">
                       {chart.top.map((l) => <span key={l.id} className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: colorOf(l.id) }} />{l.name}</span>)}
-                      {!chart.any ? <span>Rien sur la période pour cette mesure.</span> : null}
                     </p>
-                    <Bars key={`${data?.key}|${metric}`} pts={chart.pts} fmt={metric === "revenue" ? fmt : (x) => int(Math.round(x))} whole={metric !== "revenue"} />
+                    {chart.any ? <Bars key={`${data?.key}|${metric}`} pts={chart.pts} fmt={metric === "revenue" ? fmt : (x) => int(Math.round(x))} whole={metric !== "revenue"} /> : <p className="py-12 text-center text-[12.5px] text-muted">{mym ? "Aucun changement relevé sur la période dans les chiffres que MYM donne pour ses liens." : "Rien sur la période pour cette mesure."}</p>}
                   </section>
 
                   {/* Tous les liens, avec leurs totaux depuis la création */}
@@ -394,7 +395,7 @@ function OfForm({ creatorId, link, sources, tags, profile, onClose, onDone }: { 
     if (t && !f.tags.includes(t)) setF({ ...f, tags: [...f.tags, t] });
     setTag("");
   };
-  const destOk = /^https:\/\/([\w-]+\.)*onlyfans\.com\//i.test(f.dest.trim());
+  const destOk = /^https:\/\/([\w-]+\.)*onlyfans\.com\/[^\s/?#]/i.test(f.dest.trim());
   const save = async () => {
     setBusy(true);
     setErr("");
@@ -424,8 +425,8 @@ function OfForm({ creatorId, link, sources, tags, profile, onClose, onDone }: { 
         </div>
       </div>
       <label className="v2-label mt-3" htmlFor="lk-dest">Page OnlyFans de destination</label>
-      <input id="lk-dest" value={f.dest} onChange={(e) => setF({ ...f, dest: e.target.value })} className="v2-field" style={f.dest && !destOk ? { borderColor: "var(--v2-down)" } : undefined} />
-      {f.dest && !destOk ? <p className="mt-1 text-[11.5px]" style={{ color: "var(--v2-down)" }}>L’adresse doit commencer par https://onlyfans.com/</p> : null}
+      <input id="lk-dest" value={f.dest} onChange={(e) => setF({ ...f, dest: e.target.value })} placeholder="https://onlyfans.com/son-pseudo" className="v2-field" style={f.dest && !destOk ? { borderColor: "var(--v2-down)" } : undefined} />
+      <p className="mt-1 text-[11.5px]" style={{ color: f.dest && !destOk ? "var(--v2-down)" : "var(--color-muted)" }}>L’adresse complète de sa page : https://onlyfans.com/son-pseudo</p>
       <p className="v2-label mt-3">Tags <span className="font-normal">(facultatif)</span></p>
       <div className="flex flex-wrap items-center gap-1.5">
         {known.map((t) => {
