@@ -505,7 +505,7 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
                 {line(pf === "mym" ? "Dépensé (hors abonnements)" : "Dépensé", f.total ? money(f.total, cur) : "rien pour l’instant")}
                 {line("Contenus payants achetés", f.ppvSent ? `${f.ppvBought} sur ${f.ppvSent} (${pct(f.ppvBought, f.ppvSent)} %)` : "aucun vu par Bloom")}
                 {line("Abonné depuis", live?.since || f.since ? day(live?.since || f.since) : "date inconnue")}
-                {live && f.status === "active" && (live.price != null || live.renews || live.expires) ? line("Abonnement", [live.price != null ? (live.price ? money(live.price, cur) : "gratuit") : "", live.canceled ? `s’arrête le ${day(live.expires)}` : live.renews && live.renews - Date.now() < 400 * 864e5 ? `renouvelé le ${day(live.renews)}` : ""].filter(Boolean).join(" · ") || "—") : null}
+                {live && f.status === "active" && (live.price != null || live.renews || live.expires) ? line("Abonnement", [live.price != null ? (live.price ? money(live.price, cur) : "gratuit") : "", live.canceled && live.expires && live.expires - Date.now() < 400 * 864e5 ? `s’arrête le ${day(live.expires)}` : !live.canceled && live.renews && live.renews - Date.now() < 400 * 864e5 ? `renouvelé le ${day(live.renews)}` : ""].filter(Boolean).join(" · ") || "—") : null}
                 {live?.link ? line("Arrivé par le lien", live.link) : null}
                 {line("Dernier message", f.lastAt ? `${ago(f.lastAt)} · ${f.lastFromFan ? "de lui" : "de nous"}` : "—")}
               </div>
