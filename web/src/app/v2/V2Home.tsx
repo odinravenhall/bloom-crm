@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import type { Me } from "@/lib/types";
 import { Avatar } from "@/rv/components/ui";
+import { useV2Url } from "./nav";
 
 // Accueil de la v2 (direction « Constellation », validée par l'agence le 25/11/2026) : toute l'agence, OnlyFans et MYM
 // réunis. Trois grandes cartes avec leur courbe, six petites, les barres par jour comparées à la période d'avant,
@@ -269,6 +270,7 @@ function Donut({ items }: { items: Slice[] }) {
 }
 
 export function V2Home({ me }: { me: Me }) {
+  const link = useV2Url();
   const { creators } = useCreators();
   const staff = me.role === "admin" || me.role === "manager" || me.role === "lead";
   const canSeeNumbers = me.role !== "chatter";
@@ -361,10 +363,10 @@ export function V2Home({ me }: { me: Me }) {
   // Chatteurs : pas de chiffres, un accueil simple avec leurs modèles et des raccourcis.
   if (!canSeeNumbers) {
     const links: { href: string; label: string; text: string; Icon: LucideIcon }[] = [
-      { href: "/v2/messagerie", label: "Messagerie", text: "Répondre aux fans", Icon: MessageCircle },
-      { href: "/v2/scripts", label: "Scripts", text: "Les messages prêts à envoyer", Icon: ScrollText },
-      { href: "/v2/fans", label: "Fans", text: "Listes et fiches", Icon: Users },
-      { href: "/v2/medias", label: "Médias", text: "Photos et vidéos des modèles", Icon: Images },
+      { href: link("/messagerie"), label: "Messagerie", text: "Répondre aux fans", Icon: MessageCircle },
+      { href: link("/scripts"), label: "Scripts", text: "Les messages prêts à envoyer", Icon: ScrollText },
+      { href: link("/fans"), label: "Fans", text: "Listes et fiches", Icon: Users },
+      { href: link("/medias"), label: "Médias", text: "Photos et vidéos des modèles", Icon: Images },
     ];
     return (
       <div className="mx-auto max-w-[920px] px-5 py-8 md:px-7">
@@ -546,7 +548,7 @@ export function V2Home({ me }: { me: Me }) {
 
           {staff ? (
             <section className="v2-card v2-rise min-w-0 p-4 lg:row-span-2" style={{ ["--i" as string]: 10 }}>
-              <div className="mb-1 flex items-center"><p className="v2-card-title flex-1">Top chatteurs</p><Link href="/v2/equipe-ventes" className="flex items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Classement complet <ArrowRight className="size-3.5" /></Link></div>
+              <div className="mb-1 flex items-center"><p className="v2-card-title flex-1">Top chatteurs</p><Link href={link("/equipe-ventes")} className="flex items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Classement complet <ArrowRight className="size-3.5" /></Link></div>
               {sellers.map((s, i) => (
                 <div key={s.key} className="flex items-center gap-3 border-t py-2.5" style={{ borderColor: i ? "rgb(255 255 255 / 0.05)" : "transparent" }}>
                   <span className="v2-num w-6 shrink-0 text-[12.5px] font-semibold text-muted">#{i + 1}</span>
@@ -568,7 +570,7 @@ export function V2Home({ me }: { me: Me }) {
           <section className="v2-card v2-rise min-w-0 p-4" style={{ ["--i" as string]: 11 }}>
             <div className="mb-1 flex items-center gap-3">
               <p className="v2-card-title flex flex-1 items-center gap-2"><span className="v2-live" />Dernières ventes</p>
-              {staff ? <Link href="/v2/chiffres" className="flex shrink-0 items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Tous les chiffres <ArrowRight className="size-3.5" /></Link> : null}
+              {staff ? <Link href={link("/chiffres")} className="flex shrink-0 items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Tous les chiffres <ArrowRight className="size-3.5" /></Link> : null}
             </div>
             <div className={`grid gap-x-8 ${staff ? "" : "lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-5"}`}>
               {(rev?.recent ?? []).slice(0, staff ? 6 : 10).map((s, i) => {

@@ -331,8 +331,9 @@ const routes = {
       return res.end('Lien expiré ou déjà utilisé. Tape /connexion sur le serveur Discord pour en recevoir un nouveau.');
     }
     login(res, u.id);
-    // « v=2 » : lien posé au retour de Discord pour une adresse de la nouvelle version, on arrive sur son accueil.
-    const home = q.get('v') === '2' ? (u.role === 'chatter' ? '/v2/messagerie' : '/v2') : u.role === 'chatter' ? '/app/messagerie' : '/app';
+    // « v=2 » : lien posé au retour de Discord pour une adresse de la nouvelle version (bloomcrm.fr), où le site
+    // entier est la nouvelle version, sans « /v2 » dans l'adresse : on arrive sur « / » (ou sur la messagerie).
+    const home = q.get('v') === '2' ? (u.role === 'chatter' ? '/messagerie' : '/') : u.role === 'chatter' ? '/app/messagerie' : '/app';
     res.writeHead(303, { location: home, 'cache-control': 'no-store' });
     res.end();
   },

@@ -9,9 +9,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { canOpen } from "@/lib/perms";
 import { getPf, PF_LABEL, setPf, type Pf } from "@/lib/platform";
 import { ROLE_LABEL, type Me } from "@/lib/types";
 import { Avatar } from "@/rv/components/ui";
+import { useV2Base, useV2Url } from "./nav";
 import { SCREENS, screenOf, type GroupKey, type ScreenKey } from "./screens";
 
 const ICON: Record<ScreenKey, LucideIcon> = {
@@ -19,6 +21,7 @@ const ICON: Record<ScreenKey, LucideIcon> = {
   chiffres: TrendingUp, analytique: ChartNoAxesCombined, liens: Link2,
   "equipe-messages": MessagesSquare, "equipe-ventes": BarChart3, shifts: Timer, activite: Activity, "en-direct": Radio, moderation: ShieldAlert, acces: KeyRound,
   push: Megaphone, planification: CalendarClock, feed: ListChecks, amis: UserRound, bons: Ticket, notifications: Bell, "site-mym": Globe,
+  "of-manager": Sparkles,
 };
 // Les rubriques du menu : un petit titre en capitales, les écrans dessous, à plat. L'icône ne sert qu'au menu réduit.
 type G = Exclude<GroupKey, "top">;
@@ -43,8 +46,12 @@ const keep = (k: string, v: string) => {
 
 /** Le cadre de la v2 (direction « Constellation ») : menu à gauche à plat, mêmes rubriques sur toutes les plateformes. */
 export function V2Shell({ me, children }: { me: Me; children: React.ReactNode }) {
-  const path = usePathname() || "/v2";
-  const cur = path === "/v2" ? "home" : path.split("/")[2] || "home";
+  // `base` : « /v2 » sur l'adresse principale, rien sur bloomcrm.fr (tout le site y est la nouvelle version).
+  const base = useV2Base();
+  const link = useV2Url();
+  // L'écran ouvert, d'après l'adresse : « /v2/chiffres » ici, « /chiffres » sur bloomcrm.fr.
+  const path = usePathname() || "/";
+  const cur = path.replace(/^\/v2(?=\/|$)/, "").split("/")[1] || "home";
   const chat = cur === "messagerie";
   const [pf, setPfState] = useState<Pf>("of");
   // Menu réduit en icônes : un réglage pour la messagerie (réduit d'office, elle a besoin de place) et un pour le reste.
@@ -94,7 +101,7 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
     setPf(p);
     // Les écrans relisent la plateforme au chargement. Un écran propre à l'autre plateforme n'existe pas ici : retour à l'accueil.
     const s = screenOf(cur);
-    if (s?.pf && s.pf !== p) location.href = "/v2";
+    if (s?.pf && s.pf !== p) location.href = link();
     else location.reload();
   };
   const isMini = chat ? miniChat : mini;
@@ -114,7 +121,9 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
   };
 
   const boss = isBoss(me.role);
-  const visible = SCREENS.filter((s) => (!s.boss || boss) && (!s.pf || s.pf === pf));
+  const manager = me.role === "admin" || me.role === "manager";
+  // OF Manager : en plus du rôle, la case d'accès « OF Manager » du rôle (comme dans la version actuelle).
+  const visible = SCREENS.filter((s) => (!s.boss || boss) && (!s.manage || manager) && (!s.pf || s.pf === pf) && (s.key !== "of-manager" || canOpen(me, "/app/of-manager")));
   const role = me.roleName || ROLE_LABEL[me.role] || me.role;
 
   const side = (m: boolean, inDrawer = false) => {
@@ -129,7 +138,7 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
       <aside className="v2-side" data-mini={m} style={{ width: m ? 62 : 232 }}>
         <div className={`flex w-full shrink-0 items-center ${m ? "justify-center" : ""}`}>
           {/* Emplacement du futur logo. */}
-          <Link href="/v2" title="Vue d’ensemble" className="v2-logo" style={m ? { padding: 0 } : undefined}><Sparkle />{m ? null : <span className="truncate">Bloom</span>}</Link>
+          <Link href={link()} title="Vue d’ensemble" className="v2-logo" style={m ? { padding: 0 } : undefined}><Sparkle />{m ? null : <span className="truncate">Bloom</span>}</Link>
           {m ? null : (
             <>
               <span className="flex-1" />
@@ -171,13 +180,11 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
 
         <nav className="v2-nav v2-noscroll">
           {m && !inDrawer ? <button onClick={() => setMiniNow(false)} title="Déplier le menu" className="mx-auto mb-1 grid h-7 w-full place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-fg"><ChevronsRight className="size-4" /></button> : null}
-          {item("home", "/v2", "Vue d’ensemble", LayoutDashboard)}
-          {item("messagerie", "/v2/messagerie", "Messagerie", MessageCircle, reply)}
+          {item("home", link(), "Vue d’ensemble", LayoutDashboard)}
+          {item("messagerie", link("/messagerie"), "Messagerie", MessageCircle, reply)}
           {GROUPS.map((g) => {
             const items = visible.filter((s) => s.group === g.key);
-            // OnlyFans : pas encore d'écran propre dans la v2, on renvoie vers OF Manager de la version actuelle.
-            const ofLink = g.key === "platform" && pf === "of" && boss;
-            if (!items.length && !ofLink) return null;
+            if (!items.length) return null;
             const label = g.label(pf);
             const open = !closed.includes(g.key);
             if (m)
@@ -194,12 +201,11 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
                     {items.map((s) => {
                       const Icon = ICON[s.key];
                       return (
-                        <Link key={s.key} href={`/v2/${s.key}`} data-on={cur === s.key} tabIndex={open ? undefined : -1} className="v2-nav-item">
+                        <Link key={s.key} href={link(`/${s.key}`)} data-on={cur === s.key} tabIndex={open ? undefined : -1} className="v2-nav-item">
                           <Icon /><span className="min-w-0 flex-1 truncate">{s.nav ?? s.label}</span>
                         </Link>
                       );
                     })}
-                    {ofLink ? <a href="/app/of-manager" tabIndex={open ? undefined : -1} className="v2-nav-item" title="OF Manager (version actuelle de Bloom)"><Sparkles /><span className="truncate">OF Manager</span></a> : null}
                   </div>
                 </div>
               </div>
@@ -208,7 +214,8 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
         </nav>
 
         <div className="mt-2 w-full shrink-0">
-          <a href="/app/parametres" title={m ? "Paramètres" : undefined} className="v2-nav-item"><Settings />{m ? null : <span>Paramètres</span>}</a>
+          {/* Paramètres = ceux de la version actuelle (thème, langue, notifications), sans effet sur la nouvelle : pas montrés sur bloomcrm.fr, où tout le site est la nouvelle version. */}
+          {base ? <a href="/app/parametres" title={m ? "Paramètres" : undefined} className="v2-nav-item"><Settings />{m ? null : <span>Paramètres</span>}</a> : null}
           {m ? (
             <button onClick={() => setMiniNow(false)} title={`${me.name} · ${role}`} className="mx-auto mt-2 grid size-10 place-items-center rounded-xl transition hover:bg-white/5"><Avatar src={me.avatar} name={me.name} size="size-8" /></button>
           ) : (
@@ -218,7 +225,7 @@ export function V2Shell({ me, children }: { me: Me; children: React.ReactNode })
                 <b className="block truncate text-[13px] leading-tight">{me.name}</b>
                 <span className="block truncate text-[11.5px] text-muted">{role}</span>
               </span>
-              <a href={pf === "mym" ? "/app/mym" : "/app/of"} title="Revenir à la version actuelle de Bloom" className="grid size-7 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-fg"><History className="size-[15px]" /></a>
+              <a href={pf === "mym" ? "/app/mym" : "/app/of"} title={base ? "Revenir à la version actuelle de Bloom" : "Ouvrir l’ancienne version de Bloom"} className="grid size-7 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-fg"><History className="size-[15px]" /></a>
               <button onClick={logout} title="Se déconnecter" className="grid size-7 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-fg"><LogOut className="size-[15px]" /></button>
             </div>
           )}

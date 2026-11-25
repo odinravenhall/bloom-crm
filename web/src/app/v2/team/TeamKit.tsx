@@ -7,6 +7,7 @@ import { getPf, type Pf } from "@/lib/platform";
 import { Avatar } from "@/rv/components/ui";
 import { cash, Modal, useDismiss } from "../kit";
 import { errText } from "../media/MediaKit";
+import { useV2Url } from "../nav";
 
 // Bloom v2 → Équipe : les pièces communes des écrans de la rubrique (Ventes, Messages, Shifts, Modération…).
 // « Qui » = l'auteur d'un message ou d'une vente, dans la forme de `whoOf` (app/v2stats.mjs).
@@ -71,6 +72,7 @@ type Thread = { platform: Pf; currency: string; creatorId: string; creator: stri
  * « creator=…&fan=…&at=… » (GET /api/v2/team/thread). Lecture seule.
  */
 export function ThreadModal({ query, onClose }: { query: string; onClose: () => void }) {
+  const link = useV2Url();
   const [d, setD] = useState<Thread | null>(null);
   const [err, setErr] = useState("");
   const [more, setMore] = useState({ before: true, after: true, busy: false });
@@ -127,7 +129,7 @@ export function ThreadModal({ query, onClose }: { query: string; onClose: () => 
             {more.after && d.messages.length ? <button type="button" disabled={more.busy} onClick={() => void load("after")} className="mx-auto block text-[12px] font-semibold underline-offset-2 hover:underline" style={{ color: "var(--v2-sky)" }}>Messages suivants</button> : null}
           </div>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            {chatOk ? <a href={`/v2/messagerie?c=${encodeURIComponent(`${d.creatorId}~${d.fanId}`)}`} className="v2-btn" data-kind="ghost"><MessageCircle className="size-4" />Ouvrir la conversation</a> : null}
+            {chatOk ? <a href={link(`/messagerie?c=${encodeURIComponent(`${d.creatorId}~${d.fanId}`)}`)} className="v2-btn" data-kind="ghost"><MessageCircle className="size-4" />Ouvrir la conversation</a> : null}
             <button type="button" onClick={onClose} className="v2-btn" data-kind="ghost">Fermer</button>
           </div>
         </>

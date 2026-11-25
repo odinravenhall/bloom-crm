@@ -33,9 +33,10 @@ const MymFriends = load(() => import("@/app/app/mym/MymFriends").then((m) => m.M
 const MymVouchers = load(() => import("@/app/app/mym/MymVouchers").then((m) => m.MymVouchers));
 const MymNotifs = load(() => import("@/app/app/mym/MymNotifs").then((m) => m.MymNotifs));
 const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.MymDirect));
+const V2OfManager = load(() => import("./of/V2OfManager").then((m) => m.V2OfManager));
 
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
-const FULL: ScreenKey[] = ["messagerie", "site-mym"];
+const FULL: ScreenKey[] = ["messagerie", "site-mym", "of-manager"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
 const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois", "equipe-ventes", "equipe-messages", "moderation"];
 
@@ -66,6 +67,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "bons": return m ? <MymVouchers /> : null;
     case "notifications": return m ? <MymNotifs /> : null;
     case "site-mym": return m ? <MymDirect /> : null;
+    case "of-manager": return m ? null : <V2OfManager />;
   }
 }
 

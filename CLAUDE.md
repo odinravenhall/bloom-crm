@@ -357,9 +357,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 
 ## Bloom v2 : le nouveau design unique, construit à part (25/11/2026) — `web/src/app/v2/`
 
-- Adresse : `/v2` (la version actuelle `/app` et `/pro` reste en service ; on branchera la v2 dessus quand elle sera
-  prête). UN seul CRM pour OnlyFans et MYM (Reveal plus tard) : même menu, mêmes noms d'écrans, la plateforme se
+- Adresse : sur **bloomcrm.fr**, le site ENTIER est la nouvelle version, sans « /v2 » dans l'adresse (« / » =
+  l'accueil, « /chiffres », « /messagerie »… ; demande de l'agence du 25/11/2026, voir « Nouveau domaine » plus bas).
+  Sur l'adresse principale elle vit sous `/v2`, à côté de la version actuelle (`/app`, `/pro`), qui reste en service.
+  UN seul CRM pour OnlyFans et MYM (Reveal plus tard) : même menu, mêmes noms d'écrans, la plateforme se
   choisit dans un MENU DÉROULANT en haut du menu (`bloom_pf` ; la ligne « Reveal » y est déjà, grisée).
+- ⚠️ Un lien vers un écran de la nouvelle version ne s'écrit JAMAIS « /v2/… » en dur : `const link = useV2Url()`
+  (`v2/nav.tsx`) puis `link("/chiffres")`, `link()` pour l'accueil. Côté serveur : `v2Url(v2BaseOf(host))`
+  (`lib/v2host.ts`). Ce que le SERVEUR enregistre garde le chemin officiel « /v2/… » (présence : `canonicalPath`).
 - **Direction de design retenue par l'agence le 25/11/2026 : « Constellation »** (choisie parmi quatre propositions,
   « c'est parfait, on part sur ça »). C'est la famille de Raven CRM avec une structure propre à Bloom :
   - noir profond, ciel étoilé (`V2Backdrop.tsx`), bleu franc (#3b82f6), police Plus Jakarta Sans ;
@@ -381,6 +386,10 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
   de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe (Messages, Ventes, Shifts, Activité, En direct, Modération, Accès), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
+- OF Manager (`v2/of/V2OfManager.tsx`, écran `of-manager`, 25/11/2026) : l'écran de la version actuelle posé tel quel
+  dans le cadre de la v2, ses pages (Home, Vault, Queue…) en onglets au-dessus (« ?p=vault »). Avant, le menu de la v2
+  renvoyait vers `/app/of-manager`, donc vers l'ancien menu. Admins et managers (`manage` de screens.ts, comme Site
+  MYM), et la case d'accès « OF Manager » du rôle reste appliquée (`canOpen`). Pas encore redessiné.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; le choix des médias est la fenêtre de
@@ -665,15 +674,33 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`
 
-- bloomcrm.fr sert le MÊME site et la même base que bloom.ravencrm.xyz ; seule l'arrivée change : « / », « /app » et
-  « /app/messagerie » y renvoient vers la v2 (`redirects()` par adresse). Liste des adresses : `V2_HOSTS` (hosts.mjs et
-  next.config.mjs, par défaut `bloomcrm.fr,www.bloomcrm.fr`).
+- bloomcrm.fr sert le MÊME site et la même base que bloom.ravencrm.xyz, mais **tout le site y est la nouvelle
+  version, sans « /v2 » dans l'adresse** (demande de l'agence, 25/11/2026 : « enlève le /v2, je veux que tout le site
+  passe sur la nouvelle »). Liste des adresses : `V2_HOSTS` (hosts.mjs, next.config.mjs, et `lib/v2host.ts` côté site,
+  par défaut `bloomcrm.fr,www.bloomcrm.fr`).
+  - Les pages restent rangées dans `app/v2`. Sur ces adresses, next.config.mjs : « / » est réécrit vers « /v2 »
+    (`beforeFiles`), « /<écran> » vers « /v2/<écran> » (`afterFiles` : seulement après les vraies pages, « /api » et
+    « /media ») ; « /v2 » et « /v2/… » renvoient vers l'adresse sans « /v2 » (anciens liens) ; « /app » → « / »,
+    « /app/messagerie » → « /messagerie », « /app/scripts » → « /scripts », « /app/of-manager[/page] » →
+    « /of-manager[?p=page] ».
+  - Les liens : `layout.tsx` lit l'adresse demandée et donne le début des liens à `V2Nav` (« » ici, « /v2 » sur
+    l'adresse principale) ; tous les écrans passent par `useV2Url()`. `usePathname()` peut rendre « /chiffres » ou
+    « /v2/chiffres » selon le moment : le menu enlève un « /v2 » éventuel avant de lire l'écran ouvert.
+  - Après la connexion (`/api/auth/link?…&v=2`), on arrive sur « / » (chatteur : « /messagerie »).
+  - Présence : `PresencePing` envoie le chemin officiel (« /v2/chiffres ») même ici, pour que « Sur le chat » et
+    l'écran En direct n'aient qu'un vocabulaire.
+  - Menu sur ces adresses : pas de « Paramètres » (ce sont ceux de la version actuelle : thème, langue,
+    notifications, sans effet sur la nouvelle) ; l'icône du bas s'appelle « Ouvrir l'ancienne version ».
+  - ⚠️ Les pages de la version actuelle (« /app/… », « /pro ») répondent toujours sur bloomcrm.fr, avec l'ancien
+    menu : on y arrive par l'icône du bas, par les liens d'écrans pas encore refaits (cartes de « Site MYM », « Le
+    relier dans Compte Creator »…) ou en tapant l'adresse. Elles disparaîtront de cette adresse à mesure que leurs
+    écrans seront refaits (ajouter alors la ligne de renvoi dans `redirects()`).
 - Connexion : Discord ne connaît que l'adresse principale. Sur bloomcrm.fr, « Se connecter avec Discord » part donc
   vers `bloom.ravencrm.xyz/api/auth/discord?to=bloomcrm.fr` ; au retour de Discord, l'API ne se connecte pas là mais
   renvoie vers `https://bloomcrm.fr/api/auth/link?t=…&v=2` (`hopLink` : lien à usage unique, 1 minute), qui ouvre la
   session sur la nouvelle adresse. `to` n'est accepté que s'il est dans `V2_HOSTS`.
-- En service depuis le 25/11/2026 (vérifié de l'extérieur et dans un navigateur) : certificat obtenu, « / » ouvre
-  `/v2`, et la connexion Discord faite en vrai depuis bloomcrm.fr arrive bien sur l'accueil de la v2. La session est
+- En service depuis le 25/11/2026 (vérifié de l'extérieur et dans un navigateur) : certificat obtenu, « / » est
+  l'accueil de la nouvelle version, et la connexion Discord faite en vrai depuis bloomcrm.fr y arrive bien. La session est
   propre à chaque adresse : être connecté sur bloom.ravencrm.xyz ne connecte pas sur bloomcrm.fr. Le cookie de
   plateforme `bloom_pf` et les préférences du navigateur sont eux aussi séparés d'une adresse à l'autre.
 - Le serveur ne vérifie pas l'adresse d'où part une requête (pas de liste d'origines) : tout ce qui marche sur

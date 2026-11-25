@@ -5,13 +5,15 @@
 //  - `pf` : absent = l'écran existe sur les deux plateformes ; "of" ou "mym" = propre à une plateforme (il n'apparaît
 //    dans le menu que quand cette plateforme est choisie).
 //  - `boss` : réservé aux team leaders, managers et admins.
+//  - `manage` : réservé aux admins et managers (on y agit sur le vrai compte de la modèle).
 export type ScreenKey =
   | "messagerie" | "scripts" | "envois" | "fans" | "medias"
   | "chiffres" | "analytique" | "liens"
   | "equipe-messages" | "equipe-ventes" | "shifts" | "activite" | "en-direct" | "moderation" | "acces"
-  | "push" | "planification" | "feed" | "amis" | "bons" | "notifications" | "site-mym";
+  | "push" | "planification" | "feed" | "amis" | "bons" | "notifications" | "site-mym"
+  | "of-manager";
 export type GroupKey = "top" | "chat" | "stats" | "team" | "platform";
-export type Screen = { key: ScreenKey; label: string; nav?: string; group: GroupKey; boss?: boolean; pf?: "of" | "mym" };
+export type Screen = { key: ScreenKey; label: string; nav?: string; group: GroupKey; boss?: boolean; manage?: boolean; pf?: "of" | "mym" };
 
 export const SCREENS: Screen[] = [
   { key: "messagerie", label: "Messagerie", group: "top" },
@@ -35,6 +37,7 @@ export const SCREENS: Screen[] = [
   { key: "amis", label: "Liste d’amis", group: "platform", pf: "mym" },
   { key: "bons", label: "Bons de réduction", group: "platform", pf: "mym" },
   { key: "notifications", label: "Notifications MYM", nav: "Notifications", group: "platform", pf: "mym" },
-  { key: "site-mym", label: "Site MYM", group: "platform", boss: true, pf: "mym" },
+  { key: "site-mym", label: "Site MYM", group: "platform", boss: true, manage: true, pf: "mym" },
+  { key: "of-manager", label: "OF Manager", group: "platform", boss: true, manage: true, pf: "of" },
 ];
 export const screenOf = (key: string) => SCREENS.find((s) => s.key === key) ?? null;

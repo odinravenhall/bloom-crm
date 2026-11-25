@@ -15,4 +15,5 @@ export function setPf(p: Pf) {
   document.cookie = `bloom_pf=${p}; Path=/; Max-Age=${365 * 86400}; SameSite=Lax; Secure`;
 }
 /** Pages qui voient toutes les créatrices : l'Accueil (toute l'agence) et les pages communes (IA, équipe, réglages). */
-export const isCommonPage = (path: string) => path === "/app" || path === "/v2" || /^\/app\/(ia|equipe|creatrices|reglages|parametres)(\/|$)/.test(path);
+// (« / » = l'accueil de la nouvelle version sur bloomcrm.fr ; ailleurs, « / » ne fait que renvoyer vers une autre page.)
+export const isCommonPage = (path: string) => path === "/app" || path === "/v2" || path === "/" || /^\/app\/(ia|equipe|creatrices|reglages|parametres)(\/|$)/.test(path);

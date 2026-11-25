@@ -6,6 +6,7 @@ import { api, toast } from "@/lib/api";
 import { getPf, type Pf } from "@/lib/platform";
 import { cash, Confirm, downloadCsv, fmtDuration, int, paris, PeriodBar, usePeriod } from "../kit";
 import { errText, plural, useDebounced } from "../media/MediaKit";
+import { useV2Url } from "../nav";
 import { dateOf, ModelMenu, ThreadModal, timeOf, WhoTag, type TeamModel, type Who } from "./TeamKit";
 
 // Bloom v2 → Équipe → Messages : le MÊME écran pour OnlyFans et MYM (25/11/2026, « Constellation »). Il remplace, dans la
@@ -30,6 +31,7 @@ const TYPE_NAME: Record<Who["type"], string> = { human: "Chatteur", platform: "C
 
 /** `pf` = la plateforme affichée par cet onglet (envoyée au serveur : le cookie du menu est commun aux onglets). */
 export function V2TeamMessages({ pf }: { pf: Pf }) {
+  const link = useV2Url();
   const period = usePeriod();
   const { from, to } = period;
   const [model, setModel] = useState("");
@@ -201,7 +203,7 @@ export function V2TeamMessages({ pf }: { pf: Pf }) {
                         <td className="px-3 py-2.5 whitespace-nowrap">{timeOf(r.at)}<span className="block text-[11px] text-muted">{dateOf(r.at)}</span></td>
                         <td className="py-2 pr-2 text-right whitespace-nowrap">
                           {r.fid ? <button type="button" onClick={() => setThread(`id=${encodeURIComponent(r.id)}`)} title="Voir la conversation autour de ce message" aria-label="Voir la conversation autour de ce message" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MessagesSquare className="size-4" /></button> : null}
-                          {chatOk && r.fid ? <a href={`/v2/messagerie?c=${encodeURIComponent(`${r.cid}~${r.fid}`)}`} title="Ouvrir la conversation dans la messagerie" aria-label="Ouvrir la conversation dans la messagerie" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MessageCircle className="size-4" /></a> : null}
+                          {chatOk && r.fid ? <a href={link(`/messagerie?c=${encodeURIComponent(`${r.cid}~${r.fid}`)}`)} title="Ouvrir la conversation dans la messagerie" aria-label="Ouvrir la conversation dans la messagerie" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MessageCircle className="size-4" /></a> : null}
                           {canUnsend(r) ? <button type="button" onClick={() => setGone(r)} title="Retirer ce message chez le fan" aria-label="Retirer ce message chez le fan" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--v2-down)"><Undo2 className="size-4" /></button> : null}
                         </td>
                       </tr>

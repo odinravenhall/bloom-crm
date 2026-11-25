@@ -8,6 +8,7 @@ import { Avatar } from "@/rv/components/ui";
 import { GROUP_ICONS, groupIcon } from "@/app/app/mym/groupIcons";
 import { cash, Confirm, int, Modal, PALETTE, pct, Ring, RowMenu, Switch } from "../kit";
 import { errText, FolderRow, plural, useDebounced } from "../media/MediaKit";
+import { useV2Url } from "../nav";
 
 // Bloom v2 → Fans : le MÊME écran pour OnlyFans et MYM (25/11/2026, « Constellation »). Il remplace, dans la v2, la
 // copie d'Infloww (Smart lists) et celle de MyPulse (Abonnés / Anciens / Intéressés, Mes groupes). À gauche les
@@ -109,6 +110,7 @@ function Chips({ list, max = 3 }: { list: Chip[]; max?: number }) {
 
 /** `pf` = la plateforme affichée par cet onglet (envoyée au serveur : le cookie du menu est commun aux onglets). */
 export function V2Fans({ pf }: { pf: Pf }) {
+  const link = useV2Url();
   const modelKey = `bloom.v2.fans.model.${pf}`;
   const [model, setModel] = useState(() => {
     try {
@@ -394,7 +396,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                               <td className="px-3 whitespace-nowrap" style={{ color: r.lastFromFan ? undefined : "var(--color-muted)" }} title={r.lastAt ? (r.lastFromFan ? "Le dernier message vient du fan" : "Le dernier message vient de nous") : undefined}>{ago(r.lastAt)}</td>
                               <td className="px-3"><Chips list={r.groups} /></td>
                               <td className="pr-2 text-right">
-                                {chatOk ? <a href={`/v2/messagerie?c=${encodeURIComponent(`${mid}~${r.fanId}`)}`} onClick={(e) => e.stopPropagation()} title={`Ouvrir la conversation avec ${r.nickname || r.name}`} aria-label="Ouvrir la conversation" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MessageCircle className="size-4" /></a> : null}
+                                {chatOk ? <a href={link(`/messagerie?c=${encodeURIComponent(`${mid}~${r.fanId}`)}`)} onClick={(e) => e.stopPropagation()} title={`Ouvrir la conversation avec ${r.nickname || r.name}`} aria-label="Ouvrir la conversation" className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MessageCircle className="size-4" /></a> : null}
                               </td>
                             </tr>
                           );
@@ -441,6 +443,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
 
 /** La fiche d'un fan : ses chiffres, ses derniers achats, et ce que l'équipe note sur lui (comme dans la messagerie). */
 function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved }: { pf: Pf; creatorId: string; fanId: string; cur: string; sources: string[]; chatOk: boolean; onClose: () => void; onSaved: () => void }) {
+  const link = useV2Url();
   const [d, setD] = useState<One | null>(null);
   const [err, setErr] = useState("");
   const [v, setV] = useState({ nickname: "", notes: "", tags: "", age: "", gender: "", source: "", lang: "", promise: "" });
@@ -524,7 +527,7 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
                   ))}
                 </div>
               ) : <p className="text-[12.5px] text-muted">Aucun achat vu par Bloom.</p>}
-              {chatOk ? <a href={`/v2/messagerie?c=${encodeURIComponent(d.convId)}`} className="v2-btn mt-4 w-full" data-kind="ghost" style={{ height: 36 }}><MessageCircle className="size-4" />Ouvrir la conversation</a> : null}
+              {chatOk ? <a href={link(`/messagerie?c=${encodeURIComponent(d.convId)}`)} className="v2-btn mt-4 w-full" data-kind="ghost" style={{ height: 36 }}><MessageCircle className="size-4" />Ouvrir la conversation</a> : null}
             </div>
 
             <div className="min-w-0">
