@@ -524,6 +524,15 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
       plus ; MYM = les achats et pourboires que Bloom a vus (nets, HORS abonnements). « Abonné depuis » côté MYM :
       Substy, sinon le premier abonnement vu dans les revenus (`firstSubs`).
     - Vues rapides (rien à régler) : ont acheté, abonnés sans achat, nouveaux abonnés (7 jours), épinglés.
+    - ⚠️ Côté OnlyFans, la liste des conversations de Substy ne donne PAS la date d'abonnement (`subscribedAt` vide,
+      relevé le 25/11/2026) : seule la fiche d'un fan (`fans.get`) la donne, avec le prix, la fin d'abonnement et
+      `acquisition` (le lien de suivi qui a amené le fan). L'écran la lit à l'ouverture d'une fiche
+      (`GET /api/v2/fans/live`, une lecture Substy) ; sans aucune date connue (`dated: false`), la colonne « Abonné
+      depuis » et la vue « Nouveaux abonnés » sont cachées. Relire tous les fans OnlyFans en tâche de fond (comme
+      `mym_fans` côté MYM) n'est pas fait : des milliers d'appels à Substy, à décider avec l'agence.
+    - Les compteurs de MYM diffèrent un peu du décompte par conversation (Pauline, 25/11/2026 : 9 142 abonnés
+      annoncés, 10 215 d'après les conversations ; les deux sources par fan, MYM en direct et Substy, sont d'accord
+      entre elles). L'écran affiche le décompte par conversation et rappelle les compteurs de MYM.
   - Groupes = `fan_lists` : « manual » et « auto » existent maintenant AUSSI côté OnlyFans (`KINDS`), le formulaire
     est le même des deux côtés. Les « spend » / « newfans » de l'ancien écran Smart lists s'affichent et se suppriment
     mais ne se modifient pas ici (personne n'en avait créé). Créer / modifier / dupliquer / supprimer :

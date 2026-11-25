@@ -8,6 +8,9 @@
 //    achats et pourboires que Bloom a vus passer (nets, hors abonnements) — Substy ne donne pas la dépense d'un fan MYM.
 //  - Vues rapides (calculées, rien à régler) : ont acheté, abonnés qui n'ont jamais acheté, nouveaux abonnés, épinglés.
 //  - Groupes : ceux de `fan_lists` (fanlists.mjs), manuels ou automatiques, les mêmes des deux côtés depuis la v2.
+//  - Abonné depuis. MYM : Substy, sinon le premier abonnement vu dans les revenus. OnlyFans : la liste de Substy ne
+//    donne PAS la date (relevé le 25/11/2026) ; seule la fiche d'un fan (`fans.get`) la donne, avec le prix, la fin de
+//    l'abonnement et le lien de suivi qui a amené le fan → « /api/v2/fans/live », lu à l'ouverture d'une fiche.
 // La fiche d'un fan lit et écrit ce que la MESSAGERIE montre déjà (`fan_meta` : surnom, note, étiquettes) et le
 // profil (`mym_fan_meta` : âge, genre, provenance, langue, promesse d'achat), maintenant aussi côté OnlyFans.
 // Créer / modifier / supprimer un groupe : « /api/fanlists/save|delete|duplicate » (team leaders et plus).
@@ -117,7 +120,9 @@ function buysOf(pf, cid, r, unique) {
   return out.sort((a, b) => b.at - a.at).slice(0, 12);
 }
 
-export function v2FansRoutes({ userFrom, send, body, creators }) {
+const money = (p) => (p == null ? null : typeof p === 'object' ? (Number.isFinite(p.minor) ? p.minor : null) : Math.round((Number(p) || 0) * 100));
+
+export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
   /** La personne (toute l'équipe sauf les modèles) et ce qu'elle demande : plateforme affichée, modèles visibles. */
   const start = (req, res) => {
     const u = userFrom(req);
@@ -190,6 +195,8 @@ export function v2FansRoutes({ userFrom, send, body, creators }) {
           return { ...fanListView(x.l), count, active, spent };
         }),
         all: set.rows.length,
+        // Aucune date d'abonnement connue (OnlyFans : Substy ne la donne que fan par fan) : l'écran cache la colonne.
+        dated: set.rows.some((r) => r.since),
         stats, total: rows.length, page, per: PER, sort,
         rows: rows.slice((page - 1) * PER, page * PER).map((r) => ({ ...publicRow(r), groups: groups.filter((x) => x.members.has(r.fanId)).map(chip) })),
       });
@@ -235,6 +242,30 @@ export function v2FansRoutes({ userFrom, send, body, creators }) {
         groups: groups.map((g) => ({ ...chip(g), member: g.members.has(fanId) })),
         buys: buysOf(pf, cid, r, unique),
         convId: `${cid}~${fanId}`,
+      });
+    },
+
+    // Ce que Substy sait du fan à l'instant (une lecture par fiche ouverte) : abonnement exact, dernier achat, et le
+    // lien de suivi qui l'a amené. Rien pour une modèle ajoutée sans Substy.
+    'GET /api/v2/fans/live': async (req, res) => {
+      const a = start(req, res);
+      if (!a) return;
+      const { p, mine } = a;
+      const c = mine.find((x) => String(x.id) === String(p.get('creatorId') || ''));
+      if (!c) return send(res, 404, { error: 'Modèle inconnue sur cette plateforme' });
+      const cid = String(c.id);
+      const fanId = String(p.get('fanId') || '');
+      if (!fanData(cid).has(fanId) || cid.startsWith('mym-') || !substy) return send(res, 200, { live: null });
+      const f = await substy.fan(cid, fanId).catch(() => null);
+      if (!f || typeof f !== 'object') return send(res, 200, { live: null });
+      const s = f.subscription || {};
+      const t = (x) => Date.parse(x || '') || null;
+      send(res, 200, {
+        live: {
+          status: s.status || null, since: t(s.subscribedAt), expires: t(s.expiresAt), renews: s.isCanceledAtPeriodEnd ? null : t(s.renewsAt), canceled: !!s.isCanceledAtPeriodEnd,
+          price: money(s.price), purchases: Number(f.spend?.purchases) || 0, lastPurchase: t(f.spend?.lastPurchaseAt || f.lastPpvPurchaseAt),
+          link: f.acquisition?.link?.name ? String(f.acquisition.link.name) : null, channel: f.acquisition?.channel ? String(f.acquisition.channel) : null,
+        },
       });
     },
 

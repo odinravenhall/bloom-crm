@@ -34,8 +34,9 @@ type Data = {
   list: { id: string; name: string; avatar: string | null; fans: number }[];
   model: { id: string; name: string; avatar: string | null } | null;
   views: { id: string; name: string; count: number }[]; groups: Group[];
-  all?: number; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
+  all?: number; dated?: boolean; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
 };
+type Live = { status: string | null; since: number | null; expires: number | null; renews: number | null; canceled: boolean; price: number | null; purchases: number; lastPurchase: number | null; link: string | null; channel: string | null };
 type Official = { active: number; old: number; interested: number };
 type SortKey = "spent" | "recent" | "last" | "name" | "rate";
 type One = {
@@ -200,6 +201,8 @@ export function V2Fans({ pf }: { pf: Pf }) {
   const pages = d ? Math.max(1, Math.ceil(d.total / d.per)) : 1;
   const manual = groups.filter((g) => g.kind === "manual");
   const chatOk = pf === getPf();
+  // Dates d'abonnement connues ? (OnlyFans : Substy ne les donne que dans la fiche d'un fan.)
+  const dated = d?.dated !== false;
   const th = (k: SortKey, label: string, right = false) => {
     const on = sort.key === k;
     // Par défaut : du plus grand au plus petit (et de A à Z pour le nom) ; un second clic inverse.
@@ -267,7 +270,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                   <FolderRow on={!group} icon={<Users className="size-3.5" />} name="Tous les fans" sub={plural(d.all ?? 0, "fan connu", "fans connus")} onClick={() => pickGroup("")} />
                   <p className="px-2 pt-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">Vues rapides</p>
                   <div className="space-y-0.5">
-                    {d.views.map((v) => <FolderRow key={v.id} on={group === v.id} icon={VIEW_ICON[v.id] ?? <Users className="size-3.5" />} name={v.name} sub={v.count ? plural(v.count, "fan") : "personne"} onClick={() => pickGroup(v.id)} />)}
+                    {d.views.filter((v) => v.id !== "v:new" || dated).map((v) => <FolderRow key={v.id} on={group === v.id} icon={VIEW_ICON[v.id] ?? <Users className="size-3.5" />} name={v.name} sub={v.count ? plural(v.count, "fan") : "personne"} onClick={() => pickGroup(v.id)} />)}
                   </div>
                   <p className="flex items-center justify-between px-2 pt-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">
                     <span>Groupes</span>
@@ -319,7 +322,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                     <h2 className="truncate text-[16px] font-bold tracking-[-0.01em]">{title}</h2>
                     <p className="mt-0.5 text-[12.5px] text-muted">
                       {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : `Les fans de ${m.name} avec qui une conversation existe.`}
-                      {!group && off ? ` MYM compte ${int(off.active)} abonnés, ${int(off.old)} anciens et ${int(off.interested)} intéressés.` : ""}
+                      {!group && off ? ` Compteurs de MYM : ${int(off.active)} abonnés, ${int(off.old)} anciens, ${int(off.interested)} intéressés (son décompte diffère un peu, et il compte aussi les fans sans conversation).` : ""}
                     </p>
                   </div>
                   {st ? (
@@ -355,7 +358,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                           <th className="px-3 py-2.5 text-left font-semibold">Statut</th>
                           {th("spent", "Dépensé", true)}
                           {th("rate", "Contenus achetés", true)}
-                          {th("recent", "Abonné depuis")}
+                          {dated ? th("recent", "Abonné depuis") : null}
                           {th("last", "Dernier message")}
                           <th className="px-3 py-2.5 text-left font-semibold">Groupes</th>
                           <th className="w-10" />
@@ -385,7 +388,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                               <td className="px-3"><span className="v2-tag" style={STATUS[r.status].style}>{STATUS[r.status].one}</span></td>
                               <td className="v2-num px-3 text-right text-[13px] font-bold" style={{ color: r.total ? undefined : "var(--color-muted)" }}>{r.total ? money(r.total, cur) : "—"}</td>
                               <td className="v2-num px-3 text-right" title={r.ppvSent ? `${r.ppvBought} contenus payants achetés sur ${r.ppvSent} envoyés` : "Aucun contenu payant envoyé à ce fan (vu par Bloom)"}>{r.ppvSent ? <>{r.ppvBought} / {r.ppvSent}<span className="ml-1.5 text-muted">{pct(r.ppvBought, r.ppvSent)} %</span></> : <span className="text-muted">—</span>}</td>
-                              <td className="px-3 whitespace-nowrap text-muted">{day(r.since)}</td>
+                              {dated ? <td className="px-3 whitespace-nowrap text-muted">{day(r.since)}</td> : null}
                               <td className="px-3 whitespace-nowrap" style={{ color: r.lastFromFan ? undefined : "var(--color-muted)" }} title={r.lastAt ? (r.lastFromFan ? "Le dernier message vient du fan" : "Le dernier message vient de nous") : undefined}>{ago(r.lastAt)}</td>
                               <td className="px-3"><Chips list={r.groups} /></td>
                               <td className="pr-2 text-right">
@@ -441,6 +444,14 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
   const [v, setV] = useState({ nickname: "", notes: "", tags: "", age: "", gender: "", source: "", lang: "", promise: "" });
   const [mine, setMine] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState<Live | null>(null);
+  useEffect(() => {
+    let off = false;
+    api<{ live: Live | null }>("GET", `/api/v2/fans/live?pf=${pf}&creatorId=${encodeURIComponent(creatorId)}&fanId=${encodeURIComponent(fanId)}`).then((r) => void (!off && setLive(r.live))).catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [pf, creatorId, fanId]);
   useEffect(() => {
     let off = false;
     api<One>("GET", `/api/v2/fans/one?pf=${pf}&creatorId=${encodeURIComponent(creatorId)}&fanId=${encodeURIComponent(fanId)}`)
@@ -492,8 +503,10 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
               </div>
               <div className="mt-3">
                 {line(pf === "mym" ? "Dépensé (hors abonnements)" : "Dépensé", f.total ? money(f.total, cur) : "rien pour l’instant")}
-                {line("Contenus payants achetés", f.ppvSent ? `${f.ppvBought} sur ${f.ppvSent} (${pct(f.ppvBought, f.ppvSent)} %)` : "aucun envoyé")}
-                {line("Abonné depuis", f.since ? `${day(f.since)}` : "date inconnue")}
+                {line("Contenus payants achetés", f.ppvSent ? `${f.ppvBought} sur ${f.ppvSent} (${pct(f.ppvBought, f.ppvSent)} %)` : "aucun vu par Bloom")}
+                {line("Abonné depuis", live?.since || f.since ? day(live?.since || f.since) : "date inconnue")}
+                {live && f.status === "active" && (live.price != null || live.renews || live.expires) ? line("Abonnement", [live.price != null ? (live.price ? money(live.price, cur) : "gratuit") : "", live.canceled ? `s’arrête le ${day(live.expires)}` : live.renews && live.renews - Date.now() < 400 * 864e5 ? `renouvelé le ${day(live.renews)}` : ""].filter(Boolean).join(" · ") || "—") : null}
+                {live?.link ? line("Arrivé par le lien", live.link) : null}
                 {line("Dernier message", f.lastAt ? `${ago(f.lastAt)} · ${f.lastFromFan ? "de lui" : "de nous"}` : "—")}
               </div>
               <p className="v2-label mt-4">Derniers achats</p>
