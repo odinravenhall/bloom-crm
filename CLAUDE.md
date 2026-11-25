@@ -46,6 +46,8 @@ Procédures relevées sur de vrais envois (21/11/2026) :
 | `revenue.overview` (dashboard) | `creatorIds: [] (vide = agence), startDate, endDate (AAAA-MM-JJ), earningsMode: "net"` → `total, messages, tips, subscriptions, posts, totalNewSubs` (+ `…Delta` en %, `…Charts` par jour) |
 | `agency.getRecentSales` | aucune entrée → `[{id, type: ppv/tip/post, createdAt, price: "€11.29", userId, userName, creatorId, creatorName}]` |
 | `creators.fans.getFanAiLogs` | `creatorId, fanId, limit` → `{items: [{action, reason, employee{name}, createdAt}]}` |
+| `creators.trackingLinks.getTrackingLinks` | `creatorId, limit, offset` → `{trackingLinks: [{name, url, clicks, subscribers, revenue (brut), totalRevenue (net), promoCost, source, listId, isActive, lastSyncAt…}], total, hasMore}` (liens de suivi d'OnlyFans, 25/11/2026) |
+| `creators.trackingLinks.getTrackingLinksStats` | `creatorId, startDate, endDate` → `{metrics, chartData: [par jour], comparison: {previousPeriod}}` |
 
 Vus dans le code du site (entrées à relever) : `chats.list`, `chats.messages`, `messages.markRead|markUnread|unsend`,
 `creators.onMessage` (abonnement temps réel — transport à confirmer), `creators.fans.getHandoffSummaries`,
@@ -429,22 +431,30 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     (gratuits compris) viennent de Substy, par une route à part car lente : `GET /api/v2/analytics/subs`.
 - Liens de suivi v2 (`v2/stats/V2Links.tsx`, `app/v2links.mjs`, 25/11/2026) : un écran pour les deux plateformes, à
   la place des copies de MyPulse (`MymTrack`) et d'Infloww (`TrackingLinks`), qui restent dans la version actuelle.
-  - Les liens ne sont PAS les mêmes : OnlyFans = liens faits par Bloom (`tracking.mjs`, « /l/<code> », clics comptés
-    par Bloom, abonné rattaché au dernier clic des 30 min d'avant, revenus = dépenses vues chez Substy, net = brut ×
-    0,8) ; MYM = liens du compte MYM (`mymtrack.mjs`, totaux lus sur le site, un relevé par jour).
+  - Des deux côtés ce sont les VRAIS liens de la plateforme, que Bloom lit (demande de l'agence, 25/11/2026 : voir
+    dans Bloom tout ce que montre le tableau « Tracking links » d'Infloww) :
+    - OnlyFans = les liens de suivi d'OnlyFans (« onlyfans.com/<pseudo>/c123 », les mêmes que dans Infloww), que
+      Substy synchronise : `creators.trackingLinks.getTrackingLinks { creatorId, limit, offset }` (name, url,
+      isActive, source, listId, clicks, subscribers, revenue = BRUT en $, totalRevenue = NET, promoCost, lastSyncAt,
+      syncError, reversals) et `creators.trackingLinks.getTrackingLinksStats { creatorId, startDate, endDate }`
+      (metrics de la période, chartData par jour, comparison.previousPeriod), relevés sur app.substy.ai/tracking-links.
+      Réponses de Substy gardées 5 min (`fresh=1` les redemande). Substy ne donne PAS les « fans qui ont dépensé »
+      ni les tags d'Infloww ; le détail par jour n'existe que tous liens réunis. Bloom ne crée pas ces liens.
+    - MYM = liens du compte MYM (`mymtrack.mjs`, totaux lus sur le site, un relevé par jour) : le détail par jour =
+      différence entre deux relevés, donc rien avant le lendemain du premier relevé (`since`, `covered`,
+      `prevCovered` ; un lien créé après le début des relevés part de zéro). `fresh=1` relit le site de MYM.
+    - Les liens « /l/<code> » faits par Bloom (`tracking.mjs`) ne sont plus montrés dans la v2 (personne n'en avait
+      créé) ; ils restent dans la version actuelle (`/app/tracking`).
   - `GET /api/v2/links?pf&from&to[&creatorId][&mode=gross][&fresh=1]` (team leaders et plus) ne fait que LIRE, dans
-    une même forme : totaux de chaque lien depuis sa création + clics / abonnés / revenus par jour sur la période et
-    celle d'avant. MYM : le détail par jour = différence entre deux relevés, donc rien avant le lendemain du premier
-    relevé (`since`, `covered`, `prevCovered` ; un lien créé après le début des relevés part de zéro). `fresh=1` relit
-    le site de MYM ; sans lui la route répond avec le dernier relevé (toutes les 10 min). Pas de mémoire de 20 s ici.
-  - Écrire passe par les routes d'avant : OnlyFans `POST /api/track/links` (créer / modifier), `/api/track/links/active`,
-    `GET /api/track/details` ; MYM `/api/mym/track/create|delete|share|shares|share/delete`. ⚠️ Créer et supprimer un
+    une même forme : totaux de chaque lien depuis sa création, `daily` = [clics, abonnés, revenus] par jour de la
+    période (tous les liens), `period` et `prev`. Si Substy ne répond pas, la route répond quand même avec `error`.
+  - Écrire, côté MYM seulement : `/api/mym/track/create|delete|share|shares|share/delete`. ⚠️ Créer et supprimer un
     lien MYM agissent sur le vrai compte et leurs formats n'ont jamais été vérifiés sur une vraie action.
-  - L'écran : colonne des modèles (abonnés gagnés par leurs liens), quatre cartes « sur la période » avec le total
-    depuis la création, graphique par jour (revenus / clics / abonnés, une couleur par lien), tableau des liens triable
-    (colonnes communes + coût, bénéfice, ROI, acheteurs côté OnlyFans ; achats côté MYM), fenêtres pour créer, modifier,
-    désactiver, voir les fans d'un lien (OnlyFans), supprimer et partager (MYM). La page publique `/partage/<jeton>`
-    n'est pas encore redessinée.
+  - L'écran : colonne des modèles (abonnés gagnés par leurs liens), quatre cartes (total depuis la création en grand,
+    période en dessous), graphique par jour (revenus / clics / abonnés), tableau des liens triable avec l'adresse à
+    copier. Bouton « Toutes les colonnes » (choix gardé) : côté OnlyFans coût, bénéfice, revenu et coût par clic, coût
+    par abonné, ROI, remboursés, source, liste, dernière mise à jour ; côté MYM part des abonnements et des contenus.
+    Fenêtres MYM : créer, supprimer, partager. La page publique `/partage/<jeton>` n'est pas encore redessinée.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal`, `PALETTE`,
   `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ; l'accueil a encore ses copies.

@@ -215,6 +215,20 @@ export class SubstySession {
   massMessages(creatorId, page = 1, pageSize = 20) { return this.call('creators.massMessage.list', { creatorId, page, pageSize }); }
   /** Listes de fans de la créatrice (Fans, Recent, paliers de dépense…) avec leur nombre de fans. */
   fanLists(creatorId) { return this.call('fans.lists.list', { creatorId, limit: 100, isChat: false }); }
+  // Liens de suivi d'OnlyFans, que Substy synchronise avec OnlyFans (formats relevés le 25/11/2026 sur /tracking-links,
+  // détail en tête de v2links.mjs) : tous les liens d'une créatrice, par pages de 100 ; et les chiffres par jour d'une
+  // période (tous les liens ensemble, avec la période d'avant). Lecture seule.
+  async trackingLinks(creatorId) {
+    const out = [];
+    for (let offset = 0; offset < 3000; offset += 100) {
+      const r = await this.call('creators.trackingLinks.getTrackingLinks', { creatorId, limit: 100, offset });
+      const list = r?.trackingLinks || [];
+      out.push(...list);
+      if (!r?.hasMore || !list.length) break;
+    }
+    return out;
+  }
+  trackingStats(creatorId, startDate, endDate) { return this.call('creators.trackingLinks.getTrackingLinksStats', { creatorId, startDate, endDate }); }
   /** Nouveau message groupé. `scheduledAt` (ISO) et `autoUnsendAfterSeconds` seulement s'ils sont donnés, comme le site. */
   createMass(creatorId, { text, price = 0, mediaIds = [], includedListIds = [], excludedListIds = [], userIds = [], includeOnlineFans = false, scheduledAt, autoUnsendAfterSeconds }) {
     const input = { creatorId, text, lockedText: false, price, mediaIds, previewIds: [], includedListIds, excludedListIds, userIds, includeOnlineFans, tags: [] };

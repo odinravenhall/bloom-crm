@@ -1,97 +1,100 @@
 // Bloom v2 → Liens de suivi : UN écran pour OnlyFans et MYM (25/11/2026, design « Constellation »).
-// Il remplace, dans la v2, la copie de MyPulse (MymTrack) et celle d'Infloww (TrackingLinks). Les liens eux-mêmes ne
-// changent pas, parce que les deux plateformes ne marchent pas pareil :
-//  - OnlyFans : ce sont des liens FAITS PAR BLOOM (tracking.mjs, « /l/<code> »). Bloom compte les clics, attribue chaque
-//    nouvel abonné au dernier clic (30 min avant) et additionne ses dépenses vues chez Substy (brut ; net = brut × 0,8) ;
-//  - MYM : ce sont les liens de MYM (mymtrack.mjs). Bloom lit leurs TOTAUX sur le site et en garde un relevé par jour :
+// Il remplace, dans la v2, la copie de MyPulse (MymTrack) et celle d'Infloww (TrackingLinks). Des deux côtés ce sont les
+// VRAIS liens de la plateforme, que Bloom ne fait que lire :
+//  - OnlyFans : les liens de suivi d'OnlyFans (« onlyfans.com/<pseudo>/c123 », les mêmes que montre Infloww), que Substy
+//    synchronise avec OnlyFans. Relevé le 25/11/2026 sur app.substy.ai/tracking-links :
+//      `creators.trackingLinks.getTrackingLinks { creatorId, limit, offset }` → { trackingLinks, total, hasMore } ; par
+//      lien : name, url, isActive, source, listId, clicks, subscribers, conversionRate, revenue (BRUT, en $),
+//      totalRevenue (NET), promoCost, lastSyncAt, syncStatus, syncError, reversals { refundedAmount, chargebackAmount },
+//      createdAt (= le jour où Substy a vu le lien pour la première fois, pas sa création chez OnlyFans) ;
+//      `creators.trackingLinks.getTrackingLinksStats { creatorId, startDate, endDate }` → metrics (période),
+//      chartData (un point par jour : clicks, subscribers, revenue), comparison.previousPeriod.
+//    Substy ne donne PAS les « fans qui ont dépensé » ni les tags d'Infloww. Créer un lien se fait chez OnlyFans (ou
+//    dans Substy / Infloww) : Bloom ne les crée pas.
+//  - MYM : les liens du compte MYM (mymtrack.mjs). Bloom lit leurs TOTAUX sur le site et en garde un relevé par jour :
 //    le détail par jour n'existe donc que depuis le premier relevé (24/11/2026), par différence entre deux relevés.
-// Cette route ne fait que LIRE, dans une même forme pour les deux plateformes : totaux de chaque lien depuis sa création,
-// et ce qui s'est passé jour par jour sur la période (et la période d'avant). Montants en CENTIMES de la devise de la
-// plateforme. Créer, modifier, activer, supprimer, partager : les routes existantes de tracking.mjs et mymtrack.mjs.
+// (Les liens « /l/<code> » faits par Bloom, tracking.mjs, restent dans la version actuelle ; la v2 ne les montre plus :
+// personne n'en avait créé, et ceux d'OnlyFans disent exactement d'où vient chaque abonné.)
+// Cette route ne fait que LIRE, dans une même forme pour les deux plateformes. Montants en CENTIMES de la devise de la
+// plateforme. Créer / supprimer / partager côté MYM : les routes de mymtrack.mjs.
 import { all } from './store.mjs';
 import { isBoss, seesAll } from './team.mjs';
-import { parisDay, parisMidnight } from './revenue.mjs';
-import { SOURCES } from './tracking.mjs';
+import { parisDay } from './revenue.mjs';
 import { syncTrack, trackState } from './mymtrack.mjs';
 import { askOf } from './v2stats.mjs';
 
 const DAY = 864e5;
-const FEE = 0.8; // net OnlyFans = brut × 0,8, comme dans tracking.mjs
+const FEE = 0.8; // net OnlyFans = brut × 0,8
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const zero = () => ({ clicks: 0, subs: 0, revenue: 0 });
-const J = (s, d) => {
-  try {
-    return JSON.parse(s ?? '');
-  } catch {
-    return d;
-  }
-};
+const cents = (x) => Math.round((Number(x) || 0) * 100);
 
-/** Liens OnlyFans (faits par Bloom) d'une modèle : totaux, et clics / abonnés / dépenses rangés par jour de [days]. */
-function ofLinks(cid, days, gross) {
-  const len = days.length / 2; // `days` = période d'avant puis période
-  const mid = days.map(parisMidnight);
-  mid.push(parisMidnight(addDay(days[days.length - 1], 1)));
-  const lo = mid[0];
-  const hi = mid[mid.length - 1];
-  const idxOf = (at) => {
-    let a = 0;
-    let b = mid.length - 1;
-    while (b - a > 1) {
-      const m = (a + b) >> 1;
-      if (mid[m] <= at) a = m;
-      else b = m;
-    }
-    return a;
+// ---------------------------------------------------------------- OnlyFans : les liens d'OnlyFans, lus chez Substy
+// Substy ne relit OnlyFans qu'une à deux fois par heure : ses réponses sont gardées quelques minutes (la demande en
+// cours est partagée, pour ne pas interroger Substy deux fois de suite pour la même chose).
+const memo = new Map(); // clé → { at, value (promesse) }
+function kept(key, ttl, fresh, make) {
+  const hit = memo.get(key);
+  if (hit && !fresh && Date.now() - hit.at < ttl) return hit.value;
+  const value = Promise.resolve().then(make);
+  if (memo.size > 600) memo.clear();
+  memo.set(key, { at: Date.now(), value });
+  value.catch(() => memo.get(key)?.value === value && memo.delete(key));
+  return value;
+}
+const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('Substy ne répond pas')), ms))]);
+
+/** Un lien de Substy → la forme commune de l'écran. `lists` : nom des listes de fans (id → nom). */
+function ofLink(l, gross, lists) {
+  return {
+    id: String(l.id), name: l.name || 'Lien', url: l.url || null, created: l.createdAt ? parisDay(Date.parse(l.createdAt)) : null, active: l.isActive !== false,
+    clicks: Number(l.clicks) || 0, subs: Number(l.subscribers) || 0,
+    revenue: gross ? cents(l.revenue) : l.totalRevenue != null ? cents(l.totalRevenue) : Math.round(cents(l.revenue) * FEE),
+    items: null, parts: null,
+    source: l.source || null, cost: cents(l.promoCost), listName: l.listId ? lists.get(String(l.listId)) || 'liste' : null,
+    lastSync: l.lastSyncAt ? Date.parse(l.lastSyncAt) || null : null, syncError: l.syncError || null,
+    refunds: cents((Number(l.reversals?.refundedAmount) || 0) + (Number(l.reversals?.chargebackAmount) || 0)),
+    days: null,
   };
-  const k = gross ? 1 : FEE;
-  const rows = all('SELECT * FROM track_links WHERE creator_id = ? ORDER BY created_at DESC', cid);
-  // Par lien : totaux (les revenus sont additionnés en brut, convertis à la fin) et un tableau par jour.
-  const acc = new Map(rows.map((l) => [l.id, { clicks: 0, subs: 0, gross: 0, buyers: 0, day: days.map(() => [0, 0, 0]) }]));
-  for (const r of all('SELECT link_id, COUNT(*) AS n FROM track_clicks WHERE creator_id = ? GROUP BY link_id', cid)) if (acc.has(r.link_id)) acc.get(r.link_id).clicks = r.n;
-  for (const r of all('SELECT link_id, at FROM track_clicks WHERE creator_id = ? AND at >= ? AND at < ?', cid, lo, hi)) {
-    const a = acc.get(r.link_id);
-    if (a) a.day[idxOf(r.at)][0]++;
-  }
-  const fans = all('SELECT fan_id, link_id, subscribed_at FROM track_fans WHERE creator_id = ?', cid);
-  const fanOf = new Map();
-  for (const f of fans) {
-    const a = acc.get(f.link_id);
-    if (!a) continue;
-    fanOf.set(String(f.fan_id), { a, since: f.subscribed_at || 0, spent: 0 });
-    a.subs++;
-    const t = f.subscribed_at || 0;
-    if (t >= lo && t < hi) a.day[idxOf(t)][1]++;
-  }
-  // Dépenses des fans arrivés par un lien, depuis leur abonnement (ventes vues chez Substy).
-  if (fanOf.size) {
-    for (const s of all('SELECT fan_id, at, gross FROM rv_live WHERE creator_id = ? AND fan_id IS NOT NULL', cid)) {
-      const f = fanOf.get(String(s.fan_id));
-      if (!f || s.at < f.since) continue;
-      f.a.gross += s.gross;
-      f.spent += s.gross;
-      if (s.at >= lo && s.at < hi) f.a.day[idxOf(s.at)][2] += s.gross;
-    }
-    for (const f of fanOf.values()) if (f.spent > 0) f.a.buyers++;
-  }
-  const links = rows.map((l) => {
-    const a = acc.get(l.id);
-    const sum = (from, to) => a.day.slice(from, to).reduce((x, d) => ({ clicks: x.clicks + d[0], subs: x.subs + d[1], revenue: x.revenue + d[2] }), zero());
-    const money = (x) => ({ ...x, revenue: Math.round(x.revenue * k) });
-    return {
-      id: String(l.id), name: l.name, url: null, code: l.code, dest: l.dest, created: parisDay(l.created_at), active: !!l.active,
-      clicks: a.clicks, subs: a.subs, revenue: Math.round(a.gross * k), buyers: a.buyers, items: null, parts: null,
-      source: l.source, tags: J(l.tags, []), cost: Math.round((l.cost || 0) * 100), listId: l.list_id || null, listName: l.list_name || null, createdBy: l.created_by || null,
-      period: money(sum(len, len * 2)), prev: money(sum(0, len)),
-      days: a.day.slice(len).map((d) => [d[0], d[1], Math.round(d[2] * k)]),
-    };
-  });
-  return { links, since: null, covered: true, prevCovered: true, at: null };
 }
 
+async function ofLinks(substy, cid, cur, gross, fresh) {
+  const k = gross ? 1 : FEE;
+  const list = await kept(`links|${cid}`, 5 * 60_000, fresh, () => substy.trackingLinks(cid));
+  let lists = new Map();
+  if (list.some((l) => l.listId)) lists = await kept(`lists|${cid}`, 15 * 60_000, false, async () => new Map(((await substy.fanLists(cid))?.items || []).map((x) => [String(x.id), String(x.name || '')]))).catch(() => new Map());
+  const links = list.map((l) => ofLink(l, gross, lists));
+  // La période : Substy donne un point par jour pour tous les liens ensemble, et la période d'avant.
+  let error = null;
+  const stats = await kept(`stats|${cid}|${cur[0]}|${cur[cur.length - 1]}`, 5 * 60_000, fresh, () => substy.trackingStats(cid, cur[0], cur[cur.length - 1])).catch((e) => ((error = `Substy n’a pas donné le détail par jour (${e.message}).`), null));
+  const byDate = new Map((stats?.chartData || []).map((d) => [String(d.date).slice(0, 10), d]));
+  const daily = cur.map((d) => {
+    const x = byDate.get(d);
+    return [Number(x?.clicks) || 0, Number(x?.subscribers) || 0, Math.round(cents(x?.revenue) * k)];
+  });
+  const trio = (m) => ({ clicks: Number(m?.clicks) || 0, subs: Number(m?.subscribers) || 0, revenue: Math.round(cents(m?.revenue) * k) });
+  const before = stats?.comparison?.previousPeriod || null;
+  return {
+    links, daily, error,
+    period: stats?.metrics ? trio(stats.metrics) : daily.reduce((x, d) => ({ clicks: x.clicks + d[0], subs: x.subs + d[1], revenue: x.revenue + d[2] }), zero()),
+    prev: trio(before), since: null, covered: !!stats, prevCovered: !!before,
+    at: links.reduce((m, l) => Math.max(m, l.lastSync || 0), 0) || null,
+  };
+}
+
+/** Colonne des modèles côté OnlyFans : une demande à Substy par modèle, gardée dix minutes (zéro si Substy ne répond pas). */
+async function ofRanking(substy, mine) {
+  return Promise.all(mine.map(async (c) => {
+    const list = await within(kept(`links|${c.id}`, 10 * 60_000, false, () => substy.trackingLinks(String(c.id))), 8000).catch(() => null);
+    return { id: String(c.id), name: c.name, avatar: c.avatar || null, links: list ? list.filter((l) => l.isActive !== false).length : 0, subs: (list || []).reduce((a, l) => a + (Number(l.subscribers) || 0), 0), clicks: (list || []).reduce((a, l) => a + (Number(l.clicks) || 0), 0) };
+  }));
+}
+
+// ---------------------------------------------------------------- MYM : les liens du compte, relevés par Bloom
 /**
  * Liens MYM d'une modèle : totaux lus chez MYM, et par jour la DIFFÉRENCE entre deux relevés (rien avant le premier
  * relevé d'un lien qui existait déjà : sa base n'est pas connue ; un lien créé après le début des relevés part de zéro).
+ * `days` = la période d'avant puis la période.
  */
 function mymLinks(cid, days) {
   const len = days.length / 2;
@@ -103,6 +106,7 @@ function mymLinks(cid, days) {
     if (!snaps.has(s.link_id)) snaps.set(s.link_id, []);
     snaps.get(s.link_id).push(s);
   }
+  const total = days.map(() => [0, 0, 0]);
   const links = rows.map((l) => {
     const day = days.map(() => [0, 0, 0]);
     let before = null;
@@ -113,77 +117,80 @@ function mymLinks(cid, days) {
       if (base && i !== undefined) day[i] = [Math.max(0, (s.clicks || 0) - (base.clicks || 0)), Math.max(0, (s.subs || 0) - (base.subs || 0)), Math.max(0, (s.total || 0) - (base.total || 0))];
       before = s;
     }
-    const sum = (from, to) => day.slice(from, to).reduce((x, d) => ({ clicks: x.clicks + d[0], subs: x.subs + d[1], revenue: x.revenue + d[2] }), zero());
+    day.forEach((d, i) => d.forEach((v, j) => (total[i][j] += v)));
     return {
-      id: String(l.link_id), name: l.name, url: l.url || null, code: null, dest: null, created: l.created || null, active: true,
-      clicks: l.clicks || 0, subs: l.subs || 0, revenue: l.total || 0, buyers: null, items: l.ppv_n || 0, parts: { subs: l.sub_rev || 0, content: l.ppv || 0 },
-      source: null, tags: [], cost: 0, listId: null, listName: null, createdBy: null,
-      period: sum(len, len * 2), prev: sum(0, len),
+      id: String(l.link_id), name: l.name, url: l.url || null, created: l.created || null, active: true,
+      clicks: l.clicks || 0, subs: l.subs || 0, revenue: l.total || 0, items: l.ppv_n || 0, parts: { subs: l.sub_rev || 0, content: l.ppv || 0 },
+      source: null, cost: 0, listName: null, lastSync: null, syncError: null, refunds: 0,
       days: day.slice(len),
     };
   });
-  // La période n'est entièrement connue que si un relevé existait avant son premier jour.
-  return { links, since, covered: !!since && since < days[len], prevCovered: !!since && since < days[0], at: rows.reduce((m, l) => Math.max(m, l.at || 0), 0) || null };
+  const sum = (from, to) => total.slice(from, to).reduce((x, d) => ({ clicks: x.clicks + d[0], subs: x.subs + d[1], revenue: x.revenue + d[2] }), zero());
+  return {
+    links, daily: total.slice(len), error: null, period: sum(len, len * 2), prev: sum(0, len), since,
+    // La période n'est entièrement connue que si un relevé existait avant son premier jour.
+    covered: !!since && since < days[len], prevCovered: !!since && since < days[0],
+    at: rows.reduce((m, l) => Math.max(m, l.at || 0), 0) || null,
+  };
 }
 
-/** Ce que montre l'écran pour une modèle : ses liens, la période jour par jour, et les totaux de la période. */
-export function v2Links({ pf, creator, from, to, gross }) {
+/** Colonne des modèles côté MYM : nombre de liens, abonnés et clics depuis toujours (une requête légère). */
+function mymRanking(mine) {
+  const by = new Map(all('SELECT creator_id, COUNT(*) AS n, SUM(subs) AS subs, SUM(clicks) AS clicks FROM mym_track_links WHERE COALESCE(gone, 0) = 0 GROUP BY creator_id').map((r) => [String(r.creator_id), { links: r.n, subs: r.subs || 0, clicks: r.clicks || 0 }]));
+  return mine.map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null, ...(by.get(String(c.id)) || { links: 0, subs: 0, clicks: 0 }) }));
+}
+
+/**
+ * Ce que montre l'écran pour une modèle : ses liens (totaux depuis leur création), la période jour par jour (`daily` :
+ * [clics, abonnés, revenus] de tous ses liens) et les totaux de la période et de celle d'avant.
+ */
+export async function v2Links({ pf, creator, from, to, gross, substy, fresh = false }) {
   const cid = String(creator.id);
   const cur = [];
   for (let d = from; d <= to; d = addDay(d, 1)) cur.push(d);
-  const len = cur.length;
-  const days = [];
-  for (let d = addDay(from, -len); d <= to; d = addDay(d, 1)) days.push(d);
-  const data = pf === 'mym' ? mymLinks(cid, days) : ofLinks(cid, days, gross);
-  const add = (k) => data.links.reduce((x, l) => ({ clicks: x.clicks + l[k].clicks, subs: x.subs + l[k].subs, revenue: x.revenue + l[k].revenue }), zero());
-  return { ...data, days: cur, period: add('period'), prev: add('prev') };
-}
-
-/** Colonne des modèles : nombre de liens et abonnés gagnés par les liens, depuis toujours (deux requêtes légères). */
-function ranking(pf, mine) {
-  const by = new Map();
-  if (pf === 'mym') for (const r of all('SELECT creator_id, COUNT(*) AS n, SUM(subs) AS subs, SUM(clicks) AS clicks FROM mym_track_links WHERE COALESCE(gone, 0) = 0 GROUP BY creator_id')) by.set(String(r.creator_id), { links: r.n, subs: r.subs || 0, clicks: r.clicks || 0 });
-  else {
-    for (const r of all('SELECT creator_id, COUNT(*) AS n FROM track_links WHERE active = 1 GROUP BY creator_id')) by.set(String(r.creator_id), { links: r.n, subs: 0, clicks: 0 });
-    for (const r of all('SELECT creator_id, COUNT(*) AS n FROM track_fans GROUP BY creator_id')) by.set(String(r.creator_id), { ...(by.get(String(r.creator_id)) || { links: 0, clicks: 0 }), subs: r.n });
-    for (const r of all('SELECT creator_id, COUNT(*) AS n FROM track_clicks GROUP BY creator_id')) by.set(String(r.creator_id), { ...(by.get(String(r.creator_id)) || { links: 0, subs: 0 }), clicks: r.n });
+  if (pf === 'mym') {
+    const days = [];
+    for (let d = addDay(from, -cur.length); d <= to; d = addDay(d, 1)) days.push(d);
+    return { ...mymLinks(cid, days), days: cur };
   }
-  return mine
-    .map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null, ...(by.get(String(c.id)) || { links: 0, subs: 0, clicks: 0 }) }))
-    .sort((a, b) => b.subs - a.subs || b.clicks - a.clicks || b.links - a.links || a.name.localeCompare(b.name, 'fr'));
+  return { ...(await ofLinks(substy, cid, cur, gross, fresh)), days: cur };
 }
 
-export function v2LinksRoutes({ userFrom, send, creators }) {
+export function v2LinksRoutes({ userFrom, send, creators, substy }) {
   return {
     // Les liens de suivi d'une modèle : ?pf=of|mym, ?from=&to= (jours de Paris), &creatorId= (sinon la première de la
-    // colonne), &mode=gross (OnlyFans), &fresh=1 (MYM : relire les liens sur le site de MYM avant de répondre).
+    // colonne), &mode=gross (OnlyFans), &fresh=1 (relire tout de suite : le site de MYM, ou Substy côté OnlyFans).
     'GET /api/v2/links': async (req, res) => {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
       if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' });
       const { p, pf, from, to, today, mine, gross } = askOf(u, req, creators);
       const asked = p.get('creatorId') || '';
-      const list = ranking(pf, mine);
+      const fresh = p.get('fresh') === '1';
+      const list = (pf === 'mym' ? mymRanking(mine) : await ofRanking(substy, mine)).sort((a, b) => b.subs - a.subs || b.clicks - a.clicks || b.links - a.links || a.name.localeCompare(b.name, 'fr'));
       const creator = mine.find((c) => String(c.id) === asked) || mine.find((c) => String(c.id) === list[0]?.id) || null;
       const base = {
         platform: pf, currency: pf === 'of' ? 'USD' : 'EUR', mode: gross ? 'gross' : 'net', canGross: pf === 'of', from, to, today,
         all: mine.map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })), list,
-        // OnlyFans : liens de Bloom, les team leaders les gèrent. MYM : liens du compte de la modèle, admins et managers.
-        native: pf === 'mym', canEdit: pf === 'mym' ? seesAll(u) : true,
+        // MYM : admins et managers créent et suppriment les liens du compte. OnlyFans : Bloom ne fait que lire.
+        canEdit: pf === 'mym' && seesAll(u),
       };
       if (!creator) return send(res, 200, { ...base, model: null });
       const cid = String(creator.id);
-      let error = null;
-      if (pf === 'mym' && p.get('fresh') === '1') await syncTrack(cid).catch((e) => (error = e.message));
-      const st = pf === 'mym' ? trackState(cid) : null;
-      // Pas de mémoire ici : après une création ou une suppression, l'écran doit voir le changement tout de suite.
-      const data = v2Links({ pf, creator, from, to, gross });
-      send(res, 200, {
-        ...base, ...data,
-        model: { id: cid, name: creator.name, avatar: creator.avatar || null },
-        at: st?.ok || data.at || null, error: error || st?.error || null,
-        ...(pf === 'of' ? { sources: SOURCES, tags: all('SELECT name FROM track_tags ORDER BY name').map((r) => r.name), profile: creator.username ? `https://onlyfans.com/${creator.username}` : 'https://onlyfans.com/' } : {}),
-      });
+      const model = { id: cid, name: creator.name, avatar: creator.avatar || null };
+      if (pf === 'mym') {
+        let error = null;
+        if (fresh) await syncTrack(cid).catch((e) => (error = e.message));
+        const st = trackState(cid);
+        const data = await v2Links({ pf, creator, from, to, gross });
+        return send(res, 200, { ...base, ...data, model, at: st?.ok || data.at, error: error || st?.error || null });
+      }
+      try {
+        send(res, 200, { ...base, ...(await v2Links({ pf, creator, from, to, gross, substy, fresh })), model });
+      } catch (e) {
+        // Substy n'a pas donné les liens (fonction absente de l'abonnement, compte déconnecté…) : l'écran le dit.
+        send(res, 200, { ...base, model, links: [], daily: [], days: [], period: zero(), prev: zero(), since: null, covered: false, prevCovered: false, at: null, error: `Substy n’a pas donné les liens de suivi de cette modèle : ${e.message}` });
+      }
     },
   };
 }
