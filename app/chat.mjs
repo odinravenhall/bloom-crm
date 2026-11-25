@@ -494,6 +494,17 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
   // Connexion + accès à la créatrice demandée (un chatteur ne voit que ses créatrices).
+  // Envois groupés : le droit porte sur la MODÈLE, pas sur la plateforme choisie dans le menu (cookie commun à tous
+  // les onglets : sans ça, un envoi préparé dans un onglet est refusé dès qu'un autre onglet passe sur MYM).
+  const authM = (req, res, creatorId) => {
+    const u = auth(req, res);
+    if (!u) return null;
+    if (!canChat(u) || !canSee({ ...u, pf: null }, creatorId)) {
+      send(res, 403, { error: 'Tu n’as pas accès à cette créatrice. Demande à un manager.' });
+      return null;
+    }
+    return u;
+  };
   const authC = (req, res, creatorId) => {
     const u = auth(req, res);
     if (!u) return null;
@@ -765,7 +776,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     // ------------------------------------------------ envois groupés
     'GET /api/mass': async (req, res) => {
       const p = q(req);
-      if (!authC(req, res, p.get('creatorId'))) return;
+      if (!authM(req, res, p.get('creatorId'))) return;
       const page = Math.max(1, Number(p.get('page')) || 1);
       const r = (await substy.massMessages(String(p.get('creatorId')), page, 20)) || {};
       const money = (m) => (m == null ? null : Number(m) / 100);
@@ -801,7 +812,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     // Envoi groupé : réservé aux admins, managers et team leaders (un envoi touche des milliers de fans).
     'POST /api/mass': async (req, res) => {
       const b = await body(req);
-      const u = authC(req, res, b.creatorId);
+      const u = authM(req, res, b.creatorId);
       if (!u) return;
       if (u.role === 'chatter') return send(res, 403, { error: 'Envoi groupé réservé aux team leaders, managers et admins.' });
       const cid = String(b.creatorId);
@@ -836,7 +847,7 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
     },
     'GET /api/fan-lists': async (req, res) => {
       const p = q(req);
-      if (!authC(req, res, p.get('creatorId'))) return;
+      if (!authM(req, res, p.get('creatorId'))) return;
       const r = (await substy.fanLists(String(p.get('creatorId')))) || {};
       send(res, 200, (r.items || []).map((l) => ({ id: String(l.id), name: String(l.name || ''), type: String(l.type || ''), fans: Number(l.fanCount) || 0 })));
     },

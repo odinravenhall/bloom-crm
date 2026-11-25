@@ -83,7 +83,8 @@
 .v2-delta[data-dir="flat"] { color: var(--color-muted); background: rgb(255 255 255 / 0.06); }
 
 /* Onglets soulignés (périodes) et petits choix dans les cartes */
-.v2-tabs { display: flex; gap: 20px; }
+/* 2 px en bas : la place du trait bleu de l'onglet actif (une ombre, qu'un conteneur qui défile rognerait sinon). */
+.v2-tabs { display: flex; gap: 20px; padding-bottom: 2px; }
 .v2-tab { padding-bottom: 7px; font-size: 13px; font-weight: 600; color: var(--color-muted); white-space: nowrap; transition: color 0.15s ease, box-shadow 0.15s ease; }
 .v2-tab:hover { color: var(--color-fg); }
 .v2-tab[data-on="true"] { color: #fff; box-shadow: 0 2px 0 var(--v2-blue); }

@@ -39,7 +39,8 @@ const J = (s, d) => {
   }
 };
 
-function view(a) {
+/** Une automatisation telle que les écrans la lisent (avec ce qu'elle a envoyé et rapporté). */
+export function autoView(a) {
   const cols = J(a.collections, []);
   const st = one(
     `SELECT COUNT(DISTINCT r.fan_id) AS fans, SUM(json_array_length(r.message_ids)) AS sent FROM smart_runs r WHERE r.auto_id = ?`,
@@ -114,7 +115,8 @@ export function smartRoutes({ substy, userFrom, send, body }) {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
     if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' }), null;
-    if (cid && !canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
+    // Le droit porte sur la MODÈLE, pas sur la plateforme choisie dans le menu (cookie commun à tous les onglets).
+    if (cid && !canSee({ ...u, pf: null }, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
     return u;
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
@@ -201,7 +203,7 @@ export function smartRoutes({ substy, userFrom, send, body }) {
       const p = q(req);
       const cid = String(p.get('creatorId') || '');
       if (!auth(req, res, cid)) return;
-      send(res, 200, { items: all('SELECT * FROM smart_auto WHERE creator_id = ? ORDER BY created_at DESC LIMIT 500', cid).map(view) });
+      send(res, 200, { items: all('SELECT * FROM smart_auto WHERE creator_id = ? ORDER BY created_at DESC LIMIT 500', cid).map(autoView) });
     },
     // Enregistrer (brouillon « scheduled ») ou publier (« active ») une automatisation.
     'POST /api/smart/auto': async (req, res) => {
@@ -238,7 +240,7 @@ export function smartRoutes({ substy, userFrom, send, body }) {
           ...vals, cid, u.name, Date.now(), b.publish ? Date.now() : null,
         ).lastInsertRowid);
       }
-      send(res, 200, view(one('SELECT * FROM smart_auto WHERE id = ?', id)));
+      send(res, 200, autoView(one('SELECT * FROM smart_auto WHERE id = ?', id)));
     },
     'POST /api/smart/auto/cancel': async (req, res) => {
       const b = await body(req);

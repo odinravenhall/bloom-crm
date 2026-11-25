@@ -6,15 +6,14 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Envois groupés, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
 
 const V2Messaging = load(() => import("./chat/V2Messaging").then((m) => m.V2Messaging));
 const V2Scripts = load(() => import("./chat/V2Scripts").then((m) => m.V2Scripts));
-const SmartMessages = load(() => import("@/app/app/smart/SmartMessages").then((m) => m.SmartMessages));
-const MymMassDm = load(() => import("@/app/app/mym/MymMassDm").then((m) => m.MymMassDm));
+const V2Bulk = load(() => import("./bulk/V2Bulk").then((m) => m.V2Bulk));
 const V2Fans = load(() => import("./fans/V2Fans").then((m) => m.V2Fans));
 const V2Medias = load(() => import("./media/V2Medias").then((m) => m.V2Medias));
 const V2Stats = load(() => import("./stats/V2Stats").then((m) => m.V2Stats));
@@ -41,14 +40,14 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
-const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans"];
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
   switch (key) {
     case "messagerie": return <V2Messaging />;
     case "scripts": return <V2Scripts pf={pf} />;
-    case "envois": return m ? <MymMassDm /> : <SmartMessages />;
+    case "envois": return <V2Bulk pf={pf} />;
     case "fans": return <V2Fans pf={pf} />;
     case "medias": return <V2Medias pf={pf} />;
     // Refait pour la v2 : le même écran pour les deux plateformes (il demande les chiffres de la plateforme affichée).

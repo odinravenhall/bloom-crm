@@ -38,10 +38,15 @@ const REFUND = /refund|chargeback|revers|rembours|annul|^undo$/i;
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 const lower = (s) => String(s || '').trim().toLowerCase();
 
-/** Statut d'un fan : 'active' (abonné), 'old' (ancien abonné) ou 'interested' (MYM : suit sans être abonné). */
+/**
+ * Statut d'un fan : 'active' (abonné), 'old' (ancien abonné), 'interested' (MYM : suit sans être abonné) ou 'gone'
+ * (MYM : compte supprimé, bloqué ou conversation fermée — on ne peut plus lui écrire). Sans les « gone », le nombre
+ * d'abonnés retombe sur celui que MYM annonce (Pauline, 25/11/2026 : 9 142).
+ */
 function statusOf(pf, f, sub) {
   if (pf !== 'mym') return f.expired ? 'old' : 'active';
   const c = f.c;
+  if (c.mym && c.canSend === false) return 'gone';
   if (c.mym) return c.sub ? 'active' : c.interested ? 'interested' : 'old';
   if (sub) return tabOf(sub.status);
   return /^active$/i.test(c.subscribed || '') ? 'active' : c.subscribed ? 'old' : 'interested';
@@ -165,12 +170,12 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
       const view = g.startsWith('v:') ? VIEWS.find((v) => v[0] === g.slice(2)) : null;
       const picked = !view && g ? groups.find((x) => String(x.l.id) === g) : null;
       const base = view ? set.rows.filter((r) => view[2](r, now)) : picked ? set.rows.filter((r) => picked.members.has(r.fanId)) : set.rows;
-      const stats = { fans: base.length, active: 0, old: 0, interested: 0, buyers: 0, spent: 0 };
+      const stats = { fans: base.length, active: 0, old: 0, interested: 0, gone: 0, buyers: 0, spent: 0 };
       for (const r of base) {
         stats[r.status]++;
         if (r.total > 0) stats.buyers++, (stats.spent += r.total);
       }
-      const status = ['active', 'old', 'interested'].includes(p.get('status')) ? p.get('status') : '';
+      const status = ['active', 'old', 'interested', 'gone'].includes(p.get('status')) ? p.get('status') : '';
       const word = norm(p.get('q')).slice(0, 60);
       const rows = base.filter((r) => (!status || r.status === status) && (!word || r.key.includes(word)));
       const sort = cmp[p.get('sort')] ? p.get('sort') : 'spent';

@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -508,7 +508,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   - `MediaKit.tsx` = les pièces communes : `useMediaHead`, `useMediaItems`, `MediaFolders`, `MediaFilters`,
     `MediaGrid`, `MediaTile`, `MediaView` (vidéos MYM en HLS par « /api/mym/hls ») et `MediaPicker`, LA fenêtre de
     choix des médias de la v2 (messagerie : `fanId` côté OnlyFans → pastille « Déjà acheté » ; scripts : `keep`).
-    Encore avec leurs anciennes fenêtres : Envoi groupé, Push, Planification.
+    Les envois groupés l’utilisent aussi (`keep`). Encore avec leurs anciennes fenêtres : Push, Planification.
 - Fans v2 (`v2/fans/V2Fans.tsx`, `app/v2fans.mjs`, 25/11/2026) : un écran pour les deux plateformes, à la place des
   copies d'Infloww (`SmartLists`) et de MyPulse (`MymFans` : Abonnés / Anciens / Intéressés, `MymGroups`), qui restent
   dans la version actuelle. (Avant, la v2 ne montrait côté MYM que les abonnés, sans gestion des groupes.)
@@ -530,9 +530,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
       (`GET /api/v2/fans/live`, une lecture Substy) ; sans aucune date connue (`dated: false`), la colonne « Abonné
       depuis » et la vue « Nouveaux abonnés » sont cachées. Relire tous les fans OnlyFans en tâche de fond (comme
       `mym_fans` côté MYM) n'est pas fait : des milliers d'appels à Substy, à décider avec l'agence.
-    - Les compteurs de MYM diffèrent un peu du décompte par conversation (Pauline, 25/11/2026 : 9 142 abonnés
-      annoncés, 10 215 d'après les conversations ; les deux sources par fan, MYM en direct et Substy, sont d'accord
-      entre elles). L'écran affiche le décompte par conversation et rappelle les compteurs de MYM.
+    - Statut « injoignable » (`gone`, MYM) : la conversation existe mais MYM ne laisse plus écrire au fan
+      (`canSend === false` : compte supprimé, bloqué, conversation fermée). Ces fans ne sont plus comptés comme
+      abonnés (`fanData.expired` vaut vrai pour eux, donc aussi dans les groupes automatiques) : c'était l'écart
+      avec le compteur de MYM (Pauline, 25/11/2026 : 10 215 « abonnés » d'après les conversations, 9 142 annoncés
+      par MYM = exactement les abonnés à qui on peut écrire). L'écran rappelle toujours les compteurs de MYM, qui
+      comptent aussi les fans sans conversation.
   - Groupes = `fan_lists` : « manual » et « auto » existent maintenant AUSSI côté OnlyFans (`KINDS`), le formulaire
     est le même des deux côtés. Les « spend » / « newfans » de l'ancien écran Smart lists s'affichent et se suppriment
     mais ne se modifient pas ici (personne n'en avait créé). Créer / modifier / dupliquer / supprimer :
@@ -543,6 +546,37 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     de l'ancien écran MYM (`mym_fan_meta.notes`) est proposée tant que celle de la messagerie est vide.
     `POST /api/v2/fans/members` : mettre des fans dans un groupe manuel ou les en retirer.
   - Le lien « conversation » ouvre `/v2/messagerie?c=<modèle>~<fan>` (la messagerie de la v2 lit ce paramètre).
+- Envois groupés v2 (`v2/bulk/V2Bulk.tsx`, `v2/bulk/BulkForms.tsx`, `app/v2bulk.mjs`, 25/11/2026) : un écran pour les
+  deux plateformes, à la place des copies d'Infloww (`SmartMessages`) et de MyPulse (`MymMassDm`), qui restent dans la
+  version actuelle. Les deux plateformes n'envoient pas de la même façon, et ça ne change pas :
+  - OnlyFans = un « message de masse » d'OnlyFans créé chez Substy, parti d'un coup vers des LISTES d'OnlyFans
+    (incluses / exclues) ; l'historique (20 par page, avec vus / achats / revenus bruts) vient de Substy et montre
+    aussi ce qui est parti d'OnlyFans ou d'un autre outil. MYM = le Mass DM de Bloom (`mymbulk.mjs`) : un message
+    privé par fan, l'un après l'autre, à partir d'un « message prêt ».
+  - `GET /api/v2/bulk?pf&creatorId[&page]` (toute l'équipe sauf les modèles ; `canSend` = team leaders et plus) ne
+    fait que LIRE et rend les envois dans une même forme (`ofSend`, `mymSend` : message, phrase « à qui », état
+    scheduled / running / sent / stopped / unsent / failed, visés, partis, vus, achats, revenus en centimes, ce qu'on
+    peut encore faire), plus les listes OnlyFans, les messages automatiques, les messages prêts, les fans joignables
+    par audience et les groupes. Si Substy ne répond pas : réponse 200 avec `error`. `massDmState()` et
+    `warmMassDm()` (mymbulk.mjs) et `autoView()` (smart.mjs) servent à l'ancien et au nouvel écran.
+  - Écrire = les routes d'avant, toujours derrière une confirmation : « POST /api/mass », « /api/mass/unsend »,
+    « /api/smart/auto » et « …/cancel », « /api/mym/massdm/message », « …/message/delete », « …/campaign »,
+    « …/campaign/stop », « …/campaign/remove » ; « /api/mym/massdm/preview » ne fait que compter. Le droit de
+    « /api/mass », « /api/fan-lists » (`authM` de chat.mjs) et « /api/smart/… » porte maintenant sur la MODÈLE,
+    plus sur la plateforme du menu.
+  - « Nouvel envoi » : les mêmes quatre étapes des deux côtés (message, destinataires, moment, vérification), puis
+    une confirmation. RIEN n'est enregistré sur le serveur avant cette confirmation : le message en cours est un
+    brouillon gardé dans le navigateur (`bloom.v2.bulk.draft.<modèle>`) ; côté MYM, un message écrit sur place ne
+    devient un message prêt qu'au moment de l'envoi. On peut donc ouvrir toutes les étapes pour vérifier l'écran
+    sans rien créer. Côté OnlyFans le nombre de fans est « jusqu'à » (taille des listes : Bloom ne connaît ni les
+    doublons entre listes ni qui est en ligne) ; côté MYM il est exact (recompté au départ).
+  - ⚠️ Au 25/11/2026 AUCUN message de masse OnlyFans n'a été créé depuis Bloom (format de
+    `creators.massMessage.create` relevé sur le site de Substy, requête bloquée avant l'envoi) et aucune campagne
+    MYM n'a été lancée : le premier vrai envoi se fait avec l'agence, sur une petite liste. Le retrait OnlyFans
+    (« /api/mass/unsend ») essaie plusieurs procédures de Substy, aucune vérifiée.
+  - Messages automatiques (OnlyFans, `smart_auto`) : seul « après un achat » est proposé. ⚠️ « Bienvenue aux
+    nouveaux abonnés » ne peut pas partir côté OnlyFans : le moteur lit `since` dans la liste des conversations,
+    que Substy ne remplit pas (voir Fans v2). Aucun message automatique n'a jamais été activé.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
   formulaire, `width` pour une grande fenêtre), `Confirm`, `RowMenu`, `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`,

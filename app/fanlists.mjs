@@ -63,7 +63,8 @@ export function fanData(cid) {
       ppvTips: null,
       since: c.since ? Date.parse(c.since) || null : m?.subscribed_at || null,
       // MYM lu en direct : c'est MYM lui-même qui dit si le fan est abonné (plus frais que la relecture de Substy).
-      expired: c.mym ? !c.sub : m ? !/^active$/i.test(m.status) : /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
+      // Un compte supprimé ou bloqué (plus joignable) n'est plus un abonné, même si MYM le marque encore ainsi.
+      expired: c.mym ? !c.sub || c.canSend === false : m ? !/^active$/i.test(m.status) : /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
       ppvSent: 0,
       ppvBought: 0,
     });

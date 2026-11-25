@@ -295,8 +295,38 @@ export function startMymBulk() {
   setInterval(work, 400);
 }
 
-// ---------------------------------------------------------------- routes
+// ---------------------------------------------------------------- état (lecture seule)
+const msgView = (m) => ({ id: m.id, title: m.title, text: m.text, price: m.price, medias: J(m.medias, []), createdBy: m.created_by, updatedAt: m.updated_at });
+const campView = (c) => {
+  const n = Object.fromEntries(all('SELECT status, COUNT(*) AS n FROM mdm_sends WHERE campaign_id = ? GROUP BY status', c.id).map((r) => [r.status, r.n]));
+  const rev = one("SELECT COUNT(*) AS n, COALESCE(SUM(l.gross), 0) AS g FROM rv_live l JOIN mdm_sends s ON s.message_id = l.message_id WHERE s.campaign_id = ?", c.id);
+  const opts = J(c.opts, {});
+  return {
+    id: c.id, messageId: c.message_id, title: c.title, text: c.text, price: c.price, medias: J(c.medias, []), opts, status: c.status, startAt: c.start_at, startedAt: c.started_at, finishedAt: c.finished_at,
+    removeAt: c.remove_at, total: c.total, sent: (n.sent || 0) + (n.removed || 0), pending: n.pending || 0, failed: n.failed || 0, skipped: n.skipped || 0, removed: n.removed || 0,
+    sales: rev?.n || 0, revenue: (rev?.g || 0) / 100, createdBy: c.created_by, createdAt: c.created_at, note: c.note || null, removable: !J(c.medias, []).length,
+  };
+};
 const synced = new Set();
+/** Une fois par démarrage et par modèle : toutes ses conversations sont relues chez MYM (abonné / ancien / intéressé à jour). */
+export function warmMassDm(cid) {
+  if (synced.has(cid)) return;
+  synced.add(cid);
+  refreshMymInbox(cid).catch(() => synced.delete(cid));
+}
+/** Le Mass DM d'une modèle : messages prêts, 60 dernières campagnes, fans joignables par audience, groupes. */
+export function massDmState(cid) {
+  const counts = { active: 0, old: 0, interested: 0 };
+  for (const c of inboxPeek(cid)) if (c.mym && c.canSend !== false) counts[tabOf(c)]++;
+  return {
+    messages: all('SELECT * FROM mdm_messages WHERE creator_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC', cid).map(msgView),
+    campaigns: all('SELECT * FROM mdm_campaigns WHERE creator_id = ? ORDER BY created_at DESC LIMIT 60', cid).map(campView),
+    counts,
+    groups: mymGroups(cid).map((g) => ({ id: g.id, name: g.name, color: g.color, size: g.members.size })),
+  };
+}
+
+// ---------------------------------------------------------------- routes
 const details = new Map(); // « créatrice:push » -> détail d'un push déjà parti
 export function mymBulkRoutes({ userFrom, send, body, creators }) {
   /** Créatrice MYM reliée que la personne voit. `level` : 'see' (équipe), 'boss' (team leader et +), 'admin' (admin / manager). */
@@ -312,17 +342,6 @@ export function mymBulkRoutes({ userFrom, send, body, creators }) {
     return { u, c };
   };
   const qs = (req) => new URL(req.url, 'http://x').searchParams;
-  const msgView = (m) => ({ id: m.id, title: m.title, text: m.text, price: m.price, medias: J(m.medias, []), createdBy: m.created_by, updatedAt: m.updated_at });
-  const campView = (c) => {
-    const n = Object.fromEntries(all('SELECT status, COUNT(*) AS n FROM mdm_sends WHERE campaign_id = ? GROUP BY status', c.id).map((r) => [r.status, r.n]));
-    const rev = one("SELECT COUNT(*) AS n, COALESCE(SUM(l.gross), 0) AS g FROM rv_live l JOIN mdm_sends s ON s.message_id = l.message_id WHERE s.campaign_id = ?", c.id);
-    const opts = J(c.opts, {});
-    return {
-      id: c.id, messageId: c.message_id, title: c.title, text: c.text, price: c.price, medias: J(c.medias, []), opts, status: c.status, startAt: c.start_at, startedAt: c.started_at, finishedAt: c.finished_at,
-      removeAt: c.remove_at, total: c.total, sent: (n.sent || 0) + (n.removed || 0), pending: n.pending || 0, failed: n.failed || 0, skipped: n.skipped || 0, removed: n.removed || 0,
-      sales: rev?.n || 0, revenue: (rev?.g || 0) / 100, createdBy: c.created_by, createdAt: c.created_at, note: c.note || null, removable: !J(c.medias, []).length,
-    };
-  };
 
   return {
     // ------------------------------------------------------------ push (MYM officiel)
@@ -435,20 +454,8 @@ export function mymBulkRoutes({ userFrom, send, body, creators }) {
     'GET /api/mym/massdm': (req, res) => {
       const x = pickC(req, res, qs(req).get('creatorId'));
       if (!x) return;
-      // Une fois par démarrage : toutes les conversations sont relues chez MYM (abonné / ancien / intéressé à jour).
-      if (!synced.has(x.c.id)) {
-        synced.add(x.c.id);
-        refreshMymInbox(x.c.id).catch(() => synced.delete(x.c.id));
-      }
-      const counts = { active: 0, old: 0, interested: 0 };
-      for (const c of inboxPeek(x.c.id)) if (c.mym && c.canSend !== false) counts[tabOf(c)]++;
-      send(res, 200, {
-        canSend: isBoss(x.u),
-        messages: all('SELECT * FROM mdm_messages WHERE creator_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC', x.c.id).map(msgView),
-        campaigns: all('SELECT * FROM mdm_campaigns WHERE creator_id = ? ORDER BY created_at DESC LIMIT 60', x.c.id).map(campView),
-        counts,
-        groups: mymGroups(x.c.id).map((g) => ({ id: g.id, name: g.name, color: g.color, size: g.members.size })),
-      });
+      warmMassDm(x.c.id);
+      send(res, 200, { canSend: isBoss(x.u), ...massDmState(x.c.id) });
     },
     'POST /api/mym/massdm/message': async (req, res) => {
       const b = await body(req);

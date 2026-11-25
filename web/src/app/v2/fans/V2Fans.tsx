@@ -16,7 +16,8 @@ import { errText, FolderRow, plural, useDebounced } from "../media/MediaKit";
 // la même que dans la messagerie (surnom, note, étiquettes) avec son profil et ses groupes.
 // Lecture : « /api/v2/fans… » (app/v2fans.mjs). Écriture : « /api/v2/fans/sheet », « /api/v2/fans/members », et les
 // groupes par « /api/fanlists/save|delete|duplicate » (team leaders et plus).
-type Status = "active" | "old" | "interested";
+// « gone » (MYM) : compte supprimé, bloqué ou conversation fermée — on ne peut plus lui écrire, il n'est plus compté abonné.
+type Status = "active" | "old" | "interested" | "gone";
 type Kind = "manual" | "auto" | "spend" | "newfans";
 type Chip = { id: number; name: string; color: string | null; icon: string | null; kind: Kind };
 type Row = {
@@ -28,7 +29,7 @@ type Group = Chip & {
   ageMin: number | null; ageMax: number | null; rateMin: number | null; rateMax: number | null; ratePpv: number | null;
   reset: string; resetDay: number | null; resetHour: string | null; stayHours: number | null; count: number; active: number; spent: number;
 };
-type Stats = { fans: number; active: number; old: number; interested: number; buyers: number; spent: number };
+type Stats = { fans: number; active: number; old: number; interested: number; gone: number; buyers: number; spent: number };
 type Data = {
   platform: Pf; currency: string; canEdit: boolean; sources: string[]; newDays: number;
   list: { id: string; name: string; avatar: string | null; fans: number }[];
@@ -53,10 +54,11 @@ type Win =
   | { kind: "add" }
   | { kind: "confirm"; title: string; text: string; button: string; go: () => Promise<unknown> };
 
-const STATUS: Record<Status, { one: string; many: string; style: React.CSSProperties }> = {
+const STATUS: Record<Status, { one: string; many: string; hint?: string; style: React.CSSProperties }> = {
   active: { one: "Abonné", many: "Abonnés", style: { color: "var(--v2-up)", background: "rgb(16 185 129 / 0.14)" } },
   old: { one: "Ancien", many: "Anciens", style: { color: "var(--color-muted)", background: "rgb(255 255 255 / 0.06)" } },
   interested: { one: "Intéressé", many: "Intéressés", style: { color: "var(--v2-sky)", background: "rgb(59 130 246 / 0.14)" } },
+  gone: { one: "Injoignable", many: "Injoignables", hint: "Compte supprimé, bloqué, ou conversation fermée : on ne peut plus lui écrire.", style: { color: "#7c7c86", background: "transparent", boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.12)" } },
 };
 const VIEW_ICON: Record<string, React.ReactNode> = { "v:buyers": <ShoppingBag className="size-3.5" />, "v:never": <UserRoundX className="size-3.5" />, "v:new": <UserPlus className="size-3.5" />, "v:pinned": <Pin className="size-3.5" /> };
 const BUY: Record<string, string> = { sub: "Abonnement", renew: "Renouvellement", ppv: "Contenu payant", mod: "Média à la demande", push: "Push", tip: "Pourboire", post: "Publication", stream: "Live", refund: "Remboursement", other: "Autre" };
@@ -322,12 +324,12 @@ export function V2Fans({ pf }: { pf: Pf }) {
                     <h2 className="truncate text-[16px] font-bold tracking-[-0.01em]">{title}</h2>
                     <p className="mt-0.5 text-[12.5px] text-muted">
                       {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : `Les fans de ${m.name} avec qui une conversation existe.`}
-                      {!group && off ? ` Compteurs de MYM : ${int(off.active)} abonnés, ${int(off.old)} anciens, ${int(off.interested)} intéressés (son décompte diffère un peu, et il compte aussi les fans sans conversation).` : ""}
+                      {!group && off ? ` Compteurs de MYM : ${int(off.active)} abonnés, ${int(off.old)} anciens, ${int(off.interested)} intéressés (MYM compte aussi les fans avec qui aucune conversation n’existe).` : ""}
                     </p>
                   </div>
                   {st ? (
                     <div className="grid grid-cols-2 gap-2 pb-3 md:grid-cols-4">
-                      {tile("Fans", int(st.fans), mym ? `${int(st.interested)} intéressé${st.interested > 1 ? "s" : ""} · ${int(st.old)} ancien${st.old > 1 ? "s" : ""}` : `${int(st.old)} ancien${st.old > 1 ? "s" : ""}`)}
+                      {tile("Fans", int(st.fans), mym ? `${int(st.interested)} intéressé${st.interested > 1 ? "s" : ""} · ${int(st.old)} ancien${st.old > 1 ? "s" : ""}${st.gone ? ` · ${int(st.gone)} injoignable${st.gone > 1 ? "s" : ""}` : ""}` : `${int(st.old)} ancien${st.old > 1 ? "s" : ""}`)}
                       {tile("Abonnés", int(st.active), st.fans ? `${pct(st.active, st.fans)} % de la liste` : undefined)}
                       {tile("Ont acheté", int(st.buyers), st.fans ? `${pct(st.buyers, st.fans)} % de la liste` : undefined)}
                       {tile(mym ? "Dépensé (hors abonnements)" : "Dépensé", cash(st.spent, cur, 0), st.buyers ? `${money(Math.round(st.spent / st.buyers), cur)} par acheteur` : undefined)}
@@ -341,8 +343,8 @@ export function V2Fans({ pf }: { pf: Pf }) {
                     </label>
                     <div className="v2-segbar">
                       <button type="button" className="v2-seg" data-on={!status} onClick={() => (setStatus(""), reset())}>Tous</button>
-                      {(["active", "old", ...(mym ? (["interested"] as Status[]) : [])] as Status[]).map((k) => (
-                        <button key={k} type="button" className="v2-seg" data-on={status === k} onClick={() => (setStatus(k), reset())}>{STATUS[k].many}{st ? <b className="v2-num font-bold opacity-70">{int(st[k])}</b> : null}</button>
+                      {(["active", "old", ...(mym ? ["interested"] : []), ...(mym && (st?.gone || status === "gone") ? ["gone"] : [])] as Status[]).map((k) => (
+                        <button key={k} type="button" className="v2-seg" data-on={status === k} title={STATUS[k].hint} onClick={() => (setStatus(k), reset())}>{STATUS[k].many}{st ? <b className="v2-num font-bold opacity-70">{int(st[k])}</b> : null}</button>
                       ))}
                     </div>
                   </div>
@@ -385,7 +387,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                                   </span>
                                 </span>
                               </td>
-                              <td className="px-3"><span className="v2-tag" style={STATUS[r.status].style}>{STATUS[r.status].one}</span></td>
+                              <td className="px-3"><span className="v2-tag" title={STATUS[r.status].hint} style={STATUS[r.status].style}>{STATUS[r.status].one}</span></td>
                               <td className="v2-num px-3 text-right text-[13px] font-bold" style={{ color: r.total ? undefined : "var(--color-muted)" }}>{r.total ? money(r.total, cur) : "—"}</td>
                               <td className="v2-num px-3 text-right" title={r.ppvSent ? `${r.ppvBought} contenus payants achetés sur ${r.ppvSent} envoyés` : "Aucun contenu payant envoyé à ce fan (vu par Bloom)"}>{r.ppvSent ? <>{r.ppvBought} / {r.ppvSent}<span className="ml-1.5 text-muted">{pct(r.ppvBought, r.ppvSent)} %</span></> : <span className="text-muted">—</span>}</td>
                               {dated ? <td className="px-3 whitespace-nowrap text-muted">{day(r.since)}</td> : null}
@@ -494,7 +496,8 @@ function FanSheet({ pf, creatorId, fanId, cur, sources, chatOk, onClose, onSaved
               <div className="flex items-center gap-3">
                 <Avatar src={f.avatar} name={f.name} size="size-14" />
                 <div className="min-w-0">
-                  <span className="v2-tag" style={STATUS[f.status].style}>{STATUS[f.status].one}</span>
+                  <span className="v2-tag" title={STATUS[f.status].hint} style={STATUS[f.status].style}>{STATUS[f.status].one}</span>
+                  {f.status === "gone" ? <p className="mt-1 text-[11.5px] leading-snug text-muted">{STATUS.gone.hint}</p> : null}
                   <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11.5px] text-muted">
                     {f.pinned ? <span className="flex items-center gap-1" style={{ color: "#fbbf24" }}><Pin className="size-3" />épinglé par l’équipe</span> : null}
                     {f.ai ? <span className="flex items-center gap-1" style={{ color: "var(--v2-sky)" }}><Sparkles className="size-3" />IA active</span> : null}
