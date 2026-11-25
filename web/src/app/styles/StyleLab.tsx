@@ -109,7 +109,7 @@ function Win({ variant, models }: { variant: 1 | 2 | 3; models: M[] }) {
           ) : null}
 
           <div className="mc-search"><Search size={15} /> Rechercher un fan…</div>
-          <div className="mc-tabs"><span className="on">À traiter <b>{total}</b></span><span>Toutes</span><span className="flex-1" /><span className="lw-muted" style={{ padding: 0, fontWeight: 500 }}>Le plus ancien d’abord</span></div>
+          <div className="mc-tabs"><span className="on">À traiter <b>{total}</b></span><span>Toutes</span><span className="flex-1" /><span className="lw-muted" style={{ padding: 0, fontWeight: 500 }}>Anciens d’abord</span></div>
           <div className="mc-rows">
             <p className="mc-group">Attendent une réponse · 17<i /></p>
             {WAITING.map((c, i) => (

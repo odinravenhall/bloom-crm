@@ -355,14 +355,21 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Adresse : `/v2` (la version actuelle `/app` et `/pro` reste en service ; on branchera la v2 dessus quand elle sera
   prête). UN seul CRM pour OnlyFans et MYM (Reveal plus tard) : même menu, mêmes noms d'écrans, la plateforme se
   choisit dans un MENU DÉROULANT en haut du menu (`bloom_pf` ; la ligne « Reveal » y est déjà, grisée).
-- Direction de design donnée par l'agence le 25/11/2026 : un MÉLANGE de Raven CRM (« quasiment parfait ») et de Moby
-  (mobycrm.io). Une première version tout en bleu, avec halos et dégradés, a été refusée : « ça fait trop vibe codé ».
-  Donc : noir neutre, bleu franc (#3b82f6 / #2563eb), très peu de dégradés, police Plus Jakarta Sans (celle de Raven).
-  - De Raven : fond étoilé (`V2Backdrop.tsx`, en plus calme), pastilles de variation vertes / rouges, barres comparées
-    à la période d'avant, anneau « Répartition », classements, temps d'attente coloré dans la messagerie.
-  - De Moby : menu flottant arrondi avec rubriques à carré de couleur, grande carte du total avec quatre tuiles,
-    pastilles de période, onglets de la messagerie, barres de progression dans les classements.
-  - Logo : la lettre « B » dans un carré bleu + « Bloom CRM », en attendant un vrai logo.
+- **Direction de design retenue par l'agence le 25/11/2026 : « Constellation »** (choisie parmi quatre propositions,
+  « c'est parfait, on part sur ça »). C'est la famille de Raven CRM avec une structure propre à Bloom :
+  - noir profond, ciel étoilé (`V2Backdrop.tsx`), bleu franc (#3b82f6), police Plus Jakarta Sans ;
+  - menu à gauche À PLAT, pleine hauteur, en texte : petits titres de rubrique en capitales, écrans dessous, trait bleu
+    sur la ligne active ; il se réduit en icônes (d'office dans la messagerie) ;
+  - accueil : trois grandes cartes avec leur courbe (agence, OnlyFans, MYM), six petites, barres par jour comparées à
+    la période d'avant, anneau « Répartition », classements, dernières ventes ; périodes en onglets soulignés ;
+  - pastilles de variation vertes / rouges, temps d'attente coloré dans la messagerie ;
+  - logo : une étoile et le mot « Bloom », en attendant un vrai logo.
+- ⚠️ Ce qu'il ne faut PAS refaire (refusé le même jour) : (1) tout en bleu marine avec halos, textes en dégradé et
+  boutons lumineux : « trop vibe codé » ; (2) le mélange Raven + Moby : « ça ressemble trop à Moby » et « trop mélange de
+  tout » — donc pas de menu flottant arrondi, pas de carrés d'icônes en dégradé, pas de grande carte du total avec
+  quatre tuiles, pas de pastilles de période. On s'inspire des concurrents pour CE QUE fait un écran, jamais pour son
+  dessin. Bloom doit avoir la même identité partout : chaque écran derrière le menu doit être redessiné (plus de copie
+  de MyPulse ou d'Infloww, comme les écrans Chiffres aujourd'hui).
 - `v2.css` : tout est sous `.v2` (variables `--color-*`, `--mp-*`, `--of-*`, `--pro-*` repeintes, classes `v2-*`).
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
@@ -373,15 +380,12 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   « /api/rv/… » (rien de changé au serveur). Liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
   encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
   sous-inbox, traduction et envoi programmé de Messages Pro.
+  - Demandé le 25/11/2026 : « à répondre » et « non lus » RÉUNIS au même endroit (une seule liste « À traiter »), et un
+    choix de la modèle qui tienne avec 15 modèles (les pastilles en ligne ne suffisent pas). Trois propositions en image
+    sur la page provisoire `/styles` (`web/src/app/styles/`, admins / managers / team leaders) : 1. colonne des
+    modèles, 2. liste déroulante avec recherche, 3. pastilles des plus urgentes + bouton pour les autres. En attente du
+    choix ; ensuite refaire la messagerie, puis supprimer `/styles`.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
-- ⚠️ Retour de l'agence le 25/11/2026 sur ce mélange : « ça ressemble trop à Moby » (on garde les fonctionnalités, pas
-  le dessin : Moby ne doit pas se reconnaître) et « ça fait trop mélange de tout ». Bloom doit avoir SON identité, la
-  même partout, et chaque écran doit être redessiné (plus de copie de MyPulse ou d'Infloww derrière le menu, comme les
-  écrans Chiffres aujourd'hui). Page provisoire `/styles` (`web/src/app/styles/`, admins / managers / team leaders) :
-  quatre directions à comparer sur les mêmes écrans avec les vrais chiffres — A « Constellation » (famille Raven),
-  B « Ligne claire » (menu en haut, graphite, dense), C « Pétale » (bleu nuit, formes arrondies), D « Papier » (clair,
-  titres en serif). En attente du choix. Ensuite : construire la direction retenue dans `/v2`, page par page, puis
-  supprimer `/styles`.
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`
 
