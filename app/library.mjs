@@ -68,7 +68,7 @@ export function libItemOf(creatorId, id) {
 }
 
 /** Toute la bibliothèque d'une créatrice, avec les chiffres de chaque script ; avec `fanId`, ce qui a déjà été envoyé à ce fan. */
-function library(creatorId, fanId) {
+export function library(creatorId, fanId) {
   const groups = all('SELECT id, kind, name, position, descr, active, threshold, updated_at AS updatedAt FROM lib_groups WHERE creator_id = ? ORDER BY position, id', creatorId).map((g) => ({ ...g, active: g.active !== 0 }));
   const items = all(
     `SELECT i.* FROM lib_items i JOIN lib_groups g ON g.id = i.group_id WHERE g.creator_id = ? ORDER BY i.position, i.id`,
@@ -135,7 +135,8 @@ export function libraryRoutes({ userFrom, send, body }) {
   const editor = (req, res, creatorId) => {
     const u = auth(req, res);
     if (!u) return null;
-    if (!isBoss(u) || !canSee(u, creatorId)) {
+    // Droit sur la MODÈLE, pas sur la plateforme du menu (cookie commun à tous les onglets ouverts).
+    if (!isBoss(u) || !canSee({ ...u, pf: null }, creatorId)) {
       send(res, 403, { error: 'Réservé aux team leaders, managers et admins de cette créatrice.' });
       return null;
     }
@@ -150,7 +151,7 @@ export function libraryRoutes({ userFrom, send, body }) {
       const cid = String(p.get('creatorId') || '');
       const u = auth(req, res);
       if (!u) return;
-      if (u.role === 'model' || !canSee(u, cid)) return send(res, 403, { error: 'Tu n’as pas accès à cette créatrice.' });
+      if (u.role === 'model' || !canSee({ ...u, pf: null }, cid)) return send(res, 403, { error: 'Tu n’as pas accès à cette créatrice.' });
       send(res, 200, { groups: library(cid, p.get('fanId')), canEdit: isBoss(u) });
     },
 
@@ -272,7 +273,7 @@ export function libraryRoutes({ userFrom, send, body }) {
       const price = Number(b.price) > 0 ? Math.round(Number(b.price) * 100) / 100 : 0;
       if (!text.trim() && !medias.length) return send(res, 400, { error: 'Écris un message ou ajoute un média' });
       if (price && !medias.length) return send(res, 400, { error: 'Un PPV a besoin d’au moins un média' });
-      if (price && price < 3) return send(res, 400, { error: 'Prix minimum d’un PPV : 3 $' });
+      if (price && price < 3) return send(res, 400, { error: 'Prix minimum d’un contenu payant : 3 (dans la devise de la plateforme).' });
       const name = String(b.name || '').trim().slice(0, 80);
       const note = String(b.note || '').trim().slice(0, 500) || null;
       const cond = g.kind === 'sequence' && CONDS.includes(b.cond) ? b.cond : '';
@@ -310,7 +311,7 @@ export function libraryRoutes({ userFrom, send, body }) {
       if (!u) return;
       const to = [...new Set((Array.isArray(b.toCreatorIds) ? b.toCreatorIds : []).map(String))].filter((c) => c !== i.creator_id);
       if (!to.length) return send(res, 400, { error: 'Choisis au moins une créatrice' });
-      for (const c of to) if (!canSee(u, c)) return send(res, 403, { error: 'Tu n’as pas accès à une de ces créatrices.' });
+      for (const c of to) if (!canSee({ ...u, pf: null }, c)) return send(res, 403, { error: 'Tu n’as pas accès à une de ces créatrices.' });
       tx(() => {
         for (const c of to) {
           let tg = one('SELECT id FROM lib_groups WHERE creator_id = ? AND kind = ? AND name = ?', c, g.kind, g.name);

@@ -125,18 +125,21 @@ export function useDismiss(open: boolean, close: () => void, name: string) {
  * Fenêtre par-dessus l'écran (créer, modifier, confirmer). Elle est posée à la racine de la v2, hors de « .v2-frame » :
  * dans ce cadre, une position fixe suit le contenu qui défile et la fenêtre se retrouverait hors de vue.
  */
-export function Modal({ title, sub, onClose, wide = false, children }: { title: React.ReactNode; sub?: React.ReactNode; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
+export function Modal({ title, sub, onClose, wide = false, sticky = false, children }: { title: React.ReactNode; sub?: React.ReactNode; onClose: () => void; wide?: boolean; sticky?: boolean; children: React.ReactNode }) {
   const [host, setHost] = useState<Element | null>(null);
+  // `sticky` : un formulaire qu'on ne veut pas perdre — ni Échap ni un clic à côté ne le ferment (seulement ✕ / Annuler).
+  const keep = useRef(sticky);
+  keep.current = sticky;
   useEffect(() => setHost(document.querySelector(".v2")), []);
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && !keep.current && onClose();
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (!host) return null;
   return createPortal(
-    <div className="v2-fade-in fixed inset-0 z-[90] grid place-items-center overflow-y-auto p-4" style={{ background: "rgb(0 0 0 / 0.66)", backdropFilter: "blur(3px)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="v2-fade-in fixed inset-0 z-[90] grid place-items-center overflow-y-auto p-4" style={{ background: "rgb(0 0 0 / 0.66)", backdropFilter: "blur(3px)" }} onMouseDown={(e) => e.target === e.currentTarget && !sticky && onClose()}>
       <div role="dialog" aria-modal="true" className={`v2-card w-full p-5 ${wide ? "max-w-[860px]" : "max-w-[480px]"}`} style={{ background: "#0e0e11", boxShadow: "0 40px 90px -30px rgb(0 0 0 / 0.95)" }}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -149,6 +152,25 @@ export function Modal({ title, sub, onClose, wide = false, children }: { title: 
       </div>
     </div>,
     host,
+  );
+}
+
+/**
+ * Pose un élément à la racine de la v2, au-dessus des fenêtres : pour ouvrir par-dessus un formulaire une fenêtre d'un
+ * composant d'avant (choix de médias du vault…), qui se place elle-même en position fixe.
+ */
+export function Layer({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [host, setHost] = useState<Element | null>(null);
+  useEffect(() => setHost(document.querySelector(".v2")), []);
+  return host ? createPortal(<div className={className} style={{ position: "relative", zIndex: 95 }}>{children}</div>, host) : null;
+}
+
+/** Interrupteur (actif / inactif). */
+export function Switch({ on, onChange, disabled, title }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean; title?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={disabled} title={title} onClick={() => onChange(!on)} className="relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-50" style={{ background: on ? "var(--v2-blue)" : "rgb(255 255 255 / 0.16)" }}>
+      <span className="absolute top-[3px] size-4 rounded-full bg-white transition-all" style={{ left: on ? 19 : 3 }} />
+    </button>
   );
 }
 

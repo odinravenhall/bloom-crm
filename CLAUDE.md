@@ -376,8 +376,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Chiffres, Analytique, Liens de suivi ; les autres sont
-  encore ceux de la version actuelle, à refaire un par un.
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Chiffres, Analytique, Liens de suivi ; les
+  autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
@@ -455,9 +455,29 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     copier. Bouton « Toutes les colonnes » (choix gardé) : côté OnlyFans coût, bénéfice, revenu et coût par clic, coût
     par abonné, ROI, remboursés, source, liste, dernière mise à jour ; côté MYM part des abonnements et des contenus.
     Fenêtres MYM : créer, supprimer, partager. La page publique `/partage/<jeton>` n'est pas encore redessinée.
+- Scripts v2 (`v2/chat/V2Scripts.tsx`, `app/v2scripts.mjs`, 25/11/2026) : un écran pour les deux plateformes, à la
+  place des copies d'Infloww (`Scripts` : onglets Tag / Sequence) et de MyPulse (`MymScripts`), qui restent dans la
+  version actuelle. La bibliothèque était déjà commune (`library.mjs`, « /api/lib… ») ; seuls les mots changent :
+  - un SCRIPT = une ligne de `lib_groups` : « Séquence » (`kind` sequence : messages dans l'ordre, étapes
+    conditionnelles « si le précédent est acheté / pas acheté ») ou « Dossier » (`kind` tag : le « tag » d'Infloww,
+    la « banque de messages » de MyPulse ; un message peut être rangé dans plusieurs dossiers) ; un MESSAGE = une
+    ligne de `lib_items` (titre, texte avec {prénom}, prix, médias, consigne pour l'équipe).
+  - `GET /api/v2/scripts?pf&creatorId` (toute l'équipe sauf les modèles) : les modèles de la plateforme affichée avec
+    leur nombre de scripts, la bibliothèque de la modèle choisie (`library()`), `canEdit` (team leaders et plus),
+    `onSubsty`. Écrire = les routes « /api/lib/… » d'avant, qui vérifient maintenant le droit sur la MODÈLE sans
+    regarder la plateforme du menu (cookie commun aux onglets).
+  - L'écran : colonne des modèles, liste des scripts (recherche, filtres Séquences / Dossiers / Inactifs, ordre),
+    détail du script (actif ou non, chiffres, messages avec leurs envois / achats / revenus), vue « Performances »
+    (tous les messages envoyés, classés par revenus), import / export CSV, fenêtres au nouveau design (script, message,
+    dupliquer, copier chez d'autres modèles, supprimer).
+  - Encore à l'ancien affichage, posés tels quels dans l'écran : le choix des médias (`VaultProPicker` côté OnlyFans,
+    dans un `Layer` ; `CloudPicker` du MYM Cloud côté MYM) et les scripts de l'IA de Substy (`AiScripts`,
+    `AiAnalytics`, vue « IA Substy » : ils lisent la modèle « en cours » de `useCreators`, que l'écran met sur la
+    sienne ; leur cadre a une hauteur fixe et un `transform` pour garder leurs fenêtres en vue).
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
-  `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal`, `PALETTE`,
-  `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ; l'accueil a encore ses copies.
+  `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
+  formulaire), `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ;
+  l'accueil a encore ses copies.
   ⚠️ Une fenêtre par-dessus l'écran se fait avec `Modal` (posée à la racine `.v2`) : dans `.v2-frame`, une position
   fixe suit le contenu qui défile. ⚠️ Une photo entourée se fait avec `Ring` (anneau DANS la boîte) : un anneau en
   ombre extérieure est rogné par les conteneurs qui défilent.

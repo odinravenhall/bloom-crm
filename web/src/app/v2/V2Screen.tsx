@@ -6,14 +6,13 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
 
 const V2Messaging = load(() => import("./chat/V2Messaging").then((m) => m.V2Messaging));
-const Scripts = load(() => import("@/app/app/scripts/Scripts").then((m) => m.Scripts));
-const MymScripts = load(() => import("@/app/app/mym/MymScripts").then((m) => m.MymScripts));
+const V2Scripts = load(() => import("./chat/V2Scripts").then((m) => m.V2Scripts));
 const SmartMessages = load(() => import("@/app/app/smart/SmartMessages").then((m) => m.SmartMessages));
 const MymMassDm = load(() => import("@/app/app/mym/MymMassDm").then((m) => m.MymMassDm));
 const Lists = load(() => import("@/app/app/listes/Lists").then((m) => m.Lists));
@@ -44,13 +43,13 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
-const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens"];
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
   switch (key) {
     case "messagerie": return <V2Messaging />;
-    case "scripts": return m ? <MymScripts /> : <Scripts />;
+    case "scripts": return <V2Scripts pf={pf} />;
     case "envois": return m ? <MymMassDm /> : <SmartMessages />;
     case "fans": return m ? <MymFans tab="active" /> : <Lists canEdit={canEdit} />;
     case "medias": return m ? <MymStudio /> : <Vault canEdit={canEdit} />;
