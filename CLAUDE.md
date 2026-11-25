@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes et Messages de l’équipe, Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Activité et En direct (Équipe), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -609,6 +609,17 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   - `GET /api/v2/team/thread?id=<message>` (ou `creator`, `fan`, `at`, puis `dir=before|after`) : le fil autour d'un
     message ou d'une vente d'après `msg_log`, pour les deux plateformes (`ThreadModal`). Autour d'une vente sans
     message connu, seulement les 7 jours d'avant et le jour d'après.
+  - Activité (`V2TeamActivity.tsx`, `GET /api/v2/team/activity?from&to[&creatorId][&user][&action][&page][&size]`)
+    et En direct (`V2TeamLive.tsx`, `GET /api/v2/team/live`, relu toutes les 10 s), à la place de `MymActivity` et
+    `MymLive` : des écrans sur les PERSONNES, donc les deux plateformes ensemble quel que soit le menu (toutes les
+    modèles que la personne voit, `canSee` sans plateforme). Activité = `bl_actions` (60 jours) : une route de la v2
+    qui écrit doit avoir sa ligne dans `ACTIONS` de journal.mjs (ajoutées le 25/11/2026 : fiche et groupes de
+    l'écran Fans, fiches de médias, médias MYM). En direct ajoute ce que chacun a fait aujourd'hui (`work_log`,
+    `sent_log`).
+  - Présence : `PresencePing` envoie l'adresse de la page toutes les 30 s (v2, version actuelle et, depuis le
+    25/11/2026, Messages Pro et `/app/messagerie`, qui n'envoyaient rien) ; la messagerie de la v2 envoie elle-même
+    la conversation ouverte toutes les 20 s (`V2Messaging`). « Sur le chat » (`CHAT_PAGE` de team.mjs) compte
+    maintenant `/v2/messagerie` : avant, quelqu'un qui chattait dans la v2 était compté « inactif ».
   - `TeamKit.tsx` : `WhoTag` (nom + pastille IA / Infloww / Auto / Hors Bloom), `ModelMenu`, `ThreadModal`.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar` (avec les raccourcis semaine et quinzaine, les périodes de paie), `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un

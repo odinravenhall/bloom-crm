@@ -83,7 +83,7 @@ const ONLINE_MS = 45_000;
 // Temps de travail par jour (Mes ventes) : « actif » = Bloom ouvert sur la messagerie / le chatting, « idle » = ouvert
 // ailleurs. Compté entre deux signes de vie rapprochés (une page fermée ne compte plus).
 db.exec('CREATE TABLE IF NOT EXISTS work_log (user_id INTEGER NOT NULL, day TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 0, idle INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))');
-const CHAT_PAGE = /^\/(app\/(messagerie|mym\/(chatting|switchboard))|pro)(\/|$)/;
+const CHAT_PAGE = /^\/(app\/(messagerie|mym\/(chatting|switchboard))|pro|v2\/messagerie)(\/|$)/;
 export function ping(u, { creatorId, fanId, page, ua = null, country = null }) {
   try {
     const prev = presence.get(u.id);

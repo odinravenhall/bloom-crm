@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CHAT_ROLES, requireMe } from "@/lib/server";
 import { Toaster as RvToaster } from "@/rv/components/Toaster";
 import { PermGuard } from "@/components/PermGuard";
+import { PresencePing } from "@/components/PresencePing";
 
 // Messages Pro : fenêtre à part (comme l'application Infloww), sans le menu de Bloom.
 export const metadata: Metadata = { title: { default: "Messages Pro", template: "%s · Messages Pro" } };
@@ -13,6 +14,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
     <>
       <PermGuard me={me}>{children}</PermGuard>
       <RvToaster />
+      <PresencePing />
     </>
   );
 }

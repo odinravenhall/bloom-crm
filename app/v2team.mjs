@@ -11,8 +11,8 @@
 //    de la modèle. Côté OnlyFans, une vente dont Bloom ne connaît pas l'auteur garde le chatteur qu'Infloww lui attribue
 //    (type « platform ») : c'est la seule donnée d'Infloww utilisée ici, elle vient avec la vente.
 import { all, one } from './store.mjs';
-import { canSee, isBoss } from './team.mjs';
-import { parisMidnight } from './revenue.mjs';
+import { canSee, isBoss, liveView, seesAll } from './team.mjs';
+import { parisDay, parisMidnight } from './revenue.mjs';
 import { inboxChat, plain } from './chat.mjs';
 import { askOf, cached, CATS, rowsOf, whoOf } from './v2stats.mjs';
 
@@ -257,6 +257,16 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
     return { u, ...x, only, list: x.mine.filter((c) => !only || String(c.id) === only), all: x.mine.map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })) };
   };
 
+  /** Team leader ou plus + toutes les modèles qu'il voit, les DEUX plateformes (écrans sur les personnes). */
+  const people = (req, res) => {
+    const u = userFrom(req);
+    if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
+    if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' }), null;
+    const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [String(m.creator_id), m.nickname]));
+    const models = creators().filter((c) => canSee({ ...u, pf: null }, c.id)).map((c) => ({ id: String(c.id), name: meta.get(String(c.id)) || c.name, avatar: c.avatar || null, mym: /mym/i.test(c.platform || '') })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    return { u, p: new URL(req.url, 'http://x').searchParams, models, names: new Map(models.map((m) => [m.id, m])) };
+  };
+
   return {
     // Ventes de l'équipe : ?pf=of|mym, ?from=&to= (jours de Paris), &creatorId= (une modèle), &mode=gross (OnlyFans),
     // &seller=<clé> (le détail des ventes d'un seul vendeur).
@@ -276,6 +286,68 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
       const g = (k) => x.p.get(k) || '';
       const data = teamMessages({ pf: x.pf, list: x.list, from: x.from, to: x.to, q: { sender: g('sender'), type: g('type'), text: g('q'), fan: g('fan'), sort: g('sort'), page: Number(g('page')) || 1, size: Number(g('size')) || 50 } });
       send(res, 200, { ...data, today: x.today, all: x.all });
+    },
+
+    // Activité : le journal des actions faites DANS Bloom (`bl_actions`, 60 jours), pour toutes les modèles que la
+    // personne voit, les deux plateformes ensemble. ?from=&to= (jours de Paris, 7 jours par défaut), &creatorId=,
+    // &user=<nom>, &action=<libellé>, &page=, &size=. Les actions sans modèle (droits, mots interdits…) ne sont
+    // montrées qu'aux admins et managers.
+    'GET /api/v2/team/activity': (req, res) => {
+      const x = people(req, res);
+      if (!x) return;
+      const today = parisDay(Date.now());
+      const ok = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : null);
+      let to = ok(x.p.get('to')) || today;
+      if (to > today) to = today;
+      let from = ok(x.p.get('from')) || addDay(to, -6);
+      if (from > to) from = to;
+      if (from < addDay(today, -60)) from = addDay(today, -60);
+      if (to < from) to = from;
+      const start = parisMidnight(from);
+      const end = parisMidnight(addDay(to, 1));
+      const ids = [...x.names.keys()];
+      const where = ['a.at >= ? AND a.at < ?', `(a.creator_id IN (${ids.map(() => '?').join(',') || "''"})${seesAll(x.u) ? ' OR a.creator_id IS NULL' : ''})`];
+      const args = [start, end, ...ids];
+      const only = x.p.get('creatorId');
+      if (only) where.push('a.creator_id = ?'), args.push(only);
+      const who = x.p.get('user');
+      if (who) where.push('a.user_name = ?'), args.push(who);
+      // Répartition par action : sans le filtre d'action (elle sert à le choisir).
+      const split = all(`SELECT a.action, COUNT(*) AS n FROM bl_actions a WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY n DESC`, ...args);
+      const action = x.p.get('action');
+      if (action) where.push('a.action = ?'), args.push(action);
+      const size = [50, 100, 200].includes(Number(x.p.get('size'))) ? Number(x.p.get('size')) : 50;
+      const t = one(`SELECT COUNT(*) AS n, COUNT(DISTINCT a.user_name) AS users, COUNT(DISTINCT CASE WHEN a.fan_id IS NOT NULL THEN a.creator_id || ':' || a.fan_id END) AS fans FROM bl_actions a WHERE ${where.join(' AND ')}`, ...args);
+      const pages = Math.max(1, Math.ceil(t.n / size));
+      const page = Math.min(pages, Math.max(1, Number(x.p.get('page')) || 1));
+      send(res, 200, {
+        from, to, today, total: t.n, users: t.users, fans: t.fans, page, pages, size, split,
+        people: all('SELECT DISTINCT a.user_name AS name FROM bl_actions a WHERE a.at >= ? AND a.user_name IS NOT NULL ORDER BY 1', Date.now() - 60 * DAY).map((r) => r.name),
+        models: x.models,
+        rows: all(`SELECT a.* FROM bl_actions a WHERE ${where.join(' AND ')} ORDER BY a.at DESC LIMIT ? OFFSET ?`, ...args, size, (page - 1) * size).map((a) => ({
+          id: a.id, at: a.at, user: a.user_name, model: x.names.get(a.creator_id)?.name || '', mym: !!x.names.get(a.creator_id)?.mym, fan: a.creator_id && a.fan_id ? inboxChat(a.creator_id, a.fan_id)?.name || 'Fan' : null, action: a.action, details: a.details,
+        })),
+        since: one('SELECT MIN(at) AS t FROM bl_actions')?.t || null,
+      });
+    },
+
+    // En direct : qui a Bloom ouvert en ce moment (présence de team.mjs), sur quelle page, quelle modèle, quel fan,
+    // depuis quel appareil ; avec ce que chacun a fait aujourd'hui (temps sur le chat / ailleurs, messages envoyés).
+    'GET /api/v2/team/live': (req, res) => {
+      const x = people(req, res);
+      if (!x) return;
+      const day = parisDay(Date.now());
+      const work = new Map(all('SELECT user_id, active, idle FROM work_log WHERE day = ?', day).map((w) => [w.user_id, w]));
+      const sent = new Map(all('SELECT user_id, COUNT(*) AS msgs, SUM(price > 0) AS ppv FROM sent_log WHERE at >= ? GROUP BY user_id', parisMidnight(day)).map((s) => [s.user_id, s]));
+      const list = liveView().map((p) => {
+        const m = p.creatorId ? x.names.get(p.creatorId) : null;
+        return {
+          userId: p.userId, name: p.name, avatar: p.avatar, role: p.role, since: p.since, at: p.at, page: p.page, active: p.active, device: p.device, country: p.country,
+          modelId: m ? p.creatorId : null, model: m?.name ?? null, mym: !!m?.mym, hidden: !!p.creatorId && !m, fan: m && p.fanId ? inboxChat(p.creatorId, p.fanId)?.name || 'Fan' : null,
+          today: { activeMs: work.get(p.userId)?.active || 0, idleMs: work.get(p.userId)?.idle || 0, msgs: sent.get(p.userId)?.msgs || 0, ppv: sent.get(p.userId)?.ppv || 0 },
+        };
+      });
+      send(res, 200, { now: Date.now(), people: list, models: x.models });
     },
 
     // Le fil autour d'un message ou d'une vente, tel que Bloom l'a noté (`msg_log`) : ?id=<message>, ou

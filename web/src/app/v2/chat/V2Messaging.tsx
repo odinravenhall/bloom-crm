@@ -104,6 +104,15 @@ function Inner({ me, models, hidden0, mym }: { me: Me; models: Model[]; hidden0:
     const t = setInterval(() => setNow(Date.now()), 20_000);
     return () => clearInterval(t);
   }, []);
+  // Présence : on signale la conversation ouverte (page « En direct », temps passé sur le chat, et pour que deux
+  // personnes sur le même fan se voient). Toutes les 20 s tant que l'onglet est affiché.
+  useEffect(() => {
+    const [creatorId, fanId] = currentId ? currentId.split("~") : [null, null];
+    const ping = () => fetch("/api/presence", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ page: "/v2/messagerie", creatorId, fanId }) }).catch(() => {});
+    ping();
+    const t = setInterval(() => document.visibilityState === "visible" && ping(), 20_000);
+    return () => clearInterval(t);
+  }, [currentId]);
   const byId = useMemo(() => Object.fromEntries(models.map((m) => [m.id, m])), [models]);
   setModelCurrencies(models);
   useEffect(() => (keep("model." + (mym ? "mym" : "of"), model), keep("view", tab), keep("order", sort), keep("panel", panel)), [model, tab, sort, panel, mym]);

@@ -127,7 +127,7 @@ export function V2TeamMessages({ pf }: { pf: Pf }) {
 
       <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
         {tile(filtered ? "Messages (sélection)" : "Messages envoyés", k ? int(k.messages) : null, k ? `à ${plural(k.fans, "fan")}` : null, 0)}
-        {tile("Temps de réponse", k ? (k.replyMs == null ? "—" : fmtDuration(k.replyMs)) : null, k ? (k.slow ? `${plural(k.slow, "réponse lente", "réponses lentes")} (plus de 10 min)` : "aucune réponse lente") : null, 1)}
+        {tile("Temps de réponse", k ? (k.replyMs == null ? "—" : fmtDuration(k.replyMs)) : null, k ? (k.slow ? `${plural(k.slow, "réponse", "réponses")} de plus de 10 min` : "aucune de plus de 10 min") : null, 1)}
         {tile("Contenus payants proposés", k ? int(k.proposed) : null, k?.messages ? `${rate(k.proposed, k.messages)} des messages` : null, 2)}
         {tile("Achetés", k ? int(k.bought) : null, k?.proposed ? `${rate(k.bought, k.proposed)} des contenus proposés` : null, 3)}
         {tile("Vendu en message", k ? cash(k.boughtAmount, cur, 0) : null, k?.bought ? `${cash(Math.round(k.boughtAmount / k.bought), cur)} par achat` : null, 4)}

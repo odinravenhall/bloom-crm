@@ -22,8 +22,8 @@ const V2Links = load(() => import("./stats/V2Links").then((m) => m.V2Links));
 const V2TeamMessages = load(() => import("./team/V2TeamMessages").then((m) => m.V2TeamMessages));
 const V2TeamSales = load(() => import("./team/V2TeamSales").then((m) => m.V2TeamSales));
 const MymShifts = load(() => import("@/app/app/mym/MymShifts").then((m) => m.MymShifts));
-const MymActivity = load(() => import("@/app/app/mym/MymActivity").then((m) => m.MymActivity));
-const MymLive = load(() => import("@/app/app/mym/MymLive").then((m) => m.MymLive));
+const V2TeamActivity = load(() => import("./team/V2TeamActivity").then((m) => m.V2TeamActivity));
+const V2TeamLive = load(() => import("./team/V2TeamLive").then((m) => m.V2TeamLive));
 const MymModeration = load(() => import("@/app/app/mym/MymModeration").then((m) => m.MymModeration));
 const ManageEmployees = load(() => import("@/app/app/employees/ManageEmployees").then((m) => m.ManageEmployees));
 const MymAccess = load(() => import("@/app/app/mym/MymAccess").then((m) => m.MymAccess));
@@ -56,8 +56,9 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "equipe-ventes": return <V2TeamSales pf={pf} />;
     // Shifts et modération lisent les messages MYM : pas encore de version OnlyFans. Activité et En direct sont communs.
     case "shifts": return m ? <MymShifts /> : null;
-    case "activite": return <MymActivity />;
-    case "en-direct": return <MymLive />;
+    // Activité et En direct parlent des personnes : les deux plateformes ensemble, quel que soit le menu.
+    case "activite": return <V2TeamActivity />;
+    case "en-direct": return <V2TeamLive />;
     case "moderation": return m ? <MymModeration /> : null;
     case "acces": return m ? <MymAccess /> : <ManageEmployees />;
     case "push": return m ? <MymPush /> : null;
