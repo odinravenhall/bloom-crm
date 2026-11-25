@@ -146,8 +146,8 @@ export function V2Medias({ pf }: { pf: Pf }) {
           {head && m ? (
             <div className="grid gap-4 xl:grid-cols-[250px_minmax(0,1fr)]">
               {/* Les dossiers de la modèle */}
-              <section className="v2-card v2-rise min-w-0 p-2 xl:sticky xl:top-4 xl:self-start" style={{ ["--i" as string]: 2 }}>
-                <div className="v2-scroll xl:max-h-[calc(100dvh-170px)] xl:overflow-y-auto">
+              <section className="v2-rise min-w-0 xl:sticky xl:top-4 xl:self-start" style={{ ["--i" as string]: 2 }}>
+                <div className="v2-card v2-scroll p-2 xl:max-h-[calc(100dvh-110px)] xl:overflow-y-auto">
                   <MediaFolders
                     head={head}
                     query={query}
@@ -189,13 +189,12 @@ export function V2Medias({ pf }: { pf: Pf }) {
               {/* Les médias */}
               <section className="v2-rise min-w-0" style={{ ["--i" as string]: 3 }}>
                 <div className="v2-card p-3">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1 pb-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-3">
                     <h2 className="min-w-0 truncate text-[16px] font-bold tracking-[-0.01em]">{title}</h2>
-                    <p className="text-[12.5px] text-muted">{about}{lib.items && (lib.next || filtered) ? ` · ${plural(lib.items.length, "affiché")}` : ""}</p>
-                  </div>
-                  <MediaFilters head={head} query={query} set={(part) => setBase((b) => ({ ...b, ...part }))} q={q} setQ={setQ}>
+                    <p className="min-w-0 flex-1 text-[12.5px] text-muted">{about}{lib.items && (lib.next || filtered) ? ` · ${plural(lib.items.length, "affiché")}` : ""}</p>
                     <button type="button" onClick={() => (selecting || n ? clear() : setSelecting(true))} className="v2-tool" data-on={selecting || n > 0} title="Choisir plusieurs médias pour les ranger ou remplir leur fiche d’un coup"><MousePointerClick className="size-4" />{selecting || n ? "Terminer" : "Sélectionner"}</button>
-                  </MediaFilters>
+                  </div>
+                  <MediaFilters head={head} query={query} set={(part) => setBase((b) => ({ ...b, ...part }))} q={q} setQ={setQ} />
                   <div className="mt-3">
                     <MediaGrid lib={lib} empty={filtered ? "Aucun média ne correspond à ces filtres." : cat ? "Aucun média dans cette catégorie. Sélectionne des médias puis « Ranger »." : mym ? "Aucun média ici. « Importer des médias » en ajoute dans le MYM Cloud." : "Aucun média ici."}>
                       {(x) => <MediaTile m={x} cur={cur} on={picked.has(x.id)} selecting={selecting || n > 0} onMain={() => (selecting || n ? toggle(x) : setWin({ kind: "detail", m: x }))} onToggle={() => toggle(x)} />}
@@ -323,7 +322,7 @@ function Detail({ pf, creatorId, m, head, onClose, onSaved }: { pf: Pf; creatorI
   const usedSomewhere = !!(info?.bloom.length || ai?.scripts.length || ai?.steps.length || m.usedPublic || m.usedPrivate);
   const filled = !!(m.note || m.labels.length || m.price);
   return (
-    <Modal title={`${TYPE_NAME[m.type]}${m.duration ? ` · ${clockOf(m.duration)}` : ""}`} sub={[m.createdAt ? `Ajouté${m.type === "photo" || m.type === "video" ? "e" : ""} le ${dayOf(m.createdAt)}` : "", m.name].filter(Boolean).join(" · ") || undefined} width={1040} onClose={onClose}>
+    <Modal title={`${TYPE_NAME[m.type]}${m.duration ? ` · ${clockOf(m.duration)}` : ""}`} sub={[m.createdAt ? `Ajouté${m.type === "photo" || m.type === "video" ? "e" : ""} le ${dayOf(m.createdAt)}` : "", m.type !== "audio" && !/^[0-9a-f-]{16,}(\.\w+)?$/i.test(m.name) ? m.name : ""].filter(Boolean).join(" · ") || undefined} width={1040} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_350px]">
         <div className="h-[46vh] overflow-hidden rounded-[12px] md:h-[min(68vh,620px)]" style={{ background: "#000" }}><MediaView m={m} /></div>
         <div className="v2-scroll min-w-0 md:max-h-[min(68vh,620px)] md:overflow-y-auto md:pr-1">
@@ -343,7 +342,7 @@ function Detail({ pf, creatorId, m, head, onClose, onSaved }: { pf: Pf; creatorI
 
           {ai && (ai.context || ai.tags.length) ? (
             <>
-              <p className="v2-label mt-4 flex items-center gap-1.5"><Sparkles className="size-3.5" style={{ color: "var(--v2-sky)" }} />Ce que l’IA de Substy en sait</p>
+              <p className="v2-label mt-4"><Sparkles className="mr-1.5 inline size-3.5 align-[-2px]" style={{ color: "var(--v2-sky)" }} />Ce que l’IA de Substy en sait</p>
               {ai.context ? <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap">{ai.context}</p> : null}
               {ai.tags.length ? <div className="mt-2 flex flex-wrap gap-1.5">{ai.tags.map((t) => <span key={t} className="v2-tag">{t.replace(/_/g, " ")}</span>)}</div> : null}
             </>
@@ -397,12 +396,12 @@ function BatchForm({ pf, creatorId, items, head, onClose, onDone }: { pf: Pf; cr
   };
   const opts: [keyof typeof use, string][] = [["note", "Note"], ["labels", "Mots-clés"], ["price", "Prix conseillé"], ...(cats ? ([["cat", "Catégorie"]] as [keyof typeof use, string][]) : [])];
   return (
-    <Modal sticky title={`Remplir ${plural(items.length, "fiche")}`} sub="Choisis ce que tu changes : seul ce qui est coché est remplacé sur chaque média choisi." onClose={onClose}>
+    <Modal sticky title={`Remplir ${plural(items.length, "fiche")}`} sub="Choisis ce que tu changes : le reste de chaque fiche n’est pas touché." onClose={onClose}>
       <div className="mb-4 flex flex-wrap gap-1.5">
         {opts.map(([k, l]) => <button key={k} type="button" aria-pressed={use[k]} onClick={() => setUse({ ...use, [k]: !use[k] })} className="v2-seg border" data-on={use[k]} style={{ borderColor: "var(--color-line)" }}>{l}</button>)}
       </div>
       <FicheFields v={v} set={(part) => setV((x) => ({ ...x, ...part }))} show={{ note: use.note, labels: use.labels, price: use.price, cat: use.cat }} head={head} id="batch" />
-      {!any ? <p className="text-[12.5px] text-muted">Rien n’est coché pour l’instant.</p> : null}
+      {!any ? <p className="text-[12.5px] text-muted">Choisis au moins une ligne à changer.</p> : null}
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
         <button type="button" onClick={() => void save()} disabled={busy || !any} className="v2-btn">{busy ? "Enregistrement…" : "Enregistrer"}</button>

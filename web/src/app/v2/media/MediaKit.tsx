@@ -182,12 +182,12 @@ export function MediaTile({ m, cur, on = false, selecting = false, onMain, onTog
         {m.note || m.labels.length ? <span className={pill} style={dark}><StickyNote className="size-3" /></span> : null}
         {m.usedPublic || m.usedPrivate ? <span className={pill} style={dark}>{m.usedPublic ? "Posté" : "Posté · privé"}</span> : null}
       </span>
-      <span className="pointer-events-none absolute right-1.5 bottom-1.5 left-1.5 flex items-end justify-between gap-1">
+      <span className={`pointer-events-none absolute bottom-1.5 left-1.5 flex items-end justify-between gap-1 ${onPreview ? "right-10" : "right-1.5"}`}>
         {m.type !== "photo" && m.duration ? <span className={pill} style={dark}>{m.type === "video" ? <Play className="size-2.5 fill-current" /> : <AudioLines className="size-3" />}<span className="v2-num">{clockOf(m.duration)}</span></span> : m.type === "video" ? <span className={pill} style={dark}><Play className="size-2.5 fill-current" />Vidéo</span> : <span />}
         {m.price ? <span className={`${pill} v2-num`} style={{ background: "rgb(0 0 0 / 0.7)", color: "var(--v2-up)" }}>{priceOf(m.price, cur)}</span> : null}
       </span>
       {onPreview ? (
-        <button type="button" onClick={onPreview} title="Voir en grand" aria-label="Voir en grand" className="absolute top-1/2 left-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" style={{ background: "rgb(0 0 0 / 0.62)" }}><Eye className="size-4" /></button>
+        <button type="button" onClick={onPreview} title="Voir en grand" aria-label="Voir en grand" className="absolute right-1.5 bottom-1.5 grid size-7 place-items-center rounded-full text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" style={{ background: "rgb(0 0 0 / 0.7)" }}><Eye className="size-3.5" /></button>
       ) : null}
       {onToggle ? (
         <button
@@ -369,17 +369,40 @@ function Video({ src, poster }: { src: string; poster: string | null }) {
   }, [src]);
   return (
     <>
-      <video ref={ref} poster={poster ?? undefined} controls playsInline onError={() => setErr((x) => x || "Lecture impossible pour l’instant.")} className="max-h-full max-w-full rounded-lg bg-black" />
+      <video ref={ref} poster={poster ?? undefined} controls playsInline onError={() => setErr((x) => x || "Lecture impossible pour l’instant.")} className="size-full rounded-lg bg-black object-contain" />
       {err ? <p className="absolute inset-x-3 bottom-3 rounded-lg px-3 py-2 text-center text-[12.5px]" style={{ background: "rgb(0 0 0 / 0.78)", color: "var(--v2-down)" }}>{err}</p> : null}
     </>
   );
 }
 
 /** Photo, vidéo ou vocal en grand : remplit le cadre que lui donne le parent (qui doit avoir une hauteur). */
-export function MediaView({ m }: { m: Pick<MediaItem, "id" | "type" | "thumb" | "full" | "name"> }) {
-  const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [m.id, m.full]);
-  const src = (broken ? null : m.full) || m.thumb;
+export function MediaView({ m }: { m: Pick<MediaItem, "id" | "type" | "thumb" | "full" | "name"> & { keepFull?: string | null } }) {
+  // Une photo entière passe par Bloom (quelques secondes) : on montre la vignette tout de suite, puis le fichier dès
+  // qu'il est là. Si son adresse a péri (page restée ouverte longtemps), on prend celle par identifiant.
+  const [big, setBig] = useState<string | null>(null);
+  const [wait, setWait] = useState(false);
+  useEffect(() => {
+    setBig(null);
+    setWait(false);
+    if (m.type !== "photo") return;
+    const tries = [m.full, m.keepFull].filter((u, i, a): u is string => !!u && a.indexOf(u) === i);
+    if (!tries.length) return;
+    let off = false;
+    setWait(true);
+    const load = (k: number) => {
+      if (off) return;
+      if (k >= tries.length) return setWait(false);
+      const im = new Image();
+      im.onload = () => void (!off && (setBig(tries[k]), setWait(false)));
+      im.onerror = () => load(k + 1);
+      im.src = tries[k];
+    };
+    load(0);
+    return () => {
+      off = true;
+    };
+  }, [m.id, m.type, m.full, m.keepFull]);
+  const src = big || m.thumb;
   return (
     <div className="relative flex size-full items-center justify-center overflow-hidden">
       {m.type === "video" && m.full ? (
@@ -393,9 +416,12 @@ export function MediaView({ m }: { m: Pick<MediaItem, "id" | "type" | "thumb" | 
           </div>
         ) : <p className="text-[13px] text-muted">Écoute indisponible pour ce vocal.</p>
       ) : src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" onError={() => setBroken(true)} className="max-h-full max-w-full rounded-lg object-contain" />
-      ) : <p className="text-[13px] text-muted">Aperçu indisponible.</p>}
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className={`max-w-full rounded-lg object-contain ${big ? "max-h-full" : "h-full"}`} />
+          {wait ? <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[11.5px] font-semibold text-white" style={{ background: "rgb(0 0 0 / 0.72)" }}>Chargement de la photo…</span> : null}
+        </>
+      ) : <p className="text-[13px] text-muted">{wait ? "Chargement de la photo…" : "Aperçu indisponible."}</p>}
     </div>
   );
 }
@@ -475,11 +501,13 @@ export function MediaPicker({ pf, creatorId, fanId, selected, max, keep = false,
         {head ? (
           <>
             <aside className="v2-scroll hidden shrink-0 overflow-y-auto pr-1 md:block md:w-[224px]"><MediaFolders head={head} query={query} onPick={(part) => setBase((b) => ({ ...b, ...part, type: part.folder && pf === "mym" && b.type === "audio" ? "" : b.type }))} /></aside>
-            <select value={query.cat ? `c${query.cat}` : query.folder} onChange={(e) => setBase((b) => (e.target.value.startsWith("c") ? { ...b, folder: "", cat: Number(e.target.value.slice(1)) } : { ...b, folder: e.target.value, cat: 0 }))} className="v2-field md:hidden" style={{ colorScheme: "dark" }} aria-label="Dossier">
-              <option value="" style={{ background: "#121215" }}>Tous les médias</option>
-              {head.folders.map((f) => <option key={f.id} value={f.id} style={{ background: "#121215" }}>{f.name}</option>)}
-              {head.cats.map((c) => <option key={c.id} value={`c${c.id}`} style={{ background: "#121215" }}>Catégorie : {c.name}</option>)}
-            </select>
+            <div className="md:hidden">
+              <select value={query.cat ? `c${query.cat}` : query.folder} onChange={(e) => setBase((b) => (e.target.value.startsWith("c") ? { ...b, folder: "", cat: Number(e.target.value.slice(1)) } : { ...b, folder: e.target.value, cat: 0, type: e.target.value && pf === "mym" && b.type === "audio" ? "" : b.type }))} className="v2-field" style={{ colorScheme: "dark" }} aria-label="Dossier">
+                <option value="" style={{ background: "#121215" }}>Tous les médias</option>
+                {head.folders.map((f) => <option key={f.id} value={f.id} style={{ background: "#121215" }}>{f.name}</option>)}
+                {head.cats.map((c) => <option key={c.id} value={`c${c.id}`} style={{ background: "#121215" }}>Catégorie : {c.name}</option>)}
+              </select>
+            </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <MediaFilters head={head} query={query} set={(part) => setBase((b) => ({ ...b, ...part }))} q={q} setQ={setQ} />
               <p className="mt-2 truncate text-[12px] text-muted"><b style={{ color: "var(--color-fg)" }}>{place}</b>{lib.items ? ` · ${plural(lib.items.length, "média")} affiché${lib.items.length > 1 ? "s" : ""}${lib.next ? ", la suite arrive en descendant" : ""}` : ""}</p>
@@ -495,7 +523,7 @@ export function MediaPicker({ pf, creatorId, fanId, selected, max, keep = false,
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-[12.5px] text-muted">{n ? <><b style={{ color: "var(--color-fg)" }}>{plural(n, "média")}</b> choisi{n > 1 ? "s" : ""}</> : "Clique sur les médias à ajouter."}{n ? <button type="button" onClick={() => setPicked(new Map())} className="ml-2 underline-offset-2 hover:underline">Tout retirer</button> : null}</p>
         <button type="button" onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
-        <button type="button" onClick={() => void confirm()} disabled={busy || (!n && !selected.length)} className="v2-btn">{busy ? "Un instant…" : n ? `Ajouter ${plural(n, "média")}` : "Retirer les médias"}</button>
+        <button type="button" onClick={() => void confirm()} disabled={busy || (!n && !selected.length)} className="v2-btn">{busy ? "Un instant…" : n ? `Ajouter ${plural(n, "média")}` : selected.length ? "Retirer les médias" : "Ajouter"}</button>
       </div>
       {preview ? <Lightbox m={preview} onClose={() => setPreview(null)} /> : null}
     </Modal>

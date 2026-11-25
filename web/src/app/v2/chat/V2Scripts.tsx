@@ -224,7 +224,8 @@ export function V2Scripts({ pf }: { pf: Pf }) {
             ) : (
               <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
                 {/* Les scripts de la modèle */}
-                <section className="v2-card v2-rise min-w-0 p-2 xl:sticky xl:top-4 xl:self-start" style={{ ["--i" as string]: 2 }}>
+                <section className="v2-rise min-w-0 xl:sticky xl:top-4 xl:self-start" style={{ ["--i" as string]: 2 }}>
+                 <div className="v2-card p-2">
                   <label className="flex h-9 items-center gap-2 rounded-[10px] border px-2.5" style={{ borderColor: "var(--color-line)" }}><Search className="size-3.5 shrink-0 text-muted" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un script ou un message" className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-[#5d5d66]" /></label>
                   <div className="v2-noscroll mt-2 flex gap-1 overflow-x-auto">
                     {([["all", "Tous"], ["sequence", "Séquences"], ["tag", "Dossiers"], ["off", "Inactifs"]] as [Filter, string][]).filter(([k]) => k !== "off" || count("off") > 0).map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className="v2-chip" data-on={filter === k}>{l}<b>{count(k)}</b></button>)}
@@ -253,6 +254,7 @@ export function V2Scripts({ pf }: { pf: Pf }) {
                     })}
                     {!shown.length ? <p className="px-2 py-6 text-center text-[12.5px] text-muted">Aucun script ne correspond.</p> : null}
                   </div>
+                 </div>
                 </section>
 
                 {/* Le script choisi et ses messages */}

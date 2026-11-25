@@ -518,6 +518,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   ombre extérieure est rogné par les conteneurs qui défilent.
 - Lire le site de Substy pour connaître une procédure : ses appels partent en POST (rien dans l'adresse) ; on les
   voit en enveloppant `fetch` dans la page, et les champs « null » y sont en réalité absents (superjson).
+  ⚠️ Les classes de `v2.css` passent APRÈS celles de Tailwind : sur un même élément, `.v2-card` (position relative)
+  annule `sticky`, `.v2-field` et `.v2-label` (display block) annulent `hidden` / `md:hidden` / `flex`. Mettre ces
+  utilitaires sur une enveloppe (défauts trouvés le 25/11/2026 : carte décalée de 16 px, liste déroulante en trop).
 - Vérifier un écran refait sur l'autre plateforme sans toucher au menu : `?pf=of|mym` dans l'adresse
   (`OWN_PF` de `V2Screen.tsx`, seulement pour les écrans qui envoient leur plateforme au serveur).
 - ⚠️ `deno check` ne voit pas toutes les fautes d'écriture d'un fichier `.mjs` (« a?.b++ » est passé le 25/11/2026) :

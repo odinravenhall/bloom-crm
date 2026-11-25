@@ -188,12 +188,22 @@ export function v2MediasRoutes({ userFrom, send, creators, substy, cloud = { col
           const scripts = p.get('scripts');
           const hasScripts = scripts === 'with' ? true : scripts === 'without' ? false : undefined;
           const fan = String(p.get('fanId') || '');
+          let fanId = /^[\w-]{1,40}$/.test(fan) ? fan : undefined;
           const got = [];
           let cur = cursor || undefined;
           let next = null;
           // « Avec / sans script » : Substy filtre page par page, une page peut donc revenir vide → on avance un peu.
           for (let k = 0; k < (hasScripts === undefined ? 1 : 5); k++) {
-            const r = await substy.vaultMedias(cid, { listId: folder || undefined, cursor: cur, limit: 60, type: type ? type.toUpperCase() : undefined, search: q || undefined, oldest: p.get('sort') === 'old', hasScripts, fanId: /^[\w-]{1,40}$/.test(fan) ? fan : undefined });
+            const ask = { listId: folder || undefined, cursor: cur, limit: 60, type: type ? type.toUpperCase() : undefined, search: q || undefined, oldest: p.get('sort') === 'old', hasScripts };
+            let r;
+            try {
+              r = await substy.vaultMedias(cid, { ...ask, fanId });
+            } catch (e) {
+              // Substy refuse un fan qui n'est pas à cette créatrice : « déjà acheté » est un plus, pas une condition.
+              if (!fanId) throw e;
+              fanId = undefined;
+              r = await substy.vaultMedias(cid, ask);
+            }
             got.push(...(r?.medias || []));
             next = r?.hasMore && r.nextCursor ? String(r.nextCursor) : null;
             if (!next || got.length >= 24) break;
