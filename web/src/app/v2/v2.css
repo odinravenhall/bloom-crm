@@ -99,6 +99,16 @@
 .v2-btn:hover:not(:disabled) { background: var(--v2-blue); }
 .v2-btn:active:not(:disabled) { transform: scale(0.98); }
 .v2-btn:disabled { opacity: 0.4; }
+/* Bouton secondaire (annuler, action discrète) et bouton d'action définitive (supprimer) */
+.v2-btn[data-kind="ghost"] { color: var(--color-fg); background: transparent; border: 1px solid var(--color-line); }
+.v2-btn[data-kind="ghost"]:hover:not(:disabled) { background: rgb(255 255 255 / 0.05); border-color: rgb(255 255 255 / 0.18); }
+.v2-btn[data-kind="danger"] { background: #be123c; }
+.v2-btn[data-kind="danger"]:hover:not(:disabled) { background: #e11d48; }
+/* Champ de formulaire et son titre */
+.v2-field { display: block; width: 100%; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--color-line); background: rgb(255 255 255 / 0.03); font-size: 13.5px; color: var(--color-fg); outline: none; transition: border-color 0.15s ease; }
+.v2-field:focus { border-color: var(--v2-blue); }
+.v2-field::placeholder { color: #5d5d66; }
+.v2-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--color-muted); }
 .v2-sq { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--color-line); color: var(--color-muted); transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 .v2-sq:hover { color: var(--color-fg); border-color: rgb(255 255 255 / 0.18); }
 .v2-sq[data-on="true"] { color: #fff; border-color: transparent; background: var(--v2-blue-strong); }

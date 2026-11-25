@@ -374,8 +374,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Chiffres, Analytique ; les autres sont encore ceux de la
-  version actuelle, à refaire un par un.
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Chiffres, Analytique, Liens de suivi ; les autres sont
+  encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
@@ -427,12 +427,34 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   - Abonnés : MYM = abonnements lus chez MYM (gratuits compris), renouvellement = fan déjà abonné avant, abonnés
     actifs relevés par Bloom. OnlyFans = abonnements PAYÉS et renouvellements lus chez Infloww ; les nouveaux abonnés
     (gratuits compris) viennent de Substy, par une route à part car lente : `GET /api/v2/analytics/subs`.
+- Liens de suivi v2 (`v2/stats/V2Links.tsx`, `app/v2links.mjs`, 25/11/2026) : un écran pour les deux plateformes, à
+  la place des copies de MyPulse (`MymTrack`) et d'Infloww (`TrackingLinks`), qui restent dans la version actuelle.
+  - Les liens ne sont PAS les mêmes : OnlyFans = liens faits par Bloom (`tracking.mjs`, « /l/<code> », clics comptés
+    par Bloom, abonné rattaché au dernier clic des 30 min d'avant, revenus = dépenses vues chez Substy, net = brut ×
+    0,8) ; MYM = liens du compte MYM (`mymtrack.mjs`, totaux lus sur le site, un relevé par jour).
+  - `GET /api/v2/links?pf&from&to[&creatorId][&mode=gross][&fresh=1]` (team leaders et plus) ne fait que LIRE, dans
+    une même forme : totaux de chaque lien depuis sa création + clics / abonnés / revenus par jour sur la période et
+    celle d'avant. MYM : le détail par jour = différence entre deux relevés, donc rien avant le lendemain du premier
+    relevé (`since`, `covered`, `prevCovered` ; un lien créé après le début des relevés part de zéro). `fresh=1` relit
+    le site de MYM ; sans lui la route répond avec le dernier relevé (toutes les 10 min). Pas de mémoire de 20 s ici.
+  - Écrire passe par les routes d'avant : OnlyFans `POST /api/track/links` (créer / modifier), `/api/track/links/active`,
+    `GET /api/track/details` ; MYM `/api/mym/track/create|delete|share|shares|share/delete`. ⚠️ Créer et supprimer un
+    lien MYM agissent sur le vrai compte et leurs formats n'ont jamais été vérifiés sur une vraie action.
+  - L'écran : colonne des modèles (abonnés gagnés par leurs liens), quatre cartes « sur la période » avec le total
+    depuis la création, graphique par jour (revenus / clics / abonnés, une couleur par lien), tableau des liens triable
+    (colonnes communes + coût, bénéfice, ROI, acheteurs côté OnlyFans ; achats côté MYM), fenêtres pour créer, modifier,
+    désactiver, voir les fans d'un lien (OnlyFans), supprimer et partager (MYM). La page publique `/partage/<jeton>`
+    n'est pas encore redessinée.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
-  `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `PALETTE`, `CAT_COLOR`,
-  `downloadCsv`). Tout nouvel écran de la v2 part de là ; l'accueil a encore ses copies. ⚠️ Une photo entourée se fait
-  avec `Ring` (anneau DANS la boîte) : un anneau en ombre extérieure est rogné par les conteneurs qui défilent.
+  `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal`, `PALETTE`,
+  `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ; l'accueil a encore ses copies.
+  ⚠️ Une fenêtre par-dessus l'écran se fait avec `Modal` (posée à la racine `.v2`) : dans `.v2-frame`, une position
+  fixe suit le contenu qui défile. ⚠️ Une photo entourée se fait avec `Ring` (anneau DANS la boîte) : un anneau en
+  ombre extérieure est rogné par les conteneurs qui défilent.
 - Vérifier un écran refait sur l'autre plateforme sans toucher au menu : `?pf=of|mym` dans l'adresse
   (`OWN_PF` de `V2Screen.tsx`, seulement pour les écrans qui envoient leur plateforme au serveur).
+- ⚠️ `deno check` ne voit pas toutes les fautes d'écriture d'un fichier `.mjs` (« a?.b++ » est passé le 25/11/2026) :
+  toujours CHARGER le module dans un essai (`deno run` d'un script qui l'importe) avant de publier.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`

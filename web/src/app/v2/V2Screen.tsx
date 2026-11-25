@@ -6,7 +6,7 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Chiffres, Analytique. Les autres sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
@@ -22,8 +22,7 @@ const Vault = load(() => import("@/app/app/vault/Vault").then((m) => m.Vault));
 const MymStudio = load(() => import("@/app/app/mym/MymStudio").then((m) => m.MymStudio));
 const V2Stats = load(() => import("./stats/V2Stats").then((m) => m.V2Stats));
 const V2Analytics = load(() => import("./stats/V2Analytics").then((m) => m.V2Analytics));
-const TrackingLinks = load(() => import("@/app/app/tracking/TrackingLinks").then((m) => m.TrackingLinks));
-const MymTrack = load(() => import("@/app/app/mym/MymTrack").then((m) => m.MymTrack));
+const V2Links = load(() => import("./stats/V2Links").then((m) => m.V2Links));
 const MessageDashboard = load(() => import("@/app/app/analytics/messages/MessageDashboard").then((m) => m.MessageDashboard));
 const MymMessages = load(() => import("@/app/app/mym/MymMessages").then((m) => m.MymMessages));
 const EmployeeReports = load(() => import("@/app/app/analytics/employees/EmployeeReports").then((m) => m.EmployeeReports));
@@ -45,7 +44,7 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
-const OWN_PF: ScreenKey[] = ["chiffres", "analytique"];
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
@@ -58,7 +57,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     // Refait pour la v2 : le même écran pour les deux plateformes (il demande les chiffres de la plateforme affichée).
     case "chiffres": return <V2Stats pf={pf} />;
     case "analytique": return <V2Analytics pf={pf} />;
-    case "liens": return m ? <MymTrack /> : <TrackingLinks />;
+    case "liens": return <V2Links pf={pf} />;
     case "equipe-messages": return m ? <MymMessages /> : <MessageDashboard />;
     case "equipe-ventes": return m ? <MymTeamSales /> : <EmployeeReports />;
     // Shifts et modération lisent les messages MYM : pas encore de version OnlyFans. Activité et En direct sont communs.

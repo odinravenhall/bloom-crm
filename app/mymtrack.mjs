@@ -81,7 +81,11 @@ export function parseLinks(html) {
   return out;
 }
 
-const state = new Map(); // cid -> { at, error }
+const state = new Map(); // cid -> { at, ok, error }
+/** État de la dernière lecture des liens d'une modèle chez MYM ({ at, ok, error }) ; null si jamais lue depuis le démarrage. */
+export const trackState = (cid) => state.get(String(cid)) || null;
+/** Relit les liens d'une modèle sur le site de MYM (totaux + relevé du jour). */
+export const syncTrack = (cid) => sync(String(cid));
 async function sync(cid) {
   const s = state.get(cid) || {};
   state.set(cid, { ...s, at: Date.now() });

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, CalendarDays } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, X } from "lucide-react";
 
 // Bloom v2 — les briques communes des écrans redessinés (direction « Constellation ») : dates, montants, période
 // (onglets + dates au choix), pastille de variation, petite courbe, anneau, barres et courbes, export. Tout nouvel écran
@@ -118,6 +119,37 @@ export function useDismiss(open: boolean, close: () => void, name: string) {
     return () => (document.removeEventListener("mousedown", out), document.removeEventListener("keydown", esc));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, name]);
+}
+
+/**
+ * Fenêtre par-dessus l'écran (créer, modifier, confirmer). Elle est posée à la racine de la v2, hors de « .v2-frame » :
+ * dans ce cadre, une position fixe suit le contenu qui défile et la fenêtre se retrouverait hors de vue.
+ */
+export function Modal({ title, sub, onClose, wide = false, children }: { title: React.ReactNode; sub?: React.ReactNode; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
+  const [host, setHost] = useState<Element | null>(null);
+  useEffect(() => setHost(document.querySelector(".v2")), []);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!host) return null;
+  return createPortal(
+    <div className="v2-fade-in fixed inset-0 z-[90] grid place-items-center overflow-y-auto p-4" style={{ background: "rgb(0 0 0 / 0.66)", backdropFilter: "blur(3px)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" className={`v2-card w-full p-5 ${wide ? "max-w-[860px]" : "max-w-[480px]"}`} style={{ background: "#0e0e11", boxShadow: "0 40px 90px -30px rgb(0 0 0 / 0.95)" }}>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[17px] leading-tight font-bold tracking-[-0.02em]">{title}</p>
+            {sub ? <p className="mt-1 text-[12.5px] text-muted">{sub}</p> : null}
+          </div>
+          <button onClick={onClose} className="v2-sq" style={{ width: 32, height: 32 }} aria-label="Fermer"><X className="size-4" /></button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>,
+    host,
+  );
 }
 
 /** Les onglets de période et le choix de dates : la même ligne sur tous les écrans de chiffres. */

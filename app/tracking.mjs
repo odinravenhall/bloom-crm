@@ -105,7 +105,8 @@ export function trackingRoutes({ userFrom, send, body, creators }) {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
     if (!isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' }), null;
-    if (cid && !canSee(u, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
+    // Droit sur la modèle, quelle que soit la plateforme choisie dans le menu (cookie commun à tous les onglets).
+    if (cid && !canSee({ ...u, pf: null }, cid)) return send(res, 403, { error: 'Pas ta créatrice' }), null;
     return u;
   };
   const q = (req) => new URL(req.url, 'http://x').searchParams;
