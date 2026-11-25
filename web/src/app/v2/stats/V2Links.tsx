@@ -32,7 +32,8 @@ type Data = {
 };
 type Metric = "revenue" | "clicks" | "subs";
 type Win = null | { kind: "new" } | { kind: "shares" } | { kind: "delete"; link: LinkRow };
-type Col = { key: string; label: string; title?: string; more?: boolean; text?: (l: LinkRow) => string; get: (l: LinkRow) => number | null; show: (l: LinkRow) => string; tone?: (l: LinkRow) => string | undefined };
+// `more` : seulement avec « Toutes les colonnes ». `plain` : du texte (pas des chiffres alignés). `text` : tri par ordre alphabétique.
+type Col = { key: string; label: string; title?: string; more?: boolean; plain?: boolean; text?: (l: LinkRow) => string; get: (l: LinkRow) => number | null; show: (l: LinkRow) => string; tone?: (l: LinkRow) => string | undefined };
 
 const METRICS: [Metric, string, 0 | 1 | 2][] = [["revenue", "Revenus", 2], ["clicks", "Clics", 0], ["subs", "Abonnés", 1]];
 const plural = (n: number, one: string, many = `${one}s`) => `${int(n)} ${n > 1 ? many : one}`;
@@ -194,9 +195,9 @@ export function V2Links({ pf }: { pf: Pf }) {
         { key: "cps", label: "Coût / abonné", title: "Coût de la promo ÷ abonnés", more: true, get: (l) => (l.subs ? l.cost / l.subs : 0), show: (l) => (l.cost ? per(l.cost, l.subs) : "—") },
         { key: "roi", label: "ROI", title: "Bénéfice ÷ coût de la promo", more: true, get: (l) => (l.cost ? (l.revenue - l.cost) / l.cost : null), show: (l) => (l.cost ? `${Math.round(((l.revenue - l.cost) / l.cost) * 100)} %` : "—") },
         { key: "refunds", label: "Remboursés", title: "Remboursements et litiges sur ces abonnés", more: true, get: (l) => l.refunds, show: (l) => (l.refunds ? money(l.refunds) : "—") },
-        { key: "source", label: "Source", more: true, text: (l) => sourceName(l.source), get: () => null, show: (l) => sourceName(l.source) },
-        { key: "list", label: "Liste", title: "Liste de fans rattachée au lien", more: true, text: (l) => l.listName || "", get: () => null, show: (l) => l.listName || "—" },
-        { key: "sync", label: "Mis à jour", title: "Dernière fois que Substy a relu ce lien chez OnlyFans", more: true, get: (l) => l.lastSync, show: (l) => ago(l.lastSync) },
+        { key: "source", label: "Source", more: true, plain: true, text: (l) => sourceName(l.source), get: () => null, show: (l) => sourceName(l.source) },
+        { key: "list", label: "Liste", title: "Liste de fans rattachée au lien", more: true, plain: true, text: (l) => l.listName || "", get: () => null, show: (l) => l.listName || "—" },
+        { key: "sync", label: "Mis à jour", title: "Dernière fois que Substy a relu ce lien chez OnlyFans", more: true, plain: true, get: (l) => l.lastSync, show: (l) => ago(l.lastSync) },
       );
     }
     return all;
@@ -375,7 +376,7 @@ export function V2Links({ pf }: { pf: Pf }) {
                                   </span>
                                 </span>
                               </td>
-                              {shown.map((c) => <td key={c.key} className={`py-2.5 pl-4 text-right whitespace-nowrap ${c.text ? "" : "v2-num"}`} style={{ color: c.tone?.(l) ?? (c.key === "sync" || c.text ? "var(--color-muted)" : undefined), fontWeight: c.key === "revenue" ? 700 : undefined, opacity: l.active ? 1 : 0.5 }}>{c.show(l)}</td>)}
+                              {shown.map((c) => <td key={c.key} className={`py-2.5 pl-4 text-right whitespace-nowrap ${c.plain ? "" : "v2-num"}`} style={{ color: c.tone?.(l) ?? (c.plain ? "var(--color-muted)" : undefined), fontWeight: c.key === "revenue" ? 700 : undefined, opacity: l.active ? 1 : 0.5 }}>{c.show(l)}</td>)}
                               {mym && s.canEdit ? <td className="py-2.5 pl-3"><button onClick={() => setWin({ kind: "delete", link: l })} title="Supprimer ce lien sur le compte MYM" className="v2-sq ml-auto" style={{ width: 30, height: 30 }}><Trash2 className="size-3.5" /></button></td> : null}
                             </tr>
                           ))}
