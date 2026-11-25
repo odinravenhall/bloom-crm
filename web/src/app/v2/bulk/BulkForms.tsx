@@ -44,6 +44,8 @@ const euros = (v: number, cur: string) => cash(Math.round(v * 100), cur, v % 1 ?
 const localInput = (t: number) => new Date(t - new Date(t).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const whenText = (t: number) => new Date(t).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+/** Une durée en minutes, lisible (« 45 min », « 3 h 40 »). */
+const lasts = (m: number) => (m < 90 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`);
 
 /** Ce qui manque à un message pour pouvoir partir ("" si tout va bien). */
 function messageProblem(pf: Pf, d: Draft) {
@@ -434,7 +436,7 @@ export function Composer({ pf, creatorId, model, cur, lists, messages, counts, g
               <>
                 <div className="rounded-[12px] border p-4" style={{ borderColor: "rgb(59 130 246 / 0.45)", background: "rgb(59 130 246 / 0.08)" }}>
                   <p className="flex flex-wrap items-baseline gap-x-3"><b className="v2-num text-[34px] leading-none font-bold">{mym ? int(total) : !upTo ? "?" : int(upTo)}</b><span className="text-[13.5px]">{mym || exact ? `fan${total > 1 ? "s" : ""} recevr${total > 1 ? "ont" : "a"} ce message` : "fans au plus recevront ce message"}</span></p>
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{mym ? `Les messages partent un par un : environ ${est?.minutes ?? 0} min.${est ? ` ${AUD.filter(([k]) => aud.includes(k)).map(([k, l]) => `${l} : ${int(est.by[k] ?? 0)}`).join(" · ")}.` : ""}` : `D’après la taille des listes incluses${incLists.length > 1 ? " (un fan présent dans deux listes ne le reçoit qu’une fois)" : ""}${exc.length ? ", moins les fans des listes exclues" : ""}${online ? ", et seulement ceux qui sont en ligne" : ""}.`}</p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{mym ? `Les messages partent un par un : environ ${lasts(est?.minutes ?? 0)} pour tout envoyer.${est ? ` ${AUD.filter(([k]) => aud.includes(k)).map(([k, l]) => `${l} : ${int(est.by[k] ?? 0)}`).join(" · ")}.` : ""}` : `D’après la taille des listes incluses${incLists.length > 1 ? " (un fan présent dans deux listes ne le reçoit qu’une fois)" : ""}${exc.length ? ", moins les fans des listes exclues" : ""}${online ? ", et seulement ceux qui sont en ligne" : ""}.`}</p>
                 </div>
                 <div className="mt-3">
                   {row("Message", <>{mym ? shownTitle || "—" : shownText.trim() ? cut(shownText.trim(), 90) : "Média seul"}{small(shownMedias.length ? plural(shownMedias.length, "média") : "texte seul")}</>, 0)}
@@ -570,7 +572,7 @@ export function AutoForm({ creatorId, auto, copy, onClose, onDone }: { creatorId
   const [ask, setAsk] = useState(false);
   const cur = cols[col] ?? cols[0];
   const setMsg = (i: number, part: Partial<AutoDraft>) => setCols((x) => x.map((c, ci) => (ci !== col ? c : { messages: c.messages.map((m, mi) => (mi === i ? { ...m, ...part } : m)) })));
-  const problem = cols.flatMap((c, ci) => c.messages.map((m, mi) => (messageProblem("of", m) ? `${cols.length > 1 ? `Variante ${ci + 1}, ` : ""}${mi ? `suite ${mi}` : "premier message"} : ${messageProblem("of", m)}` : ""))).find(Boolean) ?? (num(delayMax) < num(delayMin) ? "Délai : le maximum est plus petit que le minimum." : "");
+  const problem = cols.flatMap((c, ci) => c.messages.map((m, mi) => (messageProblem("of", m) ? `${cols.length > 1 ? `Variante ${ci + 1}, ` : ""}${mi ? `suite ${mi}` : "premier message"} : ${messageProblem("of", m).replace(/^./, (x) => x.toLowerCase())}`.replace(/^./, (x) => x.toUpperCase()) : ""))).find(Boolean) ?? (num(delayMax) < num(delayMin) ? "Délai : le maximum est plus petit que le minimum." : "");
   const save = async (publish: boolean) => {
     setBusy(true);
     try {

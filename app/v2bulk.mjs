@@ -76,7 +76,9 @@ function ofSend(m, names, senders, cid) {
   const exc = (m.excludedListIds || []).map(String);
   const label = (ids) => ids.map((id) => names.get(id) || 'liste supprimée').join(', ');
   const fans = (m.userIds || []).length;
-  const audience = [inc.length ? label(inc) : fans ? `${fans} fan${fans > 1 ? 's' : ''} choisi${fans > 1 ? 's' : ''}` : '—', exc.length ? `sauf ${label(exc)}` : '', m.includeOnlineFans ? 'fans en ligne seulement' : ''].filter(Boolean).join(' · ');
+  // Pour un envoi créé hors de Bloom (OnlyFans, Infloww…), Substy ne donne ni les listes, ni les médias, ni le prix
+  // (relevé le 25/11/2026 sur les 326 envois de Morgane) : seulement le texte et les compteurs.
+  const audience = [inc.length ? label(inc) : fans ? `${fans} fan${fans > 1 ? 's' : ''} choisi${fans > 1 ? 's' : ''}` : 'Non précisés (envoi créé hors de Bloom)', exc.length ? `sauf ${label(exc)}` : '', m.includeOnlineFans ? 'fans en ligne seulement' : ''].filter(Boolean).join(' · ');
   const status = ofStatus(m.status);
   return {
     id: String(m.id), title: '', text, medias: (m.mediaIds || []).length, thumbs: (m.mediaIds || []).slice(0, 4).map((id) => ({ id: String(id), type: 'photo', thumb: thumbOf(cid, id) })), price: Number(m.price) || 0, smart: null,
@@ -86,7 +88,9 @@ function ofSend(m, names, senders, cid) {
     total: m.recipientCount ?? null, sent: m.sentCount ?? null, viewed: m.viewedCount ?? null, bought: m.purchasedCount ?? 0, revenue: Math.round(Number(m.revenueGrossMinor) || 0),
     failed: 0, skipped: 0, removed: 0, pending: 0,
     canStop: false, canUnsend: !!m.canUnsend, canWithdraw: false, removeAt: null,
-    note: m.revertedByName ? `Retiré par ${m.revertedByName}` : m.canUnsend && m.unsendDeadline ? `Peut encore être retiré jusqu’au ${new Date(m.unsendDeadline).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' })}` : null,
+    // `unsendDeadline` n'est pas une échéance propre au message (la même date pour tous, et elle bouge d'un appel à
+    // l'autre, 25/11/2026) : on dit seulement si Substy permet encore le retrait.
+    note: m.revertedByName ? `Retiré par ${m.revertedByName}` : m.canUnsend ? 'Peut encore être retiré' : null,
     messageId: null, opts: {}, included: inc, excluded: exc, onlineOnly: !!m.includeOnlineFans,
   };
 }

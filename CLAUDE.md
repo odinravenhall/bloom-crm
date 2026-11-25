@@ -553,6 +553,10 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     (incluses / exclues) ; l'historique (20 par page, avec vus / achats / revenus bruts) vient de Substy et montre
     aussi ce qui est parti d'OnlyFans ou d'un autre outil. MYM = le Mass DM de Bloom (`mymbulk.mjs`) : un message
     privé par fan, l'un après l'autre, à partir d'un « message prêt ».
+  - Pour un envoi OnlyFans créé HORS de Bloom, Substy ne donne ni les listes visées, ni les médias, ni le prix
+    (relevé le 25/11/2026 : les 326 envois de Morgane, tous faits ailleurs) : seulement le texte et les compteurs.
+    `unsendDeadline` n'est pas une échéance par message (même date pour tous, qui bouge d'un appel à l'autre) :
+    l'écran dit seulement « peut encore être retiré » (`canUnsend`).
   - `GET /api/v2/bulk?pf&creatorId[&page]` (toute l'équipe sauf les modèles ; `canSend` = team leaders et plus) ne
     fait que LIRE et rend les envois dans une même forme (`ofSend`, `mymSend` : message, phrase « à qui », état
     scheduled / running / sent / stopped / unsent / failed, visés, partis, vus, achats, revenus en centimes, ce qu'on

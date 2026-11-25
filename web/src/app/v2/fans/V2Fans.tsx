@@ -329,7 +329,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                   </div>
                   {st ? (
                     <div className="grid grid-cols-2 gap-2 pb-3 md:grid-cols-4">
-                      {tile("Fans", int(st.fans), mym ? `${int(st.interested)} intéressé${st.interested > 1 ? "s" : ""} · ${int(st.old)} ancien${st.old > 1 ? "s" : ""}${st.gone ? ` · ${int(st.gone)} injoignable${st.gone > 1 ? "s" : ""}` : ""}` : `${int(st.old)} ancien${st.old > 1 ? "s" : ""}`)}
+                      {tile("Fans", int(st.fans), mym ? (st.gone ? `dont ${int(st.gone)} injoignable${st.gone > 1 ? "s" : ""}` : `${int(st.interested)} intéressé${st.interested > 1 ? "s" : ""} · ${int(st.old)} ancien${st.old > 1 ? "s" : ""}`) : `${int(st.old)} ancien${st.old > 1 ? "s" : ""}`)}
                       {tile("Abonnés", int(st.active), st.fans ? `${pct(st.active, st.fans)} % de la liste` : undefined)}
                       {tile("Ont acheté", int(st.buyers), st.fans ? `${pct(st.buyers, st.fans)} % de la liste` : undefined)}
                       {tile(mym ? "Dépensé (hors abonnements)" : "Dépensé", cash(st.spent, cur, 0), st.buyers ? `${money(Math.round(st.spent / st.buyers), cur)} par acheteur` : undefined)}

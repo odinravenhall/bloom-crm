@@ -253,11 +253,11 @@ export function V2Bulk({ pf }: { pf: Pf }) {
                       <div className="grid grid-cols-2 gap-2 px-1 pb-3 md:grid-cols-4">
                         {tile("Envois", int(d.total), mym ? "campagnes lancées depuis Bloom" : "dans l’historique d’OnlyFans")}
                         {tile("Messages partis", int(sum.sent), partial ? `sur les ${int(sends.length)} envois de cette page` : "tous envois réunis")}
-                        {tile("Achats", int(sum.bought), sum.sent ? `${(Math.round((sum.bought / sum.sent) * 1000) / 10).toLocaleString("fr-FR")} % des messages partis` : undefined)}
+                        {tile("Achats", int(sum.bought), sum.bought && sum.sent ? `${(Math.round((sum.bought / sum.sent) * 1000) / 10).toLocaleString("fr-FR")} % des messages partis` : sends.some((s) => s.price || s.smart) ? "aucun pour l’instant" : sends.length ? "aucun envoi payant ici" : undefined)}
                         {tile("Revenus", cash(sum.revenue, cur, 0), mym ? "nets, vus par Bloom" : "bruts, d’après OnlyFans")}
                       </div>
 
-                      <div className="v2-scroll overflow-x-auto">
+                      <div className="v2-scroll overflow-x-auto" hidden={!sends.length}>
                         <table className="w-full min-w-[920px] text-[12.5px]">
                           <thead>
                             <tr className="border-b text-muted" style={{ borderColor: "var(--color-line)" }}>
@@ -288,15 +288,15 @@ export function V2Bulk({ pf }: { pf: Pf }) {
                                     </span>
                                   </span>
                                 </td>
-                                <td className="px-3 py-2.5"><span className="line-clamp-2 max-w-[230px] leading-snug" title={s.audience}>{s.audience}</span></td>
+                                <td className="px-3 py-2.5"><span className="line-clamp-2 max-w-[230px] leading-snug" title={s.audience} style={mym || s.included.length ? undefined : { color: "var(--color-muted)" }}>{s.audience}</span></td>
                                 <td className="px-3 py-2.5">
                                   <span className="v2-tag" style={ST[s.status].style}>{ST[s.status].label}</span>
                                   {s.note ? <span className="mt-1 line-clamp-2 block max-w-[170px] text-[11px] leading-snug text-muted" title={s.note}>{s.note}</span> : null}
                                 </td>
-                                <td className="v2-num px-3 py-2.5 text-right">{s.sent == null || (s.status === "scheduled" && !s.sent) ? <span className="text-muted">—</span> : <><b className="text-[13px]">{int(s.sent)}</b>{s.total != null && s.total !== s.sent ? <span className="block text-[11px] text-muted">sur {int(s.total)}</span> : null}</>}</td>
-                                {!mym ? <td className="v2-num px-3 py-2.5 text-right">{s.viewed == null ? <span className="text-muted">—</span> : <>{int(s.viewed)}{s.sent ? <span className="block text-[11px] text-muted">{pct(s.viewed, s.sent)} %</span> : null}</>}</td> : null}
-                                <td className="v2-num px-3 py-2.5 text-right">{s.bought ? <>{int(s.bought)}{s.sent ? <span className="block text-[11px] text-muted">{(Math.round((s.bought / s.sent) * 1000) / 10).toLocaleString("fr-FR")} %</span> : null}</> : <span className="text-muted">—</span>}</td>
-                                <td className="v2-num px-3 py-2.5 text-right text-[13px] font-bold" style={{ color: s.revenue ? undefined : "var(--color-muted)" }}>{s.revenue ? money(s.revenue) : "—"}</td>
+                                <td className="v2-num px-3 py-2.5 text-right whitespace-nowrap">{s.sent == null || (s.status === "scheduled" && !s.sent) ? <span className="text-muted">—</span> : <><b className="text-[13px]">{int(s.sent)}</b>{s.total != null && s.total !== s.sent ? <span className="block text-[11px] text-muted">sur {int(s.total)}</span> : null}</>}</td>
+                                {!mym ? <td className="v2-num px-3 py-2.5 text-right whitespace-nowrap">{s.viewed == null ? <span className="text-muted">—</span> : <>{int(s.viewed)}{s.sent ? <span className="block text-[11px] text-muted">{pct(s.viewed, s.sent)} %</span> : null}</>}</td> : null}
+                                <td className="v2-num px-3 py-2.5 text-right whitespace-nowrap">{s.bought ? <>{int(s.bought)}{s.sent ? <span className="block text-[11px] text-muted">{(Math.round((s.bought / s.sent) * 1000) / 10).toLocaleString("fr-FR")} %</span> : null}</> : <span className="text-muted">—</span>}</td>
+                                <td className="v2-num px-3 py-2.5 text-right text-[13px] font-bold whitespace-nowrap" style={{ color: s.revenue ? undefined : "var(--color-muted)" }}>{s.revenue ? money(s.revenue) : "—"}</td>
                                 <td className="px-3 py-2.5 whitespace-nowrap">
                                   {dayOf(s.at)}<span className="ml-1.5 text-muted">{hourOf(s.at)}</span>
                                   <span className="block text-[11px] text-muted">{s.by ? `par ${s.by}` : mym ? "" : "hors Bloom"}</span>
