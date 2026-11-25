@@ -12,7 +12,7 @@ import { AiAnalytics } from "@/app/app/scripts/AiAnalytics";
 import { AiScripts } from "@/app/app/scripts/AiScripts";
 import { QUICK } from "@/app/pro/emojis";
 import { cash, downloadCsv, int, Modal, PALETTE, pct, Ring, Switch } from "../kit";
-import { MediaPicker } from "../media/MediaKit";
+import { Lightbox, MediaPicker, viewOf } from "../media/MediaKit";
 
 // Bloom v2 → Scripts : le MÊME écran pour OnlyFans et MYM (25/11/2026, « Constellation »). Il remplace, dans la v2, la
 // copie d'Infloww (Scripts : Tag / Sequence) et celle de MyPulse (MymScripts). La bibliothèque est commune
@@ -51,6 +51,7 @@ function Rich({ text }: { text: string }) {
 
 /** Vignettes des médias d'un message ; une note vocale se lit sur place. */
 function Thumbs({ medias }: { medias: Media[] }) {
+  const [big, setBig] = useState<Media | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   useEffect(() => () => audio.current?.pause(), []);
@@ -71,14 +72,15 @@ function Thumbs({ medias }: { medias: Media[] }) {
             {playing === m.id ? <Pause className="size-4" /> : <Play className="size-4" />} {m.duration ? `${Math.round(m.duration)} s` : "Vocal"}
           </button>
         ) : (
-          <span key={m.id} className="relative size-14 overflow-hidden rounded-lg" style={{ background: "var(--color-card-2)" }}>
+          <button key={m.id} type="button" onClick={() => setBig(m)} title="Voir en grand" className="relative size-14 overflow-hidden rounded-lg transition hover:brightness-110" style={{ background: "var(--color-card-2)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {m.thumb ? <img src={m.thumb} alt="" loading="lazy" className="size-full object-cover" /> : null}
             {/video/i.test(m.type) ? <Play className="absolute inset-0 m-auto size-4 text-white drop-shadow" /> : null}
-          </span>
+          </button>
         ),
       )}
       {medias.length > 8 ? <span className="grid size-14 place-items-center rounded-lg text-[12px] text-muted" style={{ background: "var(--color-card-2)" }}>+{medias.length - 8}</span> : null}
+      {big ? <Lightbox m={viewOf(big)} onClose={() => setBig(null)} /> : null}
     </div>
   );
 }
@@ -530,6 +532,7 @@ function ScriptForm({ creatorId, group, onClose, onDone }: { creatorId: string; 
 function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose, onDone }: { pf: Pf; creatorId: string; sym: string; group: Group; item: Item | null; folders: Group[]; others: ModelRow[]; onClose: () => void; onDone: () => void }) {
   const [v, setV] = useState({ name: item?.name ?? "", text: item?.text ?? "", note: item?.note ?? "", paid: (item?.price ?? 0) > 0, price: item?.price ? String(item.price) : "", cond: item?.cond ?? "", tags: item?.tags?.length ? item.tags : [group.id], creatorTags: item?.creatorTags ?? [] });
   const [medias, setMedias] = useState<Media[]>(item?.medias ?? []);
+  const [big, setBig] = useState<Media | null>(null);
   const [vault, setVault] = useState(false);
   const [emoji, setEmoji] = useState(false);
   const [shareTo, setShareTo] = useState<string[]>([]);
@@ -609,7 +612,8 @@ function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose
             {medias.map((x) => (
               <span key={x.id} className="relative size-14 overflow-hidden rounded-lg" style={{ background: "var(--color-card-2)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {x.thumb ? <img src={x.thumb} alt="" className="size-full object-cover" /> : <span className="grid size-full place-items-center text-[10.5px] text-muted">{/audio/i.test(x.type) ? "Vocal" : x.type}</span>}
+                <button type="button" onClick={() => setBig(x)} title="Voir en grand" className="block size-full">{x.thumb ? <img src={x.thumb} alt="" className="size-full object-cover" /> : <span className="grid size-full place-items-center text-[10.5px] text-muted">{/audio/i.test(x.type) ? "Vocal" : x.type}</span>}</button>
+                {/video/i.test(x.type) ? <Play className="pointer-events-none absolute inset-0 m-auto size-4 text-white drop-shadow" /> : null}
                 <button type="button" onClick={() => setMedias(medias.filter((y) => y.id !== x.id))} title="Retirer ce média" className="absolute top-0.5 right-0.5 grid size-5 place-items-center rounded-full bg-black/75 text-white"><X className="size-3" /></button>
               </span>
             ))}
@@ -640,6 +644,7 @@ function MessageForm({ pf, creatorId, sym, group, item, folders, others, onClose
         </div>
       </Modal>
       {/* Un script GARDE ses médias : la fenêtre rend des adresses qui ne périment pas (`keep`). */}
+      {big ? <Lightbox m={viewOf(big)} onClose={() => setBig(null)} /> : null}
       {vault ? <MediaPicker pf={pf} creatorId={creatorId} selected={medias} max={mym ? 5 : undefined} keep onPick={(list) => (setMedias(list), setVault(false))} onClose={() => setVault(false)} /> : null}
     </>
   );

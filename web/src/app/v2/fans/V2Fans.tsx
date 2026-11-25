@@ -31,12 +31,14 @@ type Group = Chip & {
   reset: string; resetDay: number | null; resetHour: string | null; stayHours: number | null; count: number; active: number; spent: number;
 };
 type Stats = { fans: number; active: number; old: number; interested: number; gone: number; buyers: number; spent: number };
+/** Une liste du compte OnlyFans (« Collections » d'OnlyFans), lue chez Substy. */
+type OfList = { id: string; name: string; type: string; fans: number };
 type Data = {
   platform: Pf; currency: string; canEdit: boolean; sources: string[]; newDays: number;
   list: { id: string; name: string; avatar: string | null; fans: number }[];
   model: { id: string; name: string; avatar: string | null } | null;
   views: { id: string; name: string; count: number }[]; groups: Group[];
-  all?: number; dated?: boolean; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
+  all?: number; dated?: boolean; ofList?: { id: string; read: number; partial: boolean; error: string | null } | null; stats: Stats | null; total: number; page: number; per: number; rows: Row[];
 };
 type Live = { status: string | null; since: number | null; expires: number | null; renews: number | null; canceled: boolean; price: number | null; purchases: number; lastPurchase: number | null; link: string | null; channel: string | null };
 type Official = { active: number; old: number; interested: number };
@@ -169,6 +171,20 @@ export function V2Fans({ pf }: { pf: Pf }) {
     };
   }, [mym, mid]);
   const off = official && official.key === mid ? official.v : null;
+  // Les listes d'OnlyFans de la modèle (Collections d'OnlyFans) : lecture seule, en plus des groupes de Bloom.
+  const [ofLists, setOfLists] = useState<{ key: string; lists: OfList[]; error?: string } | null>(null);
+  useEffect(() => {
+    if (mym || !mid) return;
+    let off2 = false;
+    api<{ lists: OfList[]; error?: string }>("GET", `/api/v2/fans/oflists?pf=of&creatorId=${encodeURIComponent(mid)}`)
+      .then((r) => void (!off2 && setOfLists({ key: mid, lists: r.lists, error: r.error })))
+      .catch((e) => void (!off2 && setOfLists({ key: mid, lists: [], error: errText(e) })));
+    return () => {
+      off2 = true;
+    };
+  }, [mym, mid]);
+  const ofl = !mym && ofLists?.key === mid ? ofLists : null;
+  const ofCur = group.startsWith("of:") ? ofl?.lists.find((l) => `of:${l.id}` === group) ?? null : null;
 
   const reset = () => (setPage(1), setPicked(new Map()));
   const pickModel = (id: string) => {
@@ -197,7 +213,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
   const colorOf = (id: string) => PALETTE[Math.max(0, (d?.list ?? []).findIndex((x) => x.id === id)) % PALETTE.length];
   const view = d?.views.find((v) => v.id === group) ?? null;
   const cur0 = groups.find((g) => String(g.id) === group) ?? null;
-  const title = view ? view.name : cur0 ? cur0.name : "Tous les fans";
+  const title = view ? view.name : cur0 ? cur0.name : ofCur ? ofCur.name : group.startsWith("of:") ? "Liste OnlyFans" : "Tous les fans";
   const st = d?.stats ?? null;
   const rows = d?.rows ?? [];
   const n = picked.size;
@@ -315,6 +331,15 @@ export function V2Fans({ pf }: { pf: Pf }) {
                     ))}
                     {!groups.length ? <p className="px-2 py-1.5 text-[12px] leading-relaxed text-muted">Aucun groupe pour l’instant.{canEdit ? " Crée-en un pour ranger les fans (gros acheteurs, à relancer…)." : ""}</p> : null}
                   </div>
+                  {!mym ? (
+                    <>
+                      <p className="px-2 pt-3 pb-1 text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">Listes OnlyFans</p>
+                      <div className="space-y-0.5">
+                        {(ofl?.lists ?? []).map((l) => <FolderRow key={l.id} on={group === `of:${l.id}`} icon={<UsersRound className="size-3.5" />} name={l.name} sub={plural(l.fans, "fan")} onClick={() => pickGroup(`of:${l.id}`)} />)}
+                        {!ofl ? <p className="px-2 py-1.5 text-[12px] text-muted">Chargement des listes…</p> : ofl.error ? <p className="px-2 py-1.5 text-[12px] leading-relaxed" style={{ color: "var(--v2-down)" }}>{ofl.error}</p> : !ofl.lists.length ? <p className="px-2 py-1.5 text-[12px] text-muted">Aucune liste sur ce compte OnlyFans.</p> : null}
+                      </div>
+                    </>
+                  ) : null}
                   <p className="mt-3 border-t px-2 pt-2.5 pb-1 text-[11.5px] leading-relaxed text-muted" style={{ borderColor: "rgb(255 255 255 / 0.06)" }}>Un groupe automatique se remplit tout seul selon sa règle ; un groupe manuel se remplit à la main.</p>
                 </div>
               </section>
@@ -325,7 +350,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                   <div className="px-1 pb-3">
                     <h2 className="truncate text-[16px] font-bold tracking-[-0.01em]">{title}</h2>
                     <p className="mt-0.5 text-[12.5px] text-muted">
-                      {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : `Les fans de ${m.name} avec qui une conversation existe.`}
+                      {cur0 ? ruleOf(cur0, cur) : view ? "Vue calculée par Bloom, à jour en permanence." : group.startsWith("of:") ? (d.ofList?.error ? d.ofList.error : `Liste du compte OnlyFans${ofCur ? ` (${int(ofCur.fans)} fans selon OnlyFans)` : ""}, lue chez Substy. Ici, ceux avec qui une conversation existe${d.ofList?.partial ? ` : lecture arrêtée après ${int(d.ofList.read)} fans, la liste est trop grande pour être lue en entier` : ""}.`) : `Les fans de ${m.name} avec qui une conversation existe.`}
                       {!group && off ? ` Compteurs de MYM : ${int(off.active)} abonnés, ${int(off.old)} anciens, ${int(off.interested)} intéressés (MYM compte aussi les fans avec qui aucune conversation n’existe).` : ""}
                     </p>
                   </div>

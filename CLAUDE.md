@@ -558,6 +558,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     de l'ancien écran MYM (`mym_fan_meta.notes`) est proposée tant que celle de la messagerie est vide.
     `POST /api/v2/fans/members` : mettre des fans dans un groupe manuel ou les en retirer.
   - Le lien « conversation » ouvre `/v2/messagerie?c=<modèle>~<fan>` (la messagerie de la v2 lit ce paramètre).
+  - Listes d'OnlyFans (« Collections », 25/11/2026, lecture seule) : `GET /api/v2/fans/oflists` (`fans.lists.list`,
+    60 s) dans la colonne ; `group=of:<id>` sur `GET /api/v2/fans` filtre les fans par les conversations de Substy de
+    cette liste (`chats.list` avec `listId`, pages de 30, 1 500 fans au plus → `ofList.partial`, gardé 5 min).
 - Envois groupés v2 (`v2/bulk/V2Bulk.tsx`, `v2/bulk/BulkForms.tsx`, `app/v2bulk.mjs`, 25/11/2026) : un écran pour les
   deux plateformes, à la place des copies d'Infloww (`SmartMessages`) et de MyPulse (`MymMassDm`), qui restent dans la
   version actuelle. Les deux plateformes n'envoient pas de la même façon, et ça ne change pas :

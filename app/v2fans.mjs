@@ -146,12 +146,50 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
     return { u, b, cid, pf: /mym/i.test(c.platform || '') ? 'mym' : 'of' };
   };
   const groupsOf = (cid) => listsOfCreator(cid).map((l) => ({ l, members: membersOf(l) }));
+
+  // ---------------------------------------------------------------- listes d'OnlyFans (« Collections »)
+  // Les listes du compte OnlyFans (celles d'OnlyFans comme « Fans », « Following »…, et celles créées par l'agence),
+  // lues chez Substy (`fans.lists.list`, gardées 60 s). Leurs membres : les conversations de Substy filtrées par
+  // liste (`chats.list` avec `listId`), par pages de 30 comme le site de Substy, gardées 5 min. Au-delà de
+  // OF_MAX fans, la lecture s'arrête (`partial`) : une très grande liste (ex. tous les abonnés) prendrait des
+  // minutes. Lecture seule : Bloom ne change pas les listes d'OnlyFans ici.
+  const OF_MAX = 1500;
+  const ofCache = new Map(); // clé → { at, value | promise }
+  const remember = (key, ttl, make) => {
+    const hit = ofCache.get(key);
+    if (hit && Date.now() - hit.at < ttl) return hit.value;
+    const value = make().catch((e) => (ofCache.delete(key), Promise.reject(e)));
+    ofCache.set(key, { at: Date.now(), value });
+    return value;
+  };
+  const ofLists = (cid) =>
+    remember(`lists:${cid}`, 60_000, async () =>
+      ((await substy.fanLists(cid))?.items || []).map((l) => ({ id: String(l.id), name: String(l.name || 'Sans nom'), type: String(l.type || ''), fans: Number(l.fanCount) || 0 })));
+  const ofMembers = (cid, listId) =>
+    remember(`members:${cid}:${listId}`, 5 * 60_000, async () => {
+      const ids = new Set();
+      let cursor;
+      let stale = 0;
+      for (let page = 0; page < Math.ceil(OF_MAX / 30) + 5; page++) {
+        const r = await substy.chats(cid, { limit: 30, cursor, listId });
+        let fresh = 0;
+        for (const it of r?.items || []) {
+          const id = String(it?.fan?.fanId ?? it?.fanId ?? '');
+          if (id && !ids.has(id)) ids.add(id), fresh++;
+        }
+        stale = fresh ? 0 : stale + 1;
+        cursor = r?.nextCursor || undefined;
+        if (!cursor || stale >= 3) return { ids, partial: false };
+        if (ids.size >= OF_MAX) return { ids, partial: true };
+      }
+      return { ids, partial: true };
+    });
   const chip = (g) => ({ id: g.l.id, name: g.l.name, color: g.l.color || null, icon: g.l.icon || null, kind: g.l.kind });
 
   return {
     // ?pf=of|mym, &creatorId= (sinon la première modèle), &group= (identifiant d'un groupe, ou « v:… » pour une vue
     // rapide), &status=active|old|interested, &q=, &sort=spent|recent|last|name|rate, &dir=asc, &page=.
-    'GET /api/v2/fans': (req, res) => {
+    'GET /api/v2/fans': async (req, res) => {
       const a = start(req, res);
       if (!a) return;
       const { u, p, pf, mine } = a;
@@ -168,8 +206,20 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
       // Le groupe (ou la vue rapide) choisi : la base du tableau et des chiffres du haut.
       const g = p.get('group') || '';
       const view = g.startsWith('v:') ? VIEWS.find((v) => v[0] === g.slice(2)) : null;
-      const picked = !view && g ? groups.find((x) => String(x.l.id) === g) : null;
-      const base = view ? set.rows.filter((r) => view[2](r, now)) : picked ? set.rows.filter((r) => picked.members.has(r.fanId)) : set.rows;
+      // « of:<id> » : une liste d'OnlyFans (seulement côté OnlyFans, modèle de Substy).
+      let ofList = null;
+      let ofErr = null;
+      if (g.startsWith('of:') && pf === 'of' && substy && !cid.startsWith('mym-')) {
+        try {
+          const m = await ofMembers(cid, g.slice(3));
+          ofList = { id: g, members: m.ids, partial: m.partial, read: m.ids.size };
+        } catch (e) {
+          ofErr = `Liste d’OnlyFans illisible pour l’instant (${String(e?.message || e).slice(0, 120)}).`;
+          ofList = { id: g, members: new Set(), partial: false, read: 0 };
+        }
+      }
+      const picked = !view && g && !ofList ? groups.find((x) => String(x.l.id) === g) : null;
+      const base = view ? set.rows.filter((r) => view[2](r, now)) : ofList ? set.rows.filter((r) => ofList.members.has(r.fanId)) : picked ? set.rows.filter((r) => picked.members.has(r.fanId)) : set.rows;
       const stats = { fans: base.length, active: 0, old: 0, interested: 0, gone: 0, buyers: 0, spent: 0 };
       for (const r of base) {
         stats[r.status]++;
@@ -200,11 +250,28 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
           return { ...fanListView(x.l), count, active, spent };
         }),
         all: set.rows.length,
+        // La liste d'OnlyFans choisie : fans lus chez Substy (`read`), lecture arrêtée avant la fin (`partial`).
+        ofList: ofList ? { id: ofList.id, read: ofList.read, partial: ofList.partial, error: ofErr } : null,
         // Aucune date d'abonnement connue (OnlyFans : Substy ne la donne que fan par fan) : l'écran cache la colonne.
         dated: set.rows.some((r) => r.since),
         stats, total: rows.length, page, per: PER, sort,
         rows: rows.slice((page - 1) * PER, page * PER).map((r) => ({ ...publicRow(r), groups: groups.filter((x) => x.members.has(r.fanId)).map(chip) })),
       });
+    },
+
+    // Les listes d'OnlyFans de la modèle (« Collections » d'OnlyFans), avec le nombre de fans donné par OnlyFans.
+    'GET /api/v2/fans/oflists': async (req, res) => {
+      const a = start(req, res);
+      if (!a) return;
+      const { p, pf, mine } = a;
+      const c = mine.find((x) => String(x.id) === String(p.get('creatorId') || ''));
+      if (!c) return send(res, 404, { error: 'Modèle inconnue sur cette plateforme' });
+      if (pf !== 'of' || !substy || String(c.id).startsWith('mym-')) return send(res, 200, { lists: [] });
+      try {
+        send(res, 200, { lists: await ofLists(String(c.id)) });
+      } catch (e) {
+        send(res, 200, { lists: [], error: `Listes d’OnlyFans illisibles pour l’instant (${String(e?.message || e).slice(0, 120)}).` });
+      }
     },
 
     // Ce que MYM compte lui-même (abonnés, anciens, intéressés) : Bloom n'affiche que les fans qui ont une conversation.

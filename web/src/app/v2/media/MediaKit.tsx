@@ -158,8 +158,22 @@ export function MediaTile({ m, cur, on = false, selecting = false, onMain, onTog
   ].filter(Boolean).join(" · ");
   const pill = "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] leading-none font-bold";
   const dark = { background: "rgb(0 0 0 / 0.62)", color: "#fff" };
+  // Vidéo : un aperçu muet se lance quand la souris reste sur la vignette (pour reconnaître la bonne sans l'ouvrir).
+  // Pas pour les vidéos MYM (flux HLS, lisibles seulement dans la grande vue).
+  const canHover = m.type === "video" && !!m.full && !/\.m3u8(\?|$)/.test(m.full);
+  const [hover, setHover] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enter = () => {
+    if (!canHover) return;
+    timer.current = setTimeout(() => setHover(true), 350);
+  };
+  const leave = () => {
+    if (timer.current) clearTimeout(timer.current);
+    setHover(false);
+  };
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
   return (
-    <div className="group relative overflow-hidden rounded-[12px]" style={{ aspectRatio: "4 / 5", background: "var(--color-card-2)" }}>
+    <div onMouseEnter={enter} onMouseLeave={leave} className="group relative overflow-hidden rounded-[12px]" style={{ aspectRatio: "4 / 5", background: "var(--color-card-2)" }}>
       <button type="button" onClick={onMain} aria-pressed={onToggle ? on : undefined} title={about} className="absolute inset-0 block size-full text-left">
         {m.type === "audio" ? (
           <span className="grid size-full place-items-center px-2 text-center">
@@ -174,6 +188,7 @@ export function MediaTile({ m, cur, on = false, selecting = false, onMain, onTog
         ) : (
           <span className="grid size-full place-items-center text-muted"><ImageIcon className="size-7" /></span>
         )}
+        {hover && m.full ? <video src={m.full} muted autoPlay loop playsInline preload="auto" className="pointer-events-none absolute inset-0 size-full bg-black object-cover" /> : null}
       </button>
       {on ? <span className="pointer-events-none absolute inset-0 rounded-[12px]" style={{ boxShadow: "inset 0 0 0 2px var(--v2-blue)", background: "rgb(59 130 246 / 0.18)" }} /> : null}
       <span className="pointer-events-none absolute top-1.5 left-1.5 flex max-w-[calc(100%-40px)] flex-wrap gap-1">
@@ -187,7 +202,7 @@ export function MediaTile({ m, cur, on = false, selecting = false, onMain, onTog
         {m.price ? <span className={`${pill} v2-num`} style={{ background: "rgb(0 0 0 / 0.7)", color: "var(--v2-up)" }}>{priceOf(m.price, cur)}</span> : null}
       </span>
       {onPreview ? (
-        <button type="button" onClick={onPreview} title="Voir en grand" aria-label="Voir en grand" className="absolute right-1.5 bottom-1.5 grid size-7 place-items-center rounded-full text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" style={{ background: "rgb(0 0 0 / 0.7)" }}><Eye className="size-3.5" /></button>
+        <button type="button" onClick={onPreview} title="Voir en grand" aria-label="Voir en grand" className={`absolute right-1.5 bottom-1.5 grid size-8 place-items-center rounded-full text-white transition-opacity hover:scale-105 focus-visible:opacity-100 ${m.type === "video" ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`} style={{ background: "rgb(0 0 0 / 0.75)" }}><Eye className="size-4" /></button>
       ) : null}
       {onToggle ? (
         <button
@@ -427,7 +442,7 @@ export function MediaView({ m }: { m: Pick<MediaItem, "id" | "type" | "thumb" | 
 }
 
 /** Un média en plein écran, par-dessus une fenêtre (aperçu dans la fenêtre de choix). */
-export function Lightbox({ m, onClose }: { m: MediaItem; onClose: () => void }) {
+export function Lightbox({ m, onClose }: { m: Pick<MediaItem, "id" | "type" | "thumb" | "full" | "name"> & { keepFull?: string | null }; onClose: () => void }) {
   const [host, setHost] = useState<Element | null>(null);
   useEffect(() => setHost(document.querySelector(".v2")), []);
   useEffect(() => {
@@ -445,6 +460,12 @@ export function Lightbox({ m, onClose }: { m: MediaItem; onClose: () => void }) 
     host,
   );
 }
+
+/** Un média gardé ailleurs (script, message) dans la forme de la grande vue. */
+export const viewOf = (m: { id: string | number; type: string; thumb?: string | null; full?: string | null; name?: string | null }) => ({
+  id: String(m.id), type: (/video/i.test(m.type) ? "video" : /audio|voice/i.test(m.type) ? "audio" : "photo") as MediaItem["type"],
+  thumb: m.thumb ?? null, full: m.full ?? null, name: m.name ?? "",
+});
 
 // ---------------------------------------------------------------- la fenêtre de choix des médias
 /**

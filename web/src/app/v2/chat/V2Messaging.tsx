@@ -55,12 +55,36 @@ const when = (iso: string | null) => {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 };
 
+// Dernière copie (dans ce navigateur) de ce que le serveur a répondu : la messagerie s'affiche tout de suite avec,
+// puis se met à jour quand la vraie réponse arrive (25/11/2026 : chaque appel prenait 1 à 1,5 s, et la liste
+// attendait deux appels l'un après l'autre).
+const CACHE = "bloom.v2.chat.cache.";
+const fromCache = <T,>(k: string): T | null => {
+  try {
+    const v = localStorage.getItem(CACHE + k);
+    return v ? (JSON.parse(v) as T) : null;
+  } catch {
+    return null;
+  }
+};
+const toCache = (k: string, v: unknown) => {
+  try {
+    localStorage.setItem(CACHE + k, JSON.stringify(v));
+  } catch {}
+};
+
 export function V2Messaging() {
-  const [boot, setBoot] = useState<Boot | null>(null);
-  const [err, setErr] = useState("");
   const [pf] = useState(() => getPf());
+  const [boot, setBoot] = useState<Boot | null>(() => fromCache<Boot>("boot." + pf));
+  const [err, setErr] = useState("");
   useEffect(() => {
-    api<Boot>("GET", "/api/boot").then((b) => setBoot({ ...b, models: b.models.filter((m) => /mym/i.test(m.platform || "") === (pf === "mym")) })).catch((e) => setErr((e as Error).message));
+    api<Boot>("GET", "/api/boot")
+      .then((b) => {
+        const v = { ...b, models: b.models.filter((m) => /mym/i.test(m.platform || "") === (pf === "mym")) };
+        setBoot(v);
+        toCache("boot." + pf, v);
+      })
+      .catch((e) => setErr((e as Error).message));
   }, [pf]);
   if (!boot) return <div className="grid h-full place-items-center text-[13px] text-muted">{err || "Chargement de la messagerie…"}</div>;
   if (!boot.models.length)
@@ -117,22 +141,28 @@ function Inner({ me, models, hidden0, mym }: { me: Me; models: Model[]; hidden0:
   setModelCurrencies(models);
   useEffect(() => (keep("model." + (mym ? "mym" : "of"), model), keep("view", tab), keep("order", sort), keep("panel", panel)), [model, tab, sort, panel, mym]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (first = false) => {
     const s = ++seq.current;
     const p = new URLSearchParams({ tab, sort, window: tab === "todo" ? "72" : "0" });
     if (model) p.set("model", model);
     if (q.trim()) p.set("q", q.trim());
     if (paying) p.set("paying", "1");
+    // Premier affichage de cette vue : la dernière copie tout de suite, la vraie réponse ensuite.
+    if (first && !q.trim()) {
+      const c = fromCache<Resp>("inbox." + p.toString());
+      if (c) setData(c);
+    }
     try {
       const r = await api<Resp>("GET", "/api/inbox?" + p);
       if (s !== seq.current) return;
       setData(r);
+      if (!q.trim()) toCache("inbox." + p.toString(), r);
       if (Array.isArray(r.hidden)) setHidden(r.hidden);
     } catch {}
   }, [tab, sort, model, q, paying]);
   useEffect(() => {
-    load();
-    const later = debounce(load, 400);
+    load(true);
+    const later = debounce(() => load(), 400);
     const a = onLive("conv", () => later());
     const b = onLive("open", () => later());
     const t = setInterval(() => document.visibilityState === "visible" && load(), pollMs(20_000));

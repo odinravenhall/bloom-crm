@@ -151,8 +151,8 @@ export class SubstySession {
   // --- Raccourcis (formats relevés sur le site le 21/11/2026) ---
   me() { return this.call('auth.me'); }
   creators() { return this.call('creators.getCreators', { fetchSettings: true }); }
-  chats(creatorId, { limit = 30, cursor, query = '', unreadOnly = false, aiStatus = 'all', handoffOnly = false } = {}) {
-    return this.call('chats.list', { creatorId, limit, listId: null, inboxIds: [], aiStatus, handoffOnly, query, order: 'recent', languages: [], platformFilters: [], withSpend: true, unreadOnly, direction: 'forward', ...(cursor ? { cursor } : {}) });
+  chats(creatorId, { limit = 30, cursor, query = '', unreadOnly = false, aiStatus = 'all', handoffOnly = false, listId = null } = {}) {
+    return this.call('chats.list', { creatorId, limit, listId, inboxIds: [], aiStatus, handoffOnly, query, order: 'recent', languages: [], platformFilters: [], withSpend: true, unreadOnly, direction: 'forward', ...(cursor ? { cursor } : {}) });
   }
   messages(creatorId, fanId, { limit = 30, cursor } = {}) {
     return this.call('chats.messages', { creatorId, fanId, limit, isUnread: false, direction: 'forward', ...(cursor ? { cursor } : {}) });

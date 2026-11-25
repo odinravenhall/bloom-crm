@@ -274,7 +274,8 @@ export function V2Home({ me }: { me: Me }) {
   const { creators } = useCreators();
   const staff = me.role === "admin" || me.role === "manager" || me.role === "lead";
   const canSeeNumbers = me.role !== "chatter";
-  const [period, setPeriod] = useState<PeriodKey>("month");
+  // Ouvre toujours sur « Aujourd'hui » (demande de l'agence, 25/11/2026) : la période choisie n'est plus gardée.
+  const [period, setPeriod] = useState<PeriodKey>("today");
   const [only, setOnly] = useState("");
   const [menu, setMenu] = useState(false);
   const [mode, setMode] = useState<"bars" | "line">("bars");
@@ -285,8 +286,6 @@ export function V2Home({ me }: { me: Me }) {
   const key = `${period}|${only}`;
   useEffect(() => {
     try {
-      const p = localStorage.getItem("bloom.v2.home.period") as PeriodKey | null;
-      if (p && PERIODS.some(([k]) => k === p)) setPeriod(p);
       if (localStorage.getItem("bloom.v2.home.mode") === "line") setMode("line");
     } catch {}
   }, []);
@@ -449,7 +448,7 @@ export function V2Home({ me }: { me: Me }) {
             ) : null}
           </div>
           <div className="v2-tabs v2-noscroll max-w-full overflow-x-auto">
-            {PERIODS.map(([k, l]) => <button key={k} onClick={() => (setPeriod(k), save("period", k))} className="v2-tab" data-on={period === k}>{l}</button>)}
+            {PERIODS.map(([k, l]) => <button key={k} onClick={() => setPeriod(k)} className="v2-tab" data-on={period === k}>{l}</button>)}
           </div>
         </div>
       </div>
