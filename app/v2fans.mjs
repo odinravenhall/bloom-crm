@@ -171,7 +171,16 @@ export function v2FansRoutes({ userFrom, send, body, creators, substy }) {
       let cursor;
       let stale = 0;
       for (let page = 0; page < Math.ceil(OF_MAX / 30) + 5; page++) {
-        const r = await substy.chats(cid, { limit: 30, cursor, listId });
+        // Substy répond « Chats not found » (erreur) au lieu d'une page vide : liste sans conversation, ou page
+        // demandée après la dernière. Ce n'est pas une panne : on garde ce qui a été lu.
+        let r;
+        try {
+          r = await substy.chats(cid, { limit: 30, cursor, listId });
+        } catch (e) {
+          if (/not found/i.test(String(e?.message || e))) return { ids, partial: false };
+          if (ids.size) return { ids, partial: true };
+          throw e;
+        }
         let fresh = 0;
         for (const it of r?.items || []) {
           const id = String(it?.fan?.fanId ?? it?.fanId ?? '');
