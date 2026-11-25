@@ -197,7 +197,8 @@ export function v2StatsRoutes({ userFrom, send, creators }) {
     return data;
   };
   return {
-    // Chiffres de la plateforme choisie : ?from=&to= (jours de Paris), &creatorId= (une seule modèle), &mode=gross (OnlyFans).
+    // Chiffres d'une plateforme : ?pf=of|mym (sinon celle du menu), ?from=&to= (jours de Paris), &creatorId= (une seule
+    // modèle), &mode=gross (OnlyFans).
     'GET /api/v2/stats': (req, res) => {
       const u = userFrom(req);
       if (!u) return send(res, 401, { error: 'Connecte-toi' });
@@ -210,7 +211,10 @@ export function v2StatsRoutes({ userFrom, send, creators }) {
       if (to > today) to = today;
       if (from > to) from = to;
       if (Date.parse(to) - Date.parse(from) > 400 * DAY) from = addDay(to, -400);
-      const pf = u.pf === 'mym' ? 'mym' : 'of';
+      // La plateforme est celle que l'écran AFFICHE (« pf » dans l'adresse) : le cookie du menu est commun à tous les
+      // onglets, un deuxième onglet resté sur l'autre plateforme recevrait sinon les mauvais chiffres sous le bon titre.
+      const asked = p.get('pf');
+      const pf = asked === 'of' || asked === 'mym' ? asked : u.pf === 'mym' ? 'mym' : 'of';
       // `canSee` ne garde que les modèles de la plateforme choisie (et, côté MYM, les comptes reliés).
       const mine = creators().filter((c) => canSee({ ...u, pf }, c.id));
       const only = p.get('creatorId') || '';

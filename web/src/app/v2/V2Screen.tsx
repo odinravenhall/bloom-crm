@@ -54,8 +54,8 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "envois": return m ? <MymMassDm /> : <SmartMessages />;
     case "fans": return m ? <MymFans tab="active" /> : <Lists canEdit={canEdit} />;
     case "medias": return m ? <MymStudio /> : <Vault canEdit={canEdit} />;
-    // Refait pour la v2 : le même écran pour les deux plateformes (il lit la plateforme choisie côté serveur).
-    case "chiffres": return <V2Stats />;
+    // Refait pour la v2 : le même écran pour les deux plateformes (il demande les chiffres de la plateforme affichée).
+    case "chiffres": return <V2Stats pf={pf} />;
     case "analytique": return m ? <MymAnalytics /> : <CreatorReports />;
     case "liens": return m ? <MymTrack /> : <TrackingLinks />;
     case "equipe-messages": return m ? <MymMessages /> : <MessageDashboard />;

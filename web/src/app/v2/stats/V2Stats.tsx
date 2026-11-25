@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, ChevronDown, Download, Users } from "lucide-react";
 import { api } from "@/lib/api";
+import type { Pf } from "@/lib/platform";
 import { Avatar } from "@/rv/components/ui";
 import { addDay, Bars, cash, Count, daysBetween, Delta, Donut, fmtDay, int, Lines, PALETTE, paris, pct, Spark, type BarPt, type Slice } from "../kit";
 
@@ -76,7 +77,8 @@ function Heat({ slots, fmt }: { slots: Stats["slots"]; fmt: (v: number, digits?:
   );
 }
 
-export function V2Stats() {
+/** `pf` = la plateforme affichée par cet onglet (elle est envoyée au serveur : le cookie du menu est commun aux onglets). */
+export function V2Stats({ pf }: { pf: Pf }) {
   const [preset, setPreset] = useState<Preset>("month");
   const [custom, setCustom] = useState<[string, string]>(() => [addDay(paris(), -6), paris()]);
   const [draft, setDraft] = useState<[string, string]>(custom);
@@ -105,7 +107,7 @@ export function V2Stats() {
   };
   useEffect(() => {
     let stop = false;
-    const q = `${model ? `&creatorId=${encodeURIComponent(model)}` : ""}${gross ? "&mode=gross" : ""}`;
+    const q = `&pf=${pf}${model ? `&creatorId=${encodeURIComponent(model)}` : ""}${gross ? "&mode=gross" : ""}`;
     const len = daysBetween(from, to) + 1;
     const load = () =>
       Promise.all([
@@ -123,7 +125,7 @@ export function V2Stats() {
       stop = true;
       if (t) clearInterval(t);
     };
-  }, [from, to, model, gross]);
+  }, [from, to, model, gross, pf]);
   useEffect(() => {
     if (!menu && !dates) return;
     const close = (e: MouseEvent) => !(e.target as Element).closest?.("[data-pop]") && (setMenu(false), setDates(false));
@@ -183,7 +185,7 @@ export function V2Stats() {
     if (!s) return;
     const num = (c: number) => (c / 100).toFixed(2).replace(".", ",");
     const withSubs = !!v?.subs;
-    const head = ["Jour", `Total (${cur})`, ...s.cats.map((c) => c.label), "Ventes", ...(withSubs ? ["Abonnés actifs"] : [])];
+    const head = ["Jour", `Total ${s.mode === "gross" ? "brut" : "net"} (${cur})`,...s.cats.map((c) => c.label), "Ventes", ...(withSubs ? ["Abonnés actifs"] : [])];
     const lines = s.days.map((d) => [d.day, num(d.total), ...s.cats.map((c) => num(d.cats[c.key] || 0)), String(d.n), ...(withSubs ? [d.subs == null ? "" : String(d.subs)] : [])].join(";"));
     const blob = new Blob(["﻿" + [head.join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
