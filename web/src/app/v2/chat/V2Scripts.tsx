@@ -290,7 +290,7 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
     ["Messages", int(g.items.length), paid.length ? `dont ${plural(paid.length, "payant")}` : "tous gratuits"],
     ["Médias", int(sum((i) => i.medias.length))],
     ["Prix cumulé", paid.length ? price(paid.reduce((a, i) => a + i.price, 0)) : "—", paid.length ? "si le fan achète tout" : undefined],
-    ["Envois", int(sent), sent ? "depuis Bloom" : "pas encore envoyé"],
+    ["Envois", int(sent), sent ? "depuis Bloom" : "pas encore"],
     ["Achats", int(sales), ppv ? `${pct(sales, ppv)} % des payants envoyés` : undefined],
     ["Revenus", cash(revenue, cur)],
   ];
@@ -341,17 +341,17 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
               ) : null}
               <div className="mb-2.5 rounded-xl border p-3.5" style={{ borderColor: "var(--color-line)", background: "rgb(255 255 255 / 0.02)" }}>
                 <div className="flex flex-wrap items-start gap-2">
-                  <p className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <b className="text-[14px]">{i.name || `Message ${n + 1}`}</b>
+                  <p className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-2">
+                    {/^\d*$/.test(i.name.trim()) ? (g.kind === "sequence" ? null : <b className="text-[14px] text-muted">Message {n + 1}</b>) : <b className="text-[14px]">{i.name}</b>}
                     {i.price ? <span className="v2-delta" data-dir="up" title="Contenu payant">{price(i.price)}</span> : null}
                     {i.cond ? <span className="v2-tag" style={{ color: "#c4b5fd", background: "rgb(124 58 237 / 0.16)" }}>{i.cond === "bought" ? "si le précédent est acheté" : "si le précédent n’est pas acheté"}</span> : null}
                   </p>
                   {canEdit ? (
-                    <span className="flex shrink-0 gap-1">
-                      {own && g.items.length > 1 ? <><button onClick={() => moveItem(g, i, -1)} title="Monter" className="v2-sq" style={{ width: 28, height: 28 }}><ArrowUp className="size-3.5" /></button><button onClick={() => moveItem(g, i, 1)} title="Descendre" className="v2-sq" style={{ width: 28, height: 28 }}><ArrowDown className="size-3.5" /></button></> : null}
-                      <button onClick={() => setWin({ kind: "message", group: g, item: i })} title="Modifier ce message" className="v2-sq" style={{ width: 28, height: 28 }}><Pencil className="size-3.5" /></button>
-                      <button onClick={() => setWin({ kind: "share", item: i })} title="Copier ce message chez d’autres modèles" className="v2-sq" style={{ width: 28, height: 28 }}><Share2 className="size-3.5" /></button>
-                      <button onClick={() => del(i)} title="Supprimer ce message" className="v2-sq" style={{ width: 28, height: 28 }}><Trash2 className="size-3.5" /></button>
+                    <span className="flex shrink-0 gap-0.5">
+                      {own && g.items.length > 1 ? <><button onClick={() => moveItem(g, i, -1)} disabled={n === 0} title="Monter" className="grid size-7 place-items-center rounded-md text-muted transition disabled:opacity-25 hover:bg-white/[0.07] hover:text-(--color-fg)"><ArrowUp className="size-3.5" /></button><button onClick={() => moveItem(g, i, 1)} disabled={n === g.items.length - 1} title="Descendre" className="grid size-7 place-items-center rounded-md text-muted transition disabled:opacity-25 hover:bg-white/[0.07] hover:text-(--color-fg)"><ArrowDown className="size-3.5" /></button></> : null}
+                      <button onClick={() => setWin({ kind: "message", group: g, item: i })} title="Modifier ce message" className="grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><Pencil className="size-3.5" /></button>
+                      <button onClick={() => setWin({ kind: "share", item: i })} title="Copier ce message chez d’autres modèles" className="grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><Share2 className="size-3.5" /></button>
+                      <button onClick={() => del(i)} title="Supprimer ce message" className="grid size-7 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><Trash2 className="size-3.5" /></button>
                     </span>
                   ) : null}
                 </div>
@@ -359,11 +359,13 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
                 <Thumbs medias={i.medias} />
                 {i.note ? <p className="mt-2.5 flex items-start gap-1.5 text-[12px]" style={{ color: "#fbbf24" }} title="Consigne pour l’équipe : jamais envoyée au fan"><StickyNote className="mt-0.5 size-3.5 shrink-0" /><span>{i.note}</span></p> : null}
                 {also.length || i.creatorTags.length ? <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">{also.length ? <>aussi dans {also.map((x) => <span key={x} className="v2-tag">{x}</span>)}</> : null}{i.creatorTags.map((x) => <span key={x} className="v2-tag">@{x}</span>)}</p> : null}
-                <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2.5 text-[11.5px] text-muted" style={{ borderColor: "rgb(255 255 255 / 0.06)" }}>
-                  <span>Envoyé <b className="v2-num" style={{ color: "var(--color-fg)" }}>{int(i.uses)}</b> fois{i.fans ? ` à ${plural(i.fans, "fan")}` : ""}</span>
-                  {i.price || i.sales ? <span>Acheté <b className="v2-num" style={{ color: "var(--color-fg)" }}>{int(i.sales)}</b> fois{i.ppvSent ? ` (${pct(i.sales, i.ppvSent)} %)` : ""}</span> : null}
-                  {i.revenue ? <span>Rapporté <b className="v2-num" style={{ color: "var(--color-fg)" }}>{cash(i.revenue, cur)}</b></span> : null}
-                </p>
+                {i.uses || i.sales || i.revenue ? (
+                  <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2.5 text-[11.5px] text-muted" style={{ borderColor: "rgb(255 255 255 / 0.06)" }}>
+                    <span>Envoyé <b className="v2-num" style={{ color: "var(--color-fg)" }}>{int(i.uses)}</b> fois{i.fans ? ` à ${plural(i.fans, "fan")}` : ""}</span>
+                    {i.price || i.sales ? <span>Acheté <b className="v2-num" style={{ color: "var(--color-fg)" }}>{int(i.sales)}</b> fois{i.ppvSent ? ` (${pct(i.sales, i.ppvSent)} %)` : ""}</span> : null}
+                    {i.revenue ? <span>Rapporté <b className="v2-num" style={{ color: "var(--color-fg)" }}>{cash(i.revenue, cur)}</b></span> : null}
+                  </p>
+                ) : null}
               </div>
             </div>
           );
