@@ -5,7 +5,7 @@ import { ArrowDownUp, Flame, Lock, MessageCircle, Pin, Search, Sparkles, UserRou
 import { api, toast } from "@/rv/lib/client";
 import { debounce, onLive, useAiWriting } from "@/rv/lib/liveClient";
 import { pollMs } from "@/rv/lib/perf";
-import { curOf, money, setCurrentModel, setModelCurrencies } from "@/rv/lib/fmt";
+import { curOf, money, setCurrentModel, setModelCurrencies, waitTone } from "@/rv/lib/fmt";
 import { Avatar } from "@/rv/components/ui";
 import { Toaster } from "@/rv/components/Toaster";
 import { FanPanel } from "@/rv/inbox/FanPanel";
@@ -23,6 +23,8 @@ type Totals = QueueResp["totals"] & { ai?: number; noai?: number };
 type Row = QueueResp["items"][number] & { aiEver?: boolean; sub?: boolean; groups?: { name: string; color: string | null }[] };
 type Tab = "reply" | "all" | "unread" | "online" | "handoff" | "noai" | "ai" | "pinned";
 const SORTS = [["newest", "Les plus récentes d’abord"], ["oldest", "Celles qui attendent depuis le plus longtemps"], ["spent", "Les plus gros acheteurs d’abord"]] as const;
+/** Temps d'attente court : « 40 s », « 12 min », « 2 h 05 », « 3 j ». */
+const waitShort = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.floor(ms / 1000))} s` : ms < 3600_000 ? `${Math.floor(ms / 60_000)} min` : ms < 86400_000 ? `${Math.floor(ms / 3600_000)} h ${String(Math.floor((ms % 3600_000) / 60_000)).padStart(2, "0")}` : `${Math.floor(ms / 86400_000)} j`);
 const stored = <T,>(k: string, d: T): T => {
   try {
     const s = localStorage.getItem("bloom.v2.chat." + k);
@@ -82,6 +84,12 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
   const [held, setHeld] = useState<Conv | null>(null);
   const [panel, setPanel] = useState(() => stored("panel", true));
   const seq = useRef(0);
+  // Les temps d'attente de la liste avancent tout seuls.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
   const byId = useMemo(() => Object.fromEntries(models.map((m) => [m.id, m])), [models]);
   setModelCurrencies(models);
   useEffect(() => (keep("model." + (mym ? "mym" : "of"), model), keep("tab", tab), keep("sort", sort), keep("panel", panel)), [model, tab, sort, panel, mym]);
@@ -170,93 +178,89 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
       {/* Colonne 1 : conversations */}
       <section className={`flex min-h-0 w-full shrink-0 flex-col border-r md:w-[348px] ${current ? "hidden md:flex" : ""}`} style={{ borderColor: "var(--color-line)", background: "var(--color-panel)" }}>
         <div className="shrink-0 px-4 pt-4">
-          <div className="flex items-center">
-            <h1 className="text-[20px] font-semibold tracking-[-0.02em]">Messagerie</h1>
-            <span className="flex-1" />
-            <span className="flex items-center gap-1.5 text-[11.5px] text-muted"><span className="v2-live" /> en direct</span>
+          <div className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[19px] leading-tight font-bold tracking-[-0.02em]">Messagerie</h1>
+              <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted"><span className="v2-live" />{T.reply ? `${T.reply} fan${T.reply > 1 ? "s" : ""} à répondre` : "Tout le monde a sa réponse"}</p>
+            </div>
+            <button onClick={() => setPaying(!paying)} title="Seulement les fans qui ont déjà acheté" className="v2-sq" data-on={paying}><Flame className="size-4" /></button>
+            <button onClick={() => setSort(SORTS[(SORTS.findIndex(([k]) => k === sort) + 1) % SORTS.length][0])} title={`Tri : ${sortLabel}. Clique pour changer.`} className="v2-sq" data-on={sort !== "newest"}><ArrowDownUp className="size-4" /></button>
           </div>
           {multi ? (
-            <div className="v2-noscroll -mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1">
-              <button onClick={() => setModel("")} className="v2-model" data-on={!model} title="Toutes mes modèles">
-                <span className="grid size-10 place-items-center rounded-full text-[11px] font-bold" style={{ background: "var(--color-card-2)" }}>Tout</span>
-                <span>Toutes</span>
-              </button>
+            <div className="v2-noscroll -mx-4 mt-3 flex gap-1 overflow-x-auto px-4">
+              <button onClick={() => setModel("")} className="v2-mtab" data-on={!model} style={{ paddingLeft: 12 }} title="Toutes mes modèles">Toutes</button>
               {models.map((m) => {
                 const n = data?.counts?.[m.id] || 0;
                 return (
-                  <button key={m.id} onClick={() => setModel(m.id)} className="v2-model" data-on={model === m.id} title={`${m.displayName}${n ? ` · ${n} à répondre` : ""}`}>
-                    <span className="relative">
-                      <Avatar src={m.avatar} name={m.displayName} size="size-10" />
-                      {n ? <b className="absolute -top-1 -right-1.5 grid min-w-[18px] place-items-center rounded-full px-1 text-[10px] leading-[18px] text-white" style={{ background: "var(--v2-blue)", boxShadow: "0 0 0 2px var(--color-bg)" }}>{n > 99 ? "99+" : n}</b> : null}
-                    </span>
-                    <span>{m.displayName}</span>
+                  <button key={m.id} onClick={() => setModel(m.id)} className="v2-mtab" data-on={model === m.id} title={`${m.displayName}${n ? ` · ${n} à répondre` : ""}`}>
+                    <Avatar src={m.avatar} name={m.displayName} size="size-6" />
+                    {m.displayName}
+                    {n ? <span className="v2-badge" style={{ minWidth: 18, height: 18, fontSize: 10, padding: "0 5px" }}>{n > 99 ? "99+" : n}</span> : null}
                   </button>
                 );
               })}
             </div>
           ) : null}
-          <div className="mt-3 flex items-center gap-1.5">
-            <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 text-[13px] transition focus-within:border-(--v2-blue)" style={{ borderColor: "var(--color-line)", background: "var(--color-card)" }}>
-              <Search className="size-4 shrink-0 text-muted" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un fan" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted/70" />
-              {q ? <button onClick={() => setQ("")} className="text-muted hover:text-fg"><X className="size-3.5" /></button> : null}
-            </label>
-            <button onClick={() => setPaying(!paying)} title="Seulement les fans qui ont déjà acheté" className="v2-sq" data-on={paying}><Flame className="size-4" /></button>
-            <button onClick={() => setSort(SORTS[(SORTS.findIndex(([k]) => k === sort) + 1) % SORTS.length][0])} title={`Tri : ${sortLabel}. Clique pour changer.`} className="v2-sq" data-on={sort !== "newest"}><ArrowDownUp className="size-4" /></button>
-          </div>
-          <div className="v2-noscroll -mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-3">
+          <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border px-3 text-[13px] transition focus-within:border-(--v2-blue)" style={{ borderColor: "var(--color-line)", background: "var(--color-card)" }}>
+            <Search className="size-4 shrink-0 text-muted" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un fan…" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted/70" />
+            {q ? <button onClick={() => setQ("")} aria-label="Effacer la recherche" className="text-muted hover:text-fg"><X className="size-3.5" /></button> : null}
+          </label>
+          <div className="v2-noscroll -mx-4 mt-2.5 flex gap-1 overflow-x-auto border-b px-4 pb-2.5" style={{ borderColor: "var(--color-line)" }}>
             {TABS.filter((t) => t.k !== "pinned" || t.n).map((t) => (
               <button key={t.k} onClick={() => setTab(t.k)} title={t.title} className="v2-chip" data-on={tab === t.k}>
                 {t.label}
-                {t.n ? <b data-hot={!!t.hot && tab !== t.k}>{t.n > 999 ? "999+" : t.n}</b> : null}
+                {t.n ? <b>{t.n > 999 ? "999+" : t.n}</b> : null}
               </button>
             ))}
           </div>
         </div>
-        <div className="v2-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <div className="v2-scroll min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {!data ? <p className="p-8 text-center text-[12.5px] text-muted">Chargement…</p> : null}
           {data && !items.length ? (
             <div className="px-6 py-12 text-center">
-              <span className="mx-auto grid size-12 place-items-center rounded-2xl" style={{ background: "rgb(59 130 246 / 0.12)", color: "var(--v2-sky)" }}><MessageCircle className="size-5" /></span>
+              <span className="v2-ico mx-auto size-11" data-c="plain" style={{ borderRadius: 13 }}><MessageCircle className="size-5" /></span>
               <p className="mt-3 text-[13.5px] font-semibold">{tab === "reply" ? "Tout le monde a sa réponse" : "Aucune conversation ici"}</p>
               <p className="mt-1 text-[12.5px] text-muted">{q ? "Aucun fan ne correspond à cette recherche." : tab === "reply" ? "Personne n’attend en ce moment." : "Essaie un autre filtre."}</p>
             </div>
           ) : null}
-          {items.map((c, i) => {
+          {items.map((c) => {
             const on = c.id === currentId;
             const byAi = !!c.ai && !c.handoff;
             const isNew = !!c.subscribedAt && Date.now() - Date.parse(c.subscribedAt) < 3 * 864e5;
             const online = !!c.lastSeenAt && Date.now() - Date.parse(c.lastSeenAt) < 10 * 60_000;
             const taken = c.lock && c.lock.userId !== me.id ? c.lock.name : null;
             const writing = aiWriting.has(c.id);
+            // Comme dans Raven : le temps d'attente du fan, vert puis orange puis rouge.
+            const wait = c.needsReply && c.waitingSince ? Math.max(0, now - Date.parse(c.waitingSince)) : null;
             return (
-              <button key={c.id} onClick={() => open(c)} className="v2-conv" data-on={on} style={i < 14 ? { animationDelay: `${i * 22}ms` } : { animation: "none", opacity: 1 }}>
+              <button key={c.id} onClick={() => open(c)} className="v2-conv" data-on={on}>
                 <span className="relative size-11 shrink-0 self-start">
                   <Avatar src={c.memberAvatar} name={c.nickname || c.memberName} size="size-11" />
-                  {online ? <span className="absolute right-0 bottom-0 size-3 rounded-full border-2" style={{ background: "#34d399", borderColor: "var(--color-bg)" }} title="En ligne : le fan vient d’écrire" /> : null}
-                  {c.pinned ? <span className="absolute -top-1 -left-1 grid size-4 place-items-center rounded-full text-white" style={{ background: "var(--v2-blue)" }}><Pin className="size-2.5" /></span> : null}
+                  {online ? <span className="absolute right-0 bottom-0 size-3 rounded-full border-2" style={{ background: "#34d399", borderColor: "#08080a" }} title="En ligne : le fan vient d’écrire" /> : null}
+                  {c.pinned ? <span className="absolute -top-1 -left-1 grid size-4 place-items-center rounded-full text-white" style={{ background: "var(--v2-blue-strong)" }}><Pin className="size-2.5" /></span> : null}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
+                  <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[13.5px]" style={{ fontWeight: c.fresh ? 700 : 600 }}>{c.nickname || c.memberName || "Fan"}</span>
-                    <span className="shrink-0 text-[11px] tabular-nums" style={{ color: c.needsReply ? "var(--v2-sky)" : "var(--color-muted)" }}>{when(c.lastMessageAt)}</span>
+                    {wait !== null ? <span className="v2-wait" data-tone={waitTone(wait)} title="Temps depuis lequel le fan attend une réponse">{waitShort(wait)}</span> : <span className="v2-num shrink-0 text-[11px] text-muted">{when(c.lastMessageAt)}</span>}
                   </span>
                   <span className="mt-0.5 flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: c.fresh ? "var(--color-fg)" : "var(--color-muted)", fontWeight: c.fresh ? 500 : 400 }}>
                       {writing ? <span className="font-semibold" style={{ color: "var(--v2-sky)" }}>L’IA écrit…</span> : <>{c.lastFromFan ? "" : "Toi : "}{c.preview || "Média"}</>}
                     </span>
-                    {c.fresh ? <span className="size-2 shrink-0 rounded-full" style={{ background: "var(--v2-blue)", boxShadow: "0 0 8px rgb(59 130 246 / 0.9)" }} /> : null}
+                    {c.fresh ? <span className="size-2 shrink-0 rounded-full" style={{ background: "var(--v2-blue)" }} /> : null}
                   </span>
-                  <span className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] font-bold">
-                    {c.totalSpent > 0 ? <span className="v2-tag" style={{ color: "#34d399", background: "rgb(52 211 153 / 0.12)" }}>{money(c.totalSpent, 0, curOf(c.modelId))}</span> : null}
-                    {byAi ? <span className="v2-tag" style={{ color: "var(--v2-sky)", background: "rgb(124 196 255 / 0.12)" }} title="L’IA mène cette conversation"><Sparkles className="size-2.5" />IA</span> : null}
-                    {c.handoff ? <span className="v2-tag" style={{ color: "#c4b5fd", background: "rgb(167 139 250 / 0.15)" }} title="L’IA a passé la main à l’équipe">À reprendre</span> : null}
-                    {taken ? <span className="v2-tag" style={{ color: "#fbbf24", background: "rgb(251 191 36 / 0.12)" }} title={`${taken} est sur cette conversation`}><Lock className="size-2.5" />{taken}</span> : c.pinnedBy ? <span className="v2-tag" style={{ color: "var(--color-muted)", background: "var(--color-card-2)" }} title={`Épinglé par ${c.pinnedBy.name}`}><UserRound className="size-2.5" />{c.pinnedBy.name}</span> : null}
-                    {isNew ? <span className="v2-tag" style={{ color: "#04101f", background: "linear-gradient(90deg, #7cc4ff, #34d399)" }}>Nouveau</span> : null}
-                    {c.sub === false ? <span className="v2-tag" style={{ color: "var(--color-muted)", background: "var(--color-card-2)" }} title="Ce fan n’est pas abonné">Non abonné</span> : null}
-                    {(c.groups ?? []).slice(0, 2).map((g) => <span key={g.name} className="v2-tag max-w-[110px] truncate" style={{ color: g.color || "var(--v2-sky)", background: g.color ? `${g.color}26` : "rgb(59 130 246 / 0.14)" }} title={`Groupe : ${g.name}`}>{g.name}</span>)}
-                    {c.box ? <span className="v2-tag" style={{ color: "var(--color-muted)", background: "var(--color-card-2)" }}>Boîte {c.box}</span> : null}
-                    {!model && multi ? <span className="v2-tag" style={{ color: "var(--color-muted)", background: "var(--color-card-2)" }}>{byId[c.modelId]?.displayName}</span> : null}
+                  <span className="mt-1.5 flex flex-wrap items-center gap-1">
+                    {c.totalSpent > 0 ? <span className="v2-tag v2-num" style={{ color: "var(--v2-up)", background: "rgb(16 185 129 / 0.12)" }}>{money(c.totalSpent, 0, curOf(c.modelId))}</span> : null}
+                    {byAi ? <span className="v2-tag" style={{ color: "var(--v2-sky)", background: "rgb(59 130 246 / 0.14)" }} title="L’IA mène cette conversation"><Sparkles className="size-2.5" />IA</span> : null}
+                    {c.handoff ? <span className="v2-tag" style={{ color: "#c4b5fd", background: "rgb(139 92 246 / 0.16)" }} title="L’IA a passé la main à l’équipe">À reprendre</span> : null}
+                    {taken ? <span className="v2-tag" style={{ color: "#fcd34d", background: "rgb(245 158 11 / 0.14)" }} title={`${taken} est sur cette conversation`}><Lock className="size-2.5" />{taken}</span> : c.pinnedBy ? <span className="v2-tag" title={`Épinglé par ${c.pinnedBy.name}`}><UserRound className="size-2.5" />{c.pinnedBy.name}</span> : null}
+                    {isNew ? <span className="v2-tag" style={{ color: "#fff", background: "var(--v2-blue-strong)" }}>Nouveau</span> : null}
+                    {c.sub === false ? <span className="v2-tag" title="Ce fan n’est pas abonné">Non abonné</span> : null}
+                    {(c.groups ?? []).slice(0, 2).map((g) => <span key={g.name} className="v2-tag max-w-[110px] truncate" style={g.color ? { color: g.color, background: `${g.color}26` } : undefined} title={`Groupe : ${g.name}`}>{g.name}</span>)}
+                    {c.box ? <span className="v2-tag">Boîte {c.box}</span> : null}
+                    {!model && multi ? <span className="v2-tag">{byId[c.modelId]?.displayName}</span> : null}
                   </span>
                 </span>
               </button>
@@ -282,10 +286,10 @@ function Inner({ me, models, mym }: { me: Me; models: Model[]; mym: boolean }) {
         ) : (
           <div className="grid flex-1 place-items-center px-6 text-center">
             <div className="v2-rise">
-              <span className="v2-orb mx-auto grid size-20 place-items-center rounded-full"><MessageCircle className="size-8 text-white" /></span>
-              <p className="mt-6 text-[26px] leading-tight font-semibold tracking-[-0.03em]">{T.reply ? <><span className="v2-grad">{T.reply}</span> fan{T.reply > 1 ? "s attendent" : " attend"} une réponse</> : "Tout le monde a sa réponse"}</p>
-              <p className="mt-2 text-[13.5px] text-muted">{T.reply ? "Choisis une conversation à gauche, ou prends la suivante." : "Les nouveaux messages arrivent ici tout seuls."}</p>
-              {T.reply ? <button onClick={() => (tab === "reply" ? next() : setTab("reply"))} className="v2-send mx-auto mt-6"><span>{tab === "reply" ? "Prendre le suivant" : "Voir qui attend"}</span></button> : null}
+              <span className="v2-ico mx-auto size-12" data-c="plain" style={{ borderRadius: 14 }}><MessageCircle className="size-5" /></span>
+              <p className="mt-4 text-[18px] font-bold tracking-[-0.02em]">Choisis un fan</p>
+              <p className="mx-auto mt-1.5 max-w-[330px] text-[13px] text-muted">{T.reply ? `${T.reply} fan${T.reply > 1 ? "s attendent" : " attend"} une réponse. Prends celui qui attend depuis le plus longtemps, ou choisis dans la liste.` : "Tout le monde a sa réponse. Les nouveaux messages arrivent ici tout seuls."}</p>
+              {T.reply ? <button onClick={() => (tab === "reply" ? next() : setTab("reply"))} className="v2-btn mx-auto mt-5">{tab === "reply" ? "Prendre le suivant" : "Voir qui attend"}</button> : null}
             </div>
           </div>
         )}

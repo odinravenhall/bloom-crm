@@ -353,16 +353,37 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 ## Bloom v2 : le nouveau design unique, construit à part (25/11/2026) — `web/src/app/v2/`
 
 - Adresse : `/v2` (la version actuelle `/app` et `/pro` reste en service ; on branchera la v2 dessus quand elle sera
-  prête). UN seul CRM pour OnlyFans et MYM : même menu, mêmes noms d'écrans, la plateforme est un simple choix en haut
-  du menu (`bloom_pf`). Design propre à Bloom, bleu (nuit / bleu vif / bleu clair), animé mais sobre ; on ne copie plus
-  le look d'Infloww ni de MyPulse. Logo : le mot « bloom » et un point, en attendant un vrai logo.
-- `v2.css` : tout est sous `.v2` (variables `--color-*`, `--mp-*`, `--of-*`, `--pro-*` repeintes en bleu, classes
-  `v2-*`). `screens.ts` : la liste des écrans (groupe, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
-  `V2Home.tsx` : accueil commun (un appel `/api/revenue?pf=all` sur 30 jours). `V2Screen.tsx` : pour chaque écran, le
-  composant de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
+  prête). UN seul CRM pour OnlyFans et MYM (Reveal plus tard) : même menu, mêmes noms d'écrans, la plateforme se
+  choisit dans un MENU DÉROULANT en haut du menu (`bloom_pf` ; la ligne « Reveal » y est déjà, grisée).
+- Direction de design donnée par l'agence le 25/11/2026 : un MÉLANGE de Raven CRM (« quasiment parfait ») et de Moby
+  (mobycrm.io). Une première version tout en bleu, avec halos et dégradés, a été refusée : « ça fait trop vibe codé ».
+  Donc : noir neutre, bleu franc (#3b82f6 / #2563eb), très peu de dégradés, police Plus Jakarta Sans (celle de Raven).
+  - De Raven : fond étoilé (`V2Backdrop.tsx`, en plus calme), pastilles de variation vertes / rouges, barres comparées
+    à la période d'avant, anneau « Répartition », classements, temps d'attente coloré dans la messagerie.
+  - De Moby : menu flottant arrondi avec rubriques à carré de couleur, grande carte du total avec quatre tuiles,
+    pastilles de période, onglets de la messagerie, barres de progression dans les classements.
+  - Logo : la lettre « B » dans un carré bleu + « Bloom CRM », en attendant un vrai logo.
+- `v2.css` : tout est sous `.v2` (variables `--color-*`, `--mp-*`, `--of-*`, `--pro-*` repeintes, classes `v2-*`).
+  `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
+  `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
+  filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
+  de la plateforme choisie — pour l'instant ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… » (rien de changé au serveur). Liste + fil + zone de saisie refaits ; Vault, scripts et fiche du fan sont
   encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
   sous-inbox, traduction et envoi programmé de Messages Pro.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
+
+### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`
+
+- bloomcrm.fr sert le MÊME site et la même base que bloom.ravencrm.xyz ; seule l'arrivée change : « / », « /app » et
+  « /app/messagerie » y renvoient vers la v2 (`redirects()` par adresse). Liste des adresses : `V2_HOSTS` (hosts.mjs et
+  next.config.mjs, par défaut `bloomcrm.fr,www.bloomcrm.fr`).
+- Connexion : Discord ne connaît que l'adresse principale. Sur bloomcrm.fr, « Se connecter avec Discord » part donc
+  vers `bloom.ravencrm.xyz/api/auth/discord?to=bloomcrm.fr` ; au retour de Discord, l'API ne se connecte pas là mais
+  renvoie vers `https://bloomcrm.fr/api/auth/link?t=…&v=2` (`hopLink` : lien à usage unique, 1 minute), qui ouvre la
+  session sur la nouvelle adresse. `to` n'est accepté que s'il est dans `V2_HOSTS`.
+- Le relais du site MYM (`mymsite.mjs`) accepte d'être affiché dans un cadre des deux adresses.
+- Hors dépôt, à faire pour que l'adresse marche : l'enregistrement DNS de bloomcrm.fr vers le VPS, et un bloc
+  `bloomcrm.fr` dans le Caddyfile de /root/zebre vers `bloom-web:3000` (jamais sans l'accord explicite de l'agence).

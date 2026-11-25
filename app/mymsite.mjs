@@ -20,9 +20,12 @@ import { randomBytes } from 'node:crypto';
 import { isLinked, mymSiteCookie } from './mym.mjs';
 import { canSee, seesAll } from './team.mjs';
 import { logAction } from './journal.mjs';
+import { V2_ORIGINS } from './hosts.mjs';
 
 export const SITE_HOST = process.env.MYM_SITE_HOST || 'mym.ravencrm.xyz';
 const BLOOM = process.env.BLOOM_ORIGIN || 'https://bloom.ravencrm.xyz';
+// Les adresses où Bloom a le droit d'afficher ce relais dans un cadre : l'adresse principale et celles de la v2.
+const FRAMES = [BLOOM, ...V2_ORIGINS].join(' ');
 const ORIGIN = 'https://creators.mym.fans';
 const COOKIE = 'bloom_mymsite';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36';
@@ -31,7 +34,7 @@ const sessions = new Map(); // sid -> { user, cid, exp, jar: Map }
 const FORBIDDEN = /\/(?:logout|signout|sign-out|deconnexion|delete-account|close-account|account\/delete|supprimer-(?:mon-)?compte)(?:\/|$)/i;
 
 const page = (res, status, text) => {
-  res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': `frame-ancestors ${BLOOM}`, 'x-robots-tag': 'noindex' });
+  res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': `frame-ancestors ${FRAMES}`, 'x-robots-tag': 'noindex' });
   res.end(`<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;height:100vh;background:#1a1d21;color:#ced4da;font:15px system-ui"><p style="max-width:460px;text-align:center;line-height:1.5">${text}</p>`);
 };
 // Partie récente du site (nouvelle messagerie, réglages) : une application qui tourne dans le navigateur et parle à
@@ -81,7 +84,7 @@ async function relay(cid, jar, method, pathAndQuery, headers, body) {
 export async function mymSiteProxy(req, res) {
   const url = new URL(req.url, 'http://x');
   const path = url.pathname.replace(/^\/mymsite/, '') || '/';
-  if (path === '/__bloom/ping') return res.writeHead(204, { 'access-control-allow-origin': BLOOM, 'cache-control': 'no-store' }), res.end();
+  if (path === '/__bloom/ping') return res.writeHead(204, { 'access-control-allow-origin': V2_ORIGINS.includes(req.headers.origin) ? req.headers.origin : BLOOM, vary: 'origin', 'cache-control': 'no-store' }), res.end();
   if (path === '/__bloom/open') {
     const t = tickets.get(url.searchParams.get('t') || '');
     tickets.delete(url.searchParams.get('t') || '');
@@ -102,7 +105,7 @@ export async function mymSiteProxy(req, res) {
     const body = await raw(req);
     const r = await relay(s.cid, s.jar, req.method, `${path === '/' ? '/app/myms' : path}${url.search}`, req.headers, body);
     if (req.method !== 'GET' && req.method !== 'HEAD' && !/\/ajax\/|\/api\//.test(path)) logAction(s.user, 'Action sur le site MYM (accès direct)', { creatorId: s.cid, details: `${req.method} ${path.slice(0, 120)} → ${r.status}` });
-    const out = { 'content-security-policy': `frame-ancestors ${BLOOM}`, 'x-robots-tag': 'noindex', 'referrer-policy': 'same-origin' };
+    const out = { 'content-security-policy': `frame-ancestors ${FRAMES}`, 'x-robots-tag': 'noindex', 'referrer-policy': 'same-origin' };
     for (const k of ['content-type', 'cache-control', 'etag', 'last-modified', 'content-disposition']) if (r.headers.get(k)) out[k] = r.headers.get(k);
     const loc = r.headers.get('location');
     if (loc) {

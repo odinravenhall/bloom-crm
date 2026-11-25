@@ -2,53 +2,134 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, ArrowRight, MessageCircle, ScrollText, Images, Users } from "lucide-react";
+import {
+  ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Check, ChevronDown, CircleDollarSign, Gift, Heart, Image as ImageIcon, Images, LineChart, MessageCircle, MessageSquare, Radio,
+  Receipt, ScrollText, ShoppingBag, Sparkles, Users, type LucideIcon,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import type { Me } from "@/lib/types";
+import { Avatar } from "@/rv/components/ui";
 
+// Accueil de la v2 : toute l'agence, OnlyFans et MYM réunis. Mise en page inspirée de Moby (grande carte du total,
+// pastilles de période, classement) et de Raven CRM (pastilles de variation, barres comparées, répartition).
 type Day = { day: string; onlyfans: number; mym: number; provisional: number };
 type Row = { creatorId: string; platform: string | null; account?: string; eur: number; prev: number; sales: number };
 type Sale = { id: string; creatorId: string; at: string; type: string; net: number; currency: string; fan: string | null; origin: string; by: string | null; provisional: boolean };
 type Rev = { total: number; prev: number; provisional: number; sales: number; buyers: number; byType: Record<string, number>; byOrigin: Record<string, number>; days: Day[]; creators: Row[]; recent: Sale[] };
+type Seller = { key: string; name: string; kind: string; eur: number; prev: number; sales: number; buyers: number };
+type Perf = { sellers: Seller[] };
+type PeriodKey = "today" | "yesterday" | "7d" | "month" | "30d" | "12m";
+type Data = { key: string; rev: Rev; ctx: Rev | null; perf: Perf | null; from: string; to: string; len: number };
+type Pt = { key: string; label: string; title: string; of: number; mym: number; wait: number; prev: number | null; dim?: boolean };
+
+const PERIODS: [PeriodKey, string][] = [["today", "Aujourd’hui"], ["yesterday", "Hier"], ["7d", "7 jours"], ["month", "Ce mois"], ["30d", "30 jours"], ["12m", "12 mois"]];
+const OF = "#3b82f6";
+const MYM = "#a78bfa";
+const WAIT = "rgb(255 255 255 / 0.28)";
+const ORIGIN: Record<string, [string, string]> = {
+  ai: ["IA Substy", "#3b82f6"], bloom: ["Chatteurs dans Bloom", "#a78bfa"], chatter: ["Chatteurs (Infloww / MyPulse)", "#34d399"], substy: ["Automatisations", "#fbbf24"], auto: ["Automatisations", "#fbbf24"],
+  sub: ["Abonnements", "#38bdf8"], creator: ["Compte de la modèle", "#f472b6"], ext: ["Hors Bloom", "#fb923c"], push: ["Push", "#22d3ee"], other: ["Autre", "#6b7280"],
+};
+const TYPES: [string, string, LucideIcon][] = [["ppv", "Messages payants", MessageSquare], ["tip", "Pourboires", Gift], ["sub", "Abonnements", Heart], ["post", "Posts", ImageIcon], ["stream", "Lives", Radio], ["other", "Autres", CircleDollarSign]];
+const TYPE_ONE: Record<string, string> = { ppv: "Message payant", tip: "Pourboire", sub: "Abonnement", post: "Post", stream: "Live", other: "Vente" };
+const TYPE_COLOR: Record<string, string> = { ppv: "#3b82f6", tip: "#a78bfa", sub: "#38bdf8", post: "#34d399", stream: "#fbbf24", other: "#6b7280" };
 
 const paris = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(d);
+const noon = (s: string) => new Date(`${s}T12:00:00Z`);
 const addDay = (s: string, n: number) => {
-  const d = new Date(`${s}T12:00:00Z`);
+  const d = noon(s);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+const daysBetween = (a: string, b: string) => Math.round((noon(b).getTime() - noon(a).getTime()) / 864e5);
 const eur = (c: number, digits = 0) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: digits, minimumFractionDigits: digits }).format(c / 100);
-const money = (c: number, cur: string) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur === "USD" ? "USD" : "EUR" }).format(c / 100);
-const shortDay = (s: string) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${s}T12:00:00Z`));
-const ORIGIN: Record<string, string> = { ai: "IA Substy", bloom: "Chatteurs dans Bloom", chatter: "Chatteurs (Infloww / MyPulse)", substy: "Automatisations Substy", auto: "Automatisations", sub: "Abonnements", creator: "Compte de la modèle", ext: "Hors Bloom", push: "Push", other: "Autre" };
-const TYPE: Record<string, string> = { ppv: "Message payant", message: "Message payant", tip: "Pourboire", sub: "Abonnement", post: "Post", media: "Média", push: "Push" };
+const money = (c: number, cur: string) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: cur === "USD" ? "USD" : "EUR", currencyDisplay: "narrowSymbol" }).format(c / 100);
+const fmtDay = (s: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("fr-FR", { ...o, timeZone: "UTC" }).format(noon(s));
 const isMym = (p?: string | null) => /mym/i.test(p || "");
+const ago = (iso: string) => {
+  const ms = Date.now() - Date.parse(iso);
+  if (ms < 60_000) return "à l’instant";
+  if (ms < 3600_000) return `il y a ${Math.floor(ms / 60_000)} min`;
+  if (ms < 86400_000) return `il y a ${Math.floor(ms / 3600_000)} h`;
+  return `il y a ${Math.floor(ms / 86400_000)} j`;
+};
+function rangeOf(k: PeriodKey) {
+  const t = paris();
+  if (k === "today") return { from: t, to: t };
+  if (k === "yesterday") return { from: addDay(t, -1), to: addDay(t, -1) };
+  if (k === "7d") return { from: addDay(t, -6), to: t };
+  if (k === "month") return { from: t.slice(0, 8) + "01", to: t };
+  if (k === "30d") return { from: addDay(t, -29), to: t };
+  return { from: addDay(t, -364), to: t };
+}
+/** Haut d'échelle « rond » dont le quart tombe juste (0, 200, 400, 600, 800…). */
+const niceMax = (v: number) => {
+  if (v <= 0) return 100;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / p;
+  return ([1, 1.2, 1.6, 2, 3, 4, 6, 8, 10].find((x) => n <= x) ?? 10) * p;
+};
 
 /** Chiffre qui monte jusqu'à sa valeur. */
 function Count({ value, format }: { value: number; format: (n: number) => string }) {
   const [v, setV] = useState(0);
   const from = useRef(0);
   useEffect(() => {
-    if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches) return setV(value);
+    if (document.documentElement.classList.contains("motion-off") || matchMedia("(prefers-reduced-motion: reduce)").matches) return setV(value);
     const a = from.current;
     const t0 = performance.now();
     let raf = 0;
     const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / 900);
-      const e = 1 - Math.pow(1 - k, 3);
-      setV(a + (value - a) * e);
+      const k = Math.min(1, (t - t0) / 700);
+      setV(a + (value - a) * (1 - Math.pow(1 - k, 3)));
       if (k < 1) raf = requestAnimationFrame(step);
       else from.current = value;
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => (cancelAnimationFrame(raf), void (from.current = value));
   }, [value]);
   return <>{format(v)}</>;
 }
 
+/** Pastille de variation par rapport à la période d'avant. */
+function Delta({ now, before }: { now: number; before: number }) {
+  if (!(before > 0)) return now > 0 ? <span className="v2-delta" data-dir="up">nouveau</span> : <span className="v2-delta" data-dir="flat">—</span>;
+  const p = ((now - before) / before) * 100;
+  const dir = Math.abs(p) < 0.5 ? "flat" : p > 0 ? "up" : "down";
+  const a = Math.abs(p);
+  return (
+    <span className="v2-delta" data-dir={dir}>
+      {dir === "up" ? <ArrowUpRight className="size-3" /> : dir === "down" ? <ArrowDownRight className="size-3" /> : null}
+      {a >= 100 ? Math.round(a) : a.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %
+    </span>
+  );
+}
+
+function PfTag({ mym }: { mym: boolean }) {
+  return <span className="v2-tag" style={{ color: mym ? MYM : "#7dd3fc", background: mym ? "rgb(167 139 250 / 0.13)" : "rgb(56 189 248 / 0.12)" }}>{mym ? "MYM" : "OF"}</span>;
+}
+
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    setW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
+/** Rectangle aux coins du haut arrondis. */
+const topRound = (x: number, y: number, w: number, h: number, r: number) => {
+  const q = Math.max(0, Math.min(r, h, w / 2));
+  return `M${x},${y + h} L${x},${y + q} Q${x},${y} ${x + q},${y} L${x + w - q},${y} Q${x + w},${y} ${x + w},${y + q} L${x + w},${y + h} Z`;
+};
 /** Courbe lissée passant par les points. */
-function path(pts: [number, number][]) {
+const smooth = (pts: [number, number][]) => {
   if (!pts.length) return "";
   let d = `M${pts[0][0]},${pts[0][1]}`;
   for (let i = 1; i < pts.length; i++) {
@@ -58,106 +139,225 @@ function path(pts: [number, number][]) {
     d += ` C${mx},${y0} ${mx},${y1} ${x1},${y1}`;
   }
   return d;
-}
+};
 
-function Chart({ days }: { days: Day[] }) {
+/** Le graphique : barres empilées par plateforme, ou comparées à la période d'avant ; ou en courbe. */
+function Chart({ pts, mode, compare }: { pts: Pt[]; mode: "bars" | "line"; compare: boolean }) {
+  const [ref, w] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
-  const W = 900, H = 250, L = 8, R = 8, T = 14, B = 26;
-  const max = Math.max(1, ...days.map((d) => d.onlyfans + d.mym + d.provisional)) * 1.12;
-  const x = (i: number) => L + (days.length > 1 ? (i * (W - L - R)) / (days.length - 1) : 0);
-  const y = (v: number) => T + (H - T - B) * (1 - v / max);
-  const total = days.map((d, i): [number, number] => [x(i), y(d.onlyfans + d.mym + d.provisional)]);
-  const mym = days.map((d, i): [number, number] => [x(i), y(d.mym)]);
+  const H = 300, L = 50, R = 6, T = 14, B = 28;
+  const n = pts.length;
+  const tot = (p: Pt) => p.of + p.mym + p.wait;
+  const max = niceMax(Math.max(1, ...pts.map((p) => Math.max(tot(p), compare ? p.prev ?? 0 : 0))));
+  const iw = Math.max(0, w - L - R);
+  const band = n ? iw / n : 0;
   const base = H - B;
-  const area = (p: [number, number][]) => (p.length ? `${path(p)} L${p[p.length - 1][0]},${base} L${p[0][0]},${base} Z` : "");
-  const h = hover == null ? null : days[hover];
+  const y = (v: number) => T + (base - T) * (1 - v / max);
+  const cx = (i: number) => L + band * i + band / 2;
+  const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 40))));
+  const h = hover == null ? null : pts[hover];
+  const line = pts.map((p, i): [number, number] => [cx(i), y(tot(p))]);
+  const lineMym = pts.map((p, i): [number, number] => [cx(i), y(p.mym)]);
+  const linePrev = pts.map((p, i): [number, number] => [cx(i), y(p.prev ?? 0)]);
   return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" onMouseLeave={() => setHover(null)} onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        const i = Math.round((((e.clientX - r.left) / r.width) * W - L) / ((W - L - R) / Math.max(1, days.length - 1)));
-        setHover(Math.max(0, Math.min(days.length - 1, i)));
-      }}>
-        <defs>
-          <linearGradient id="v2a" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#3b82f6" stopOpacity="0.42" /><stop offset="1" stopColor="#3b82f6" stopOpacity="0" /></linearGradient>
-          <linearGradient id="v2b" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#8b7bff" stopOpacity="0.4" /><stop offset="1" stopColor="#8b7bff" stopOpacity="0" /></linearGradient>
-          <linearGradient id="v2l" x1="0" x2="1"><stop offset="0" stopColor="#7cc4ff" /><stop offset="1" stopColor="#3b82f6" /></linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75, 1].map((k) => <line key={k} x1={L} x2={W - R} y1={y((max / 1.12) * k)} y2={y((max / 1.12) * k)} stroke="#1c2843" strokeDasharray="3 6" />)}
-        <path d={area(total)} fill="url(#v2a)" className="v2-fade" />
-        <path d={area(mym)} fill="url(#v2b)" className="v2-fade" />
-        <path d={path(mym)} fill="none" stroke="#8b7bff" strokeWidth="2" pathLength={1} className="v2-draw" style={{ ["--len" as string]: 1 }} />
-        <path d={path(total)} fill="none" stroke="url(#v2l)" strokeWidth="2.6" strokeLinecap="round" pathLength={1} className="v2-draw" style={{ ["--len" as string]: 1 }} />
-        {days.map((d, i) => (i % Math.ceil(days.length / 7) === 0 || i === days.length - 1 ? <text key={d.day} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === days.length - 1 ? "end" : "middle"} fontSize="11" fill="#5f7199">{shortDay(d.day)}</text> : null))}
-        {hover != null ? <g><line x1={x(hover)} x2={x(hover)} y1={T} y2={base} stroke="#3b82f6" strokeOpacity="0.5" /><circle cx={total[hover][0]} cy={total[hover][1]} r="5" fill="#060a14" stroke="#7cc4ff" strokeWidth="2.5" /><circle cx={mym[hover][0]} cy={mym[hover][1]} r="4" fill="#060a14" stroke="#8b7bff" strokeWidth="2" /></g> : null}
-      </svg>
+    <div ref={ref} className="relative mt-3">
+      {w ? (
+        <svg width={w} height={H} className="block" onMouseLeave={() => setHover(null)}>
+          <defs>
+            <linearGradient id="v2area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={OF} stopOpacity="0.32" /><stop offset="1" stopColor={OF} stopOpacity="0" /></linearGradient>
+          </defs>
+          {[0, 0.25, 0.5, 0.75, 1].map((k) => (
+            <g key={k}>
+              <line x1={L} x2={w - R} y1={y(max * k)} y2={y(max * k)} stroke="rgb(255 255 255 / 0.06)" strokeDasharray={k ? "3 5" : undefined} />
+              <text x={L - 10} y={y(max * k) + 4} textAnchor="end" fontSize="11" fill="#7c7c84">{eur(max * k)}</text>
+            </g>
+          ))}
+          {hover != null ? <rect x={L + band * hover} y={T - 4} width={band} height={base - T + 4} rx="6" fill="rgb(255 255 255 / 0.04)" /> : null}
+          {mode === "bars" ? pts.map((p, i) => {
+            const bw = Math.max(2, Math.min(compare ? 13 : 26, band * (compare ? 0.34 : 0.62)));
+            const x0 = compare ? cx(i) + 1 : cx(i) - bw / 2;
+            const parts = (compare ? [[tot(p), OF]] : [[p.of, OF], [p.mym, MYM], [p.wait, WAIT]]).filter((s) => (s[0] as number) > 0) as [number, string][];
+            let acc = 0;
+            return (
+              <g key={p.key} opacity={p.dim ? 0.3 : 1}>
+                {compare && p.prev ? <path className="v2-bar" style={{ ["--i" as string]: i }} d={topRound(cx(i) - bw - 1, y(p.prev), bw, base - y(p.prev), 3)} fill="#3a3a42" /> : null}
+                <g className="v2-bar" style={{ ["--i" as string]: i }}>
+                  {parts.map(([v, c], k) => {
+                    const y1 = y(acc + v);
+                    const hh = y(acc) - y1;
+                    acc += v;
+                    return k === parts.length - 1 ? <path key={k} d={topRound(x0, y1, bw, hh, 3.5)} fill={c} /> : <rect key={k} x={x0} y={y1} width={bw} height={hh} fill={c} />;
+                  })}
+                </g>
+              </g>
+            );
+          }) : !n ? null : (
+            <g>
+              <path d={`${smooth(line)} L${line[n - 1]?.[0] ?? L},${base} L${line[0]?.[0] ?? L},${base} Z`} fill="url(#v2area)" className="v2-fade-in" />
+              {compare ? <path d={smooth(linePrev)} fill="none" stroke="#5b5b64" strokeWidth="1.6" strokeDasharray="4 5" /> : <path d={smooth(lineMym)} fill="none" stroke={MYM} strokeWidth="1.8" pathLength={1} className="v2-draw" />}
+              <path d={smooth(line)} fill="none" stroke={OF} strokeWidth="2.4" strokeLinecap="round" pathLength={1} className="v2-draw" />
+              {hover != null ? <circle cx={line[hover][0]} cy={line[hover][1]} r="4.5" fill="#050506" stroke="#93c5fd" strokeWidth="2.2" /> : null}
+            </g>
+          )}
+          {pts.map((p, i) => (i % every === 0 ? <text key={p.key} x={cx(i)} y={H - 8} textAnchor="middle" fontSize="11" fill={p.dim ? "#4b4b52" : "#7c7c84"}>{p.label}</text> : null))}
+          {pts.map((p, i) => <rect key={p.key} x={L + band * i} y={0} width={band} height={base} fill="transparent" onMouseEnter={() => setHover(i)} />)}
+        </svg>
+      ) : <div style={{ height: H }} />}
       {h && hover != null ? (
-        <div className="pointer-events-none absolute top-1 z-10 w-44 rounded-xl border p-3 text-[12px] shadow-2xl" style={{ left: `clamp(0px, calc(${(x(hover) / W) * 100}% - 88px), calc(100% - 176px))`, background: "#0a1120", borderColor: "var(--color-line)" }}>
-          <b className="block text-[12.5px]">{shortDay(h.day)}</b>
-          <p className="mt-1.5 flex justify-between"><span className="text-muted">OnlyFans</span><b style={{ color: "var(--v2-of)" }}>{eur(h.onlyfans)}</b></p>
-          <p className="flex justify-between"><span className="text-muted">MYM</span><b style={{ color: "var(--v2-mym)" }}>{eur(h.mym)}</b></p>
-          {h.provisional ? <p className="flex justify-between"><span className="text-muted">En attente</span><b>{eur(h.provisional)}</b></p> : null}
-          <p className="mt-1.5 flex justify-between border-t pt-1.5" style={{ borderColor: "var(--color-line)" }}><span>Total</span><b>{eur(h.onlyfans + h.mym + h.provisional)}</b></p>
+        <div className="pointer-events-none absolute top-1 z-10 w-[196px] rounded-xl border p-3 text-[12px]" style={{ left: Math.max(0, Math.min(w - 196, cx(hover) - 98)), background: "#121215", borderColor: "rgb(255 255 255 / 0.1)", boxShadow: "0 18px 40px -18px rgb(0 0 0 / 0.9)" }}>
+          <b className="block text-[12.5px] first-letter:uppercase">{h.title}</b>
+          {compare ? null : (
+            <>
+              <p className="mt-2 flex justify-between"><span className="flex items-center gap-1.5 text-muted"><i className="size-2 rounded-sm" style={{ background: OF }} />OnlyFans</span><b className="v2-num">{eur(h.of)}</b></p>
+              <p className="mt-0.5 flex justify-between"><span className="flex items-center gap-1.5 text-muted"><i className="size-2 rounded-sm" style={{ background: MYM }} />MYM</span><b className="v2-num">{eur(h.mym)}</b></p>
+              {h.wait ? <p className="mt-0.5 flex justify-between"><span className="flex items-center gap-1.5 text-muted"><i className="size-2 rounded-sm" style={{ background: WAIT }} />En attente</span><b className="v2-num">{eur(h.wait)}</b></p> : null}
+            </>
+          )}
+          <p className={`flex justify-between ${compare ? "mt-2" : "mt-2 border-t pt-2"}`} style={{ borderColor: "rgb(255 255 255 / 0.08)" }}><span>Total</span><b className="v2-num">{eur(tot(h))}</b></p>
+          {compare && h.prev != null ? <p className="mt-0.5 flex items-center justify-between text-muted"><span>Période d’avant</span><span className="flex items-center gap-1.5"><span className="v2-num">{eur(h.prev)}</span><Delta now={tot(h)} before={h.prev} /></span></p> : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-function Chip({ mym }: { mym: boolean }) {
-  return <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide" style={{ color: mym ? "var(--v2-mym)" : "var(--v2-of)", background: mym ? "rgb(139 123 255 / 0.13)" : "rgb(56 168 255 / 0.13)" }}>{mym ? "MYM" : "OF"}</span>;
+/** Anneau de répartition (comme Raven) : la plus grosse part au centre. */
+function Donut({ items }: { items: { label: string; value: number; color: string }[] }) {
+  const total = items.reduce((a, x) => a + x.value, 0);
+  const r = 54;
+  const C = 2 * Math.PI * r;
+  let off = 0;
+  return (
+    <div className="relative mx-auto size-[176px]">
+      <svg viewBox="0 0 140 140" className="size-full -rotate-90">
+        <circle cx="70" cy="70" r={r} fill="none" stroke="rgb(255 255 255 / 0.05)" strokeWidth="15" />
+        {total > 0 ? items.map((it) => {
+          const share = (it.value / total) * C;
+          const len = Math.max(0.5, share - (items.length > 1 ? 2.5 : 0));
+          const el = <circle key={it.label} className="v2-arc" cx="70" cy="70" r={r} fill="none" stroke={it.color} strokeWidth="15" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-off} style={{ ["--circ" as string]: C }} />;
+          off += share;
+          return el;
+        }) : null}
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div>
+          <p className="v2-num text-[25px] leading-none font-bold">{total > 0 && items[0] ? Math.round((items[0].value / total) * 100) : 0} %</p>
+          <p className="mx-auto mt-1.5 max-w-[92px] truncate text-[11px] text-muted">{items[0]?.label ?? "Aucune vente"}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-/** Accueil commun de la v2 : toute l'agence, OnlyFans et MYM ensemble. */
+/** Barre de progression fine sous une ligne de classement (comme Moby). */
+function Progress({ value, max, color, i }: { value: number; max: number; color: string; i: number }) {
+  return <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: "rgb(255 255 255 / 0.06)" }}><i className="v2-grow block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, (value / (max || 1)) * 100))}%`, background: color, ["--i" as string]: i }} /></div>;
+}
+
 export function V2Home({ me }: { me: Me }) {
   const { creators } = useCreators();
-  const boss = me.role !== "chatter";
-  const [rev, setRev] = useState<Rev | null>(null);
+  const staff = me.role === "admin" || me.role === "manager" || me.role === "lead";
+  const canSeeNumbers = me.role !== "chatter";
+  const [period, setPeriod] = useState<PeriodKey>("month");
+  const [only, setOnly] = useState("");
+  const [menu, setMenu] = useState(false);
+  const [mode, setMode] = useState<"bars" | "line">("bars");
+  const [cmp, setCmp] = useState(false);
+  const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState("");
+  const key = `${period}|${only}`;
   useEffect(() => {
-    if (!boss) return;
+    try {
+      const p = localStorage.getItem("bloom.v2.home.period") as PeriodKey | null;
+      if (p && PERIODS.some(([k]) => k === p)) setPeriod(p);
+      if (localStorage.getItem("bloom.v2.home.mode") === "line") setMode("line");
+    } catch {}
+  }, []);
+  const save = (k: string, v: string) => {
+    try {
+      localStorage.setItem("bloom.v2.home." + k, v);
+    } catch {}
+  };
+  useEffect(() => {
+    if (!canSeeNumbers) return;
     let stop = false;
+    const q = `&pf=all${only ? `&only=${encodeURIComponent(only)}` : ""}`;
     const load = () => {
-      const to = paris();
-      api<Rev>("GET", `/api/revenue?from=${addDay(to, -29)}&to=${to}&pf=all`).then((r) => !stop && (setRev(r), setErr(""))).catch((e) => !stop && setErr(e instanceof Error ? e.message : "Chiffres indisponibles"));
+      const { from, to } = rangeOf(period);
+      const len = daysBetween(from, to) + 1;
+      // Deuxième appel : les 14 derniers jours autour d'une période courte, sinon la période d'avant (pour comparer).
+      const ctx = len < 7 ? { from: addDay(to, -13), to } : len <= 62 ? { from: addDay(from, -len), to: addDay(from, -1) } : null;
+      Promise.all([
+        api<Rev>("GET", `/api/revenue?from=${from}&to=${to}${q}`),
+        ctx ? api<Rev>("GET", `/api/revenue?from=${ctx.from}&to=${ctx.to}${q}&lite=1`).catch(() => null) : Promise.resolve(null),
+        staff ? api<Perf>("GET", `/api/performance?from=${from}&to=${to}${q}`).catch(() => null) : Promise.resolve(null),
+      ])
+        .then(([rev, c, perf]) => !stop && (setData({ key: `${period}|${only}`, rev, ctx: c, perf, from, to, len }), setErr("")))
+        .catch((e) => !stop && setErr(e instanceof Error ? e.message : "Chiffres indisponibles"));
     };
     load();
-    const t = setInterval(load, 60000);
+    const t = setInterval(() => document.visibilityState === "visible" && load(), 60_000);
     return () => (stop = true, clearInterval(t));
-  }, [boss]);
+  }, [canSeeNumbers, staff, period, only]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: MouseEvent) => !(e.target as Element).closest?.("[data-model-box]") && setMenu(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [menu]);
 
-  const k = useMemo(() => {
-    const d = rev?.days ?? [];
-    const sum = (l: Day[]) => l.reduce((a, x) => a + x.onlyfans + x.mym + x.provisional, 0);
-    const today = sum(d.slice(-1));
-    const yesterday = sum(d.slice(-2, -1));
-    const w = sum(d.slice(-7));
-    const wPrev = sum(d.slice(-14, -7));
-    const of = d.reduce((a, x) => a + x.onlyfans, 0);
-    const mym = d.reduce((a, x) => a + x.mym, 0);
-    return { today, yesterday, w, wPrev, of, mym };
-  }, [rev]);
+  const rev = data?.rev ?? null;
+  const busy = !!data && data.key !== key;
+  const view = useMemo(() => {
+    if (!data) return null;
+    const { rev: r, ctx, from, len } = data;
+    const short = len < 7;
+    const canCompare = !short && len <= 62 && !!ctx && ctx.days.length === r.days.length;
+    let pts: Pt[];
+    if (short && ctx) pts = ctx.days.map((d) => ({ key: d.day, label: fmtDay(d.day, { day: "2-digit" }), title: fmtDay(d.day, { weekday: "long", day: "numeric", month: "long" }), of: d.onlyfans, mym: d.mym, wait: d.provisional, prev: null, dim: d.day < from }));
+    else if (len > 62) {
+      const by = new Map<string, Pt>();
+      for (const d of r.days) {
+        const m = d.day.slice(0, 7);
+        const p = by.get(m) ?? { key: m, label: fmtDay(m + "-01", { month: "short" }), title: fmtDay(m + "-01", { month: "long", year: "numeric" }), of: 0, mym: 0, wait: 0, prev: null };
+        p.of += d.onlyfans;
+        p.mym += d.mym;
+        p.wait += d.provisional;
+        by.set(m, p);
+      }
+      pts = [...by.values()];
+    } else pts = r.days.map((d, i) => ({ key: d.day, label: fmtDay(d.day, { day: "2-digit" }), title: fmtDay(d.day, { weekday: "long", day: "numeric", month: "long" }), of: d.onlyfans, mym: d.mym, wait: d.provisional, prev: canCompare ? (ctx!.days[i].onlyfans + ctx!.days[i].mym + ctx!.days[i].provisional) : null }));
+    const rows = [...r.creators].filter((c) => c.eur > 0 || c.prev > 0).sort((a, b) => b.eur - a.eur);
+    const of = rows.filter((c) => !isMym(c.platform)).reduce((a, c) => a + c.eur, 0);
+    const mym = rows.filter((c) => isMym(c.platform)).reduce((a, c) => a + c.eur, 0);
+    const origins = Object.entries(r.byOrigin).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: ORIGIN[k]?.[0] ?? k, value: v, color: ORIGIN[k]?.[1] ?? "#6b7280" }));
+    const types = Object.entries(r.byType).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: TYPES.find((t) => t[0] === k)?.[1] ?? k, value: v, color: TYPE_COLOR[k] ?? "#6b7280" }));
+    return { pts, rows, of, mym, origins, types, short, canCompare, sub: short ? "Les 14 derniers jours" : len > 62 ? "Mois par mois" : "Jour par jour" };
+  }, [data]);
+
   const hour = Number(new Intl.DateTimeFormat("fr-FR", { hour: "numeric", hour12: false, timeZone: "Europe/Paris" }).format(new Date()));
   const hello = hour < 6 ? "Bonne nuit" : hour < 18 ? "Bonjour" : "Bonsoir";
   const first = (me.name || "").split(/[\s._-]/)[0];
   const nameOf = (id: string) => creators.find((c) => String(c.id) === String(id));
 
-  if (!boss) {
-    const links = [
-      { href: "/v2/messagerie", label: "Messagerie", text: "Répondre aux fans", Icon: MessageCircle },
-      { href: "/v2/scripts", label: "Scripts", text: "Les messages prêts à envoyer", Icon: ScrollText },
-      { href: "/v2/fans", label: "Fans", text: "Listes et fiches", Icon: Users },
-      { href: "/v2/medias", label: "Médias", text: "Photos et vidéos des modèles", Icon: Images },
+  // Chatteurs : pas de chiffres, un accueil simple avec leurs modèles et des raccourcis.
+  if (!canSeeNumbers) {
+    const links: { href: string; label: string; text: string; Icon: LucideIcon; c: string }[] = [
+      { href: "/v2/messagerie", label: "Messagerie", text: "Répondre aux fans", Icon: MessageCircle, c: "blue" },
+      { href: "/v2/scripts", label: "Scripts", text: "Les messages prêts à envoyer", Icon: ScrollText, c: "violet" },
+      { href: "/v2/fans", label: "Fans", text: "Listes et fiches", Icon: Users, c: "green" },
+      { href: "/v2/medias", label: "Médias", text: "Photos et vidéos des modèles", Icon: Images, c: "orange" },
     ];
     return (
-      <div className="mx-auto max-w-[900px] px-5 py-10 md:px-8">
-        <h1 className="v2-rise text-[34px] leading-tight font-semibold tracking-[-0.03em]">{hello} <span className="v2-grad">{first}</span></h1>
-        <p className="v2-rise mt-2 text-muted" style={{ ["--i" as string]: 1 }}>Tes modèles : {creators.length ? creators.map((c) => c.name).join(", ") : "aucune pour l’instant, demande à ton team leader."}</p>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mx-auto max-w-[920px] px-5 py-9 md:px-8">
+        <p className="v2-eyebrow v2-rise">Bloom CRM</p>
+        <h1 className="v2-h1 v2-rise mt-1.5" style={{ ["--i" as string]: 1 }}>{hello} {first}</h1>
+        <p className="v2-rise mt-1.5 text-[13.5px] text-muted" style={{ ["--i" as string]: 2 }}>Tes modèles : {creators.length ? creators.map((c) => c.name).join(", ") : "aucune pour l’instant, demande à ton team leader."}</p>
+        <div className="mt-7 grid gap-3 sm:grid-cols-2">
           {links.map((l, i) => (
-            <Link key={l.href} href={l.href} className="v2-card v2-lift v2-rise flex items-center gap-4 p-5" style={{ ["--i" as string]: i + 2 }}>
-              <span className="grid size-11 place-items-center rounded-xl" style={{ background: "rgb(59 130 246 / 0.14)", color: "var(--v2-sky)" }}><l.Icon className="size-5" /></span>
-              <span className="min-w-0 flex-1"><b className="block">{l.label}</b><span className="text-[13px] text-muted">{l.text}</span></span>
+            <Link key={l.href} href={l.href} className="v2-card v2-rise flex items-center gap-4 p-5 transition hover:border-white/15" style={{ ["--i" as string]: i + 3 }}>
+              <span className="v2-ico size-11" data-c={l.c}><l.Icon className="size-5" /></span>
+              <span className="min-w-0 flex-1"><b className="block text-[14.5px]">{l.label}</b><span className="text-[13px] text-muted">{l.text}</span></span>
               <ArrowRight className="size-4 text-muted" />
             </Link>
           ))}
@@ -166,123 +366,237 @@ export function V2Home({ me }: { me: Me }) {
     );
   }
 
-  const delta = (now: number, before: number) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
-  const tiles = [
-    { label: "Aujourd’hui", value: k.today, d: delta(k.today, k.yesterday), sub: "par rapport à hier" },
-    { label: "7 derniers jours", value: k.w, d: delta(k.w, k.wPrev), sub: "par rapport aux 7 jours d’avant" },
-    { label: "30 derniers jours", value: rev?.total ?? 0, d: rev ? delta(rev.total, rev.prev) : null, sub: "par rapport aux 30 jours d’avant" },
+  const periodLabel = PERIODS.find(([k]) => k === period)?.[1] ?? "";
+  const picked = only === "of" ? "OnlyFans" : only === "mym" ? "MYM" : only ? nameOf(only)?.name ?? "Modèle" : "Toutes les modèles";
+  const ofModels = creators.filter((c) => !isMym(c.platform));
+  const mymModels = creators.filter((c) => isMym(c.platform));
+  const total = rev?.total ?? 0;
+  const aiShare = rev && total > 0 ? Math.round(((rev.byOrigin.ai ?? 0) / total) * 100) : null;
+  const tiles: { label: string; value: string; sub?: string; Icon: LucideIcon; c: string }[] = [
+    { label: "Ventes", value: rev ? rev.sales.toLocaleString("fr-FR") : "…", sub: rev?.provisional ? `+ ${eur(rev.provisional)} en attente` : undefined, Icon: ShoppingBag, c: "green" },
+    { label: "Panier moyen", value: rev ? (rev.sales ? eur((total - rev.provisional) / rev.sales, 2) : "—") : "…", Icon: Receipt, c: "rose" },
+    { label: "Acheteurs", value: rev ? rev.buyers.toLocaleString("fr-FR") : "…", Icon: Users, c: "orange" },
+    staff ? { label: "Vendu par l’IA", value: aiShare == null ? "—" : `${aiShare} %`, sub: rev?.byOrigin.ai ? eur(rev.byOrigin.ai) : undefined, Icon: Sparkles, c: "violet" } : { label: "Abonnements", value: rev ? eur(rev.byType.sub ?? 0) : "…", Icon: Heart, c: "violet" },
   ];
-  const rows = [...(rev?.creators ?? [])].filter((c) => c.eur > 0).sort((a, b) => b.eur - a.eur);
-  const top = rows[0]?.eur || 1;
-  const origins = Object.entries(rev?.byOrigin ?? {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  const oTotal = origins.reduce((a, [, v]) => a + v, 0) || 1;
-  const split = k.of + k.mym || 1;
+  const sellers = (data?.perf?.sellers ?? []).filter((s) => s.eur > 0 || s.prev > 0).slice(0, 8);
+  const topRow = view?.rows[0]?.eur || 1;
+  const topSeller = sellers[0]?.eur || 1;
+  const ring = staff ? view?.origins ?? [] : view?.types ?? [];
+  const ringTotal = ring.reduce((a, x) => a + x.value, 0) || 1;
+  const pickModel = (v: string) => (setOnly(v), setMenu(false));
+  const opt = (v: string, label: React.ReactNode, lead: React.ReactNode) => (
+    <button key={v || "all"} role="option" aria-selected={only === v} onClick={() => pickModel(v)} className="v2-menu-item" data-on={only === v}>
+      {lead}<span className="min-w-0 flex-1 truncate">{label}</span>{only === v ? <Check className="size-4 shrink-0" style={{ color: "var(--v2-sky)" }} /> : null}
+    </button>
+  );
 
   return (
-    <div className="mx-auto max-w-[1280px] px-5 py-8 md:px-9 md:py-10">
-      <div className="v2-rise flex flex-wrap items-end gap-4">
+    <div className="mx-auto max-w-[1320px] px-5 py-7 md:px-8 md:py-8">
+      {/* En-tête : titre à gauche, modèle et période à droite */}
+      <div className="v2-rise flex flex-wrap items-end gap-x-6 gap-y-4">
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[12.5px] font-medium text-muted"><span className="v2-live" /> En direct · toute l’agence, OnlyFans et MYM</p>
-          <h1 className="mt-2 text-[34px] leading-[1.1] font-semibold tracking-[-0.035em] md:text-[40px]">{hello} <span className="v2-grad">{first}</span></h1>
+          <p className="v2-eyebrow">Pilotage · {fmtDay(paris(), { month: "long", year: "numeric" })}</p>
+          <h1 className="v2-h1 mt-1.5">Vue d’ensemble</h1>
+          <p className="mt-1.5 flex items-center gap-2 text-[13.5px] text-muted"><span className="v2-live" /> Les ventes de l’agence, en direct. {hello} {first}.</p>
         </div>
-        <Link href="/v2/messagerie" className="flex h-11 items-center gap-2 rounded-xl px-5 text-[14px] font-semibold text-white transition hover:brightness-110 active:scale-[0.98]" style={{ background: "linear-gradient(135deg, var(--v2-blue), var(--v2-deep))", boxShadow: "0 10px 30px -12px rgb(59 130 246 / 0.9)" }}><MessageCircle className="size-4" /> Ouvrir la messagerie</Link>
-      </div>
-      {err ? <p className="mt-6 rounded-xl border px-4 py-3 text-[13px]" style={{ borderColor: "#5b2530", background: "#1f0f15", color: "#ff9aa8" }}>{err}</p> : null}
-
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        {tiles.map((t, i) => (
-          <div key={t.label} className="v2-card v2-lift v2-rise p-5" style={{ ["--i" as string]: i + 1 }}>
-            <p className="text-[12.5px] font-medium text-muted">{t.label}</p>
-            <p className={`mt-2 text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums ${i === 2 ? "v2-grad" : ""}`}>{rev ? <Count value={t.value} format={(n) => eur(n)} /> : <span className="text-muted">…</span>}</p>
-            <p className="mt-3 flex items-center gap-1.5 text-[12px] text-muted">
-              {t.d == null ? null : <span className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold" style={{ color: t.d >= 0 ? "#34d399" : "#fb7185", background: t.d >= 0 ? "rgb(52 211 153 / 0.12)" : "rgb(251 113 133 / 0.12)" }}>{t.d >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}{Math.abs(t.d)} %</span>}
-              {t.d == null ? "pas de comparaison" : t.sub}
-            </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div data-model-box className="relative">
+            <button onClick={() => setMenu(!menu)} aria-haspopup="listbox" aria-expanded={menu} className="v2-btn-ghost" style={{ borderRadius: 999, height: 40 }}>
+              <Users className="size-4" style={{ color: "var(--v2-sky)" }} /><span className="max-w-[170px] truncate">{picked}</span><ChevronDown className="size-4 text-muted" />
+            </button>
+            {menu ? (
+              <div className="v2-menu v2-scroll max-h-[420px] w-[264px] overflow-y-auto" role="listbox" aria-label="Modèles affichées" style={{ right: 0, top: "calc(100% + 6px)" }}>
+                {opt("", "Toutes les modèles", <span className="v2-ico size-7" data-c="plain"><Users className="size-3.5" /></span>)}
+                {ofModels.length && mymModels.length ? (
+                  <>
+                    <p className="v2-menu-label">Plateformes</p>
+                    {opt("of", "OnlyFans", <span className="v2-pf-mark" data-pf="of">OF</span>)}
+                    {opt("mym", "MYM", <span className="v2-pf-mark" data-pf="mym">MY</span>)}
+                  </>
+                ) : null}
+                {creators.length > 1 ? <p className="v2-menu-label">Modèles</p> : null}
+                {creators.length > 1 ? creators.map((c) => opt(String(c.id), <span className="flex items-center gap-2"><span className="truncate">{c.name}</span><PfTag mym={isMym(c.platform)} /></span>, <Avatar src={c.avatar} name={c.name} size="size-7" />)) : null}
+              </div>
+            ) : null}
           </div>
-        ))}
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.75fr_1fr]">
-        <div className="v2-card v2-rise p-5" style={{ ["--i" as string]: 4 }}>
-          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-            <b className="text-[15px]">Chiffre par jour</b>
-            <span className="flex-1" />
-            <span className="flex items-center gap-1.5 text-[12px] text-muted"><i className="size-2 rounded-full" style={{ background: "var(--v2-sky)" }} /> Total</span>
-            <span className="flex items-center gap-1.5 text-[12px] text-muted"><i className="size-2 rounded-full" style={{ background: "var(--v2-mym)" }} /> dont MYM</span>
+          <div className="v2-pillbar v2-noscroll max-w-full overflow-x-auto">
+            {PERIODS.map(([k, l]) => <button key={k} onClick={() => (setPeriod(k), save("period", k))} className="v2-pill" data-on={period === k}>{l}</button>)}
           </div>
-          {rev ? <Chart days={rev.days} /> : <div className="h-[230px]" />}
         </div>
-        <div className="v2-card v2-rise flex flex-col p-5" style={{ ["--i" as string]: 5 }}>
-          <b className="text-[15px]">Les deux plateformes</b>
-          <p className="mt-0.5 text-[12px] text-muted">30 derniers jours, tout en euros</p>
-          <div className="mt-5 flex h-3 overflow-hidden rounded-full" style={{ background: "var(--color-card-2)" }}>
-            <i className="v2-grow h-full" style={{ width: `${(k.of / split) * 100}%`, background: "linear-gradient(90deg, #7cc4ff, #3b82f6)" }} />
-            <i className="v2-grow h-full" style={{ width: `${(k.mym / split) * 100}%`, background: "linear-gradient(90deg, #8b7bff, #6a55f0)", ["--i" as string]: 2 }} />
+      </div>
+      {err ? <p className="mt-5 rounded-xl border px-4 py-3 text-[13px]" style={{ borderColor: "rgb(244 63 94 / 0.35)", background: "rgb(244 63 94 / 0.08)", color: "var(--v2-down)" }}>{err}</p> : null}
+
+      <div style={{ opacity: busy ? 0.55 : 1, transition: "opacity 0.2s ease" }}>
+        {/* Le total de la période (comme Moby) */}
+        <section className="v2-hero v2-rise mt-6 grid gap-6 p-6 md:p-7 lg:grid-cols-[1.05fr_1fr]" style={{ ["--i" as string]: 1 }}>
+          <div className="flex min-w-0 flex-col justify-center">
+            <p className="v2-eyebrow" style={{ color: "#a9b4c9" }}>Total des gains · {periodLabel}</p>
+            <p className="v2-num mt-3 text-[50px] leading-none font-extrabold tracking-[-0.04em] md:text-[66px]">{rev ? <Count value={total} format={(n) => eur(n, 2)} /> : <span className="text-muted">…</span>}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px]">
+              {rev ? <Delta now={rev.total} before={rev.prev} /> : null}
+              <span className="text-muted">par rapport à la période d’avant{rev && rev.prev > 0 ? ` (${eur(rev.prev)})` : ""}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
+              <span className="flex items-center gap-2"><i className="size-2 rounded-full" style={{ background: OF }} /><span className="text-muted">OnlyFans</span><b className="v2-num">{eur(view?.of ?? 0, 2)}</b></span>
+              <span className="flex items-center gap-2"><i className="size-2 rounded-full" style={{ background: MYM }} /><span className="text-muted">MYM</span><b className="v2-num">{eur(view?.mym ?? 0, 2)}</b></span>
+            </div>
           </div>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {[{ n: "OnlyFans", v: k.of, c: "var(--v2-of)" }, { n: "MYM", v: k.mym, c: "var(--v2-mym)" }].map((p) => (
-              <div key={p.n} className="rounded-xl p-3.5" style={{ background: "var(--color-card-2)" }}>
-                <p className="flex items-center gap-1.5 text-[12px] text-muted"><i className="size-2 rounded-full" style={{ background: p.c }} />{p.n}</p>
-                <p className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] tabular-nums">{eur(p.v)}</p>
-                <p className="text-[11.5px] text-muted">{Math.round((p.v / split) * 100)} %</p>
+          <div className="grid grid-cols-1 gap-3 self-center sm:grid-cols-2">
+            {tiles.map((t) => (
+              <div key={t.label} className="v2-tile">
+                <span className="v2-ico size-10" data-c={t.c}><t.Icon className="size-[18px]" /></span>
+                <div className="min-w-0">
+                  <p className="truncate text-[10.5px] font-semibold tracking-[0.12em] text-muted uppercase">{t.label}</p>
+                  <p className="v2-num mt-0.5 truncate text-[20px] leading-tight font-bold">{t.value}</p>
+                  {t.sub ? <p className="truncate text-[11.5px] text-muted">{t.sub}</p> : null}
+                </div>
               </div>
             ))}
           </div>
-          <span className="flex-1" />
-          <p className="mt-4 text-[12px] text-muted">{rev ? `${rev.sales.toLocaleString("fr-FR")} ventes · ${rev.buyers.toLocaleString("fr-FR")} acheteurs` : ""}{rev?.provisional ? ` · ${eur(rev.provisional)} en attente de confirmation` : ""}</p>
-        </div>
-      </div>
+        </section>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="v2-card v2-rise p-5" style={{ ["--i" as string]: 6 }}>
-          <b className="text-[15px]">Modèles</b>
-          <div className="mt-4 space-y-3.5">
-            {rows.length ? rows.map((r, i) => {
-              const c = nameOf(r.creatorId);
-              const mym = isMym(r.platform ?? c?.platform);
-              const d = delta(r.eur, r.prev);
-              return (
-                <div key={`${r.creatorId}:${r.account}`} className="flex items-center gap-3">
-                  {c?.avatar ? <img src={c.avatar} alt="" className="size-9 shrink-0 rounded-full object-cover" /> : <span className="grid size-9 shrink-0 place-items-center rounded-full text-[12px] font-bold" style={{ background: "var(--color-card-2)" }}>{(c?.name || "?")[0]}</span>}
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 text-[13.5px]"><b className="truncate">{c?.name || r.account || "Compte"}</b><Chip mym={mym} /><span className="flex-1" /><b className="tabular-nums">{eur(r.eur)}</b>{d == null ? null : <span className="w-12 text-right text-[11.5px] font-semibold" style={{ color: d >= 0 ? "#34d399" : "#fb7185" }}>{d >= 0 ? "+" : ""}{d} %</span>}</p>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--color-card-2)" }}><i className="v2-grow block h-full rounded-full" style={{ width: `${Math.max(2, (r.eur / top) * 100)}%`, background: mym ? "linear-gradient(90deg, #8b7bff, #6a55f0)" : "linear-gradient(90deg, #7cc4ff, #3b82f6)", ["--i" as string]: i }} /></div>
-                  </div>
-                </div>
-              );
-            }) : <p className="text-[13px] text-muted">{rev ? "Aucune vente sur la période." : "Chargement…"}</p>}
-          </div>
-        </div>
-        <div className="v2-card v2-rise p-5" style={{ ["--i" as string]: 7 }}>
-          <b className="text-[15px]">Qui a vendu</b>
-          <div className="mt-4 space-y-3">
-            {origins.length ? origins.map(([o, v], i) => (
-              <div key={o}>
-                <p className="flex items-center text-[13px]"><span className="truncate">{ORIGIN[o] || o}</span><span className="flex-1" /><b className="tabular-nums">{eur(v)}</b><span className="w-11 text-right text-[11.5px] text-muted">{Math.round((v / oTotal) * 100)} %</span></p>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--color-card-2)" }}><i className="v2-grow block h-full rounded-full" style={{ width: `${Math.max(2, (v / oTotal) * 100)}%`, background: "linear-gradient(90deg, #7cc4ff, #3b82f6)", opacity: 1 - i * 0.12, ["--i" as string]: i }} /></div>
-              </div>
-            )) : <p className="text-[13px] text-muted">{rev ? "Rien à afficher." : "Chargement…"}</p>}
-          </div>
-        </div>
-      </div>
-
-      <div className="v2-card v2-rise mt-4 p-5" style={{ ["--i" as string]: 8 }}>
-        <div className="flex items-center"><b className="text-[15px]">Dernières ventes</b><span className="flex-1" /><Link href="/v2/chiffres" className="flex items-center gap-1 text-[12.5px] font-medium" style={{ color: "var(--v2-sky)" }}>Tous les chiffres <ArrowRight className="size-3.5" /></Link></div>
-        <div className="mt-3 divide-y" style={{ borderColor: "var(--color-line)" }}>
-          {(rev?.recent ?? []).slice(0, 10).map((s) => {
-            const c = nameOf(s.creatorId);
+        {/* Par type de vente (comme la rangée de Raven) */}
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {TYPES.map(([k, label, Icon], i) => {
+            const v = rev?.byType[k] ?? 0;
             return (
-              <div key={s.id} className="flex items-center gap-3 py-2.5 text-[13px]" style={{ borderColor: "var(--color-line)" }}>
-                <span className="w-12 shrink-0 text-[12px] text-muted tabular-nums">{new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }).format(new Date(s.at))}</span>
-                <span className="min-w-0 flex-1 truncate"><b>{s.fan || "Fan"}</b> <span className="text-muted">· {TYPE[s.type] || s.type} · {c?.name || "—"}</span></span>
-                <span className="hidden truncate text-[12px] text-muted sm:block">{s.by || ORIGIN[s.origin] || ""}</span>
-                <Chip mym={isMym(c?.platform) || s.currency === "EUR"} />
-                <b className="w-20 text-right tabular-nums" style={s.provisional ? { opacity: 0.6 } : undefined}>{money(s.net, s.currency)}</b>
+              <div key={k} className="v2-card v2-rise p-4" style={{ ["--i" as string]: i + 2 }}>
+                <p className="flex items-center gap-2 text-[12.5px] text-muted"><Icon className="size-[15px] shrink-0" /><span className="truncate">{label}</span></p>
+                <p className="v2-num mt-2 text-[19px] leading-none font-bold" style={v ? undefined : { color: "var(--color-muted)" }}>{eur(v, 2)}</p>
+                <p className="mt-2 text-[11.5px] text-muted">{total > 0 && v ? `${Math.round((v / total) * 100)} % du total` : "—"}</p>
               </div>
             );
           })}
-          {rev && !rev.recent.length ? <p className="py-3 text-[13px] text-muted">Aucune vente récente.</p> : null}
         </div>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)]">
+          <section className="v2-card v2-rise min-w-0 p-5" style={{ ["--i" as string]: 5 }}>
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="v2-card-title">Évolution des gains</p>
+                <p className="mt-0.5 text-[12.5px] text-muted">{periodLabel} · {view?.sub.toLowerCase() ?? ""}</p>
+              </div>
+              {view?.canCompare ? (
+                <div className="v2-segbar">
+                  <button className="v2-seg" data-on={!cmp} onClick={() => setCmp(false)}>Plateformes</button>
+                  <button className="v2-seg" data-on={cmp} onClick={() => setCmp(true)} title="Comparer chaque jour à la période d’avant">Comparer</button>
+                </div>
+              ) : null}
+              <div className="v2-segbar">
+                <button className="v2-seg" data-on={mode === "line"} onClick={() => (setMode("line"), save("mode", "line"))} title="Courbe" aria-label="Courbe"><LineChart className="size-3.5" /></button>
+                <button className="v2-seg" data-on={mode === "bars"} onClick={() => (setMode("bars"), save("mode", "bars"))} title="Barres" aria-label="Barres"><BarChart3 className="size-3.5" /></button>
+              </div>
+            </div>
+            <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
+              {cmp && view?.canCompare ? (
+                <><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: OF }} />{periodLabel}</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: "#4a4a52" }} />Période d’avant</span></>
+              ) : (
+                <><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: OF }} />{mode === "line" ? "Total" : "OnlyFans"}</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: MYM }} />{mode === "line" ? "dont MYM" : "MYM"}</span>{mode === "bars" && rev?.provisional ? <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm" style={{ background: WAIT }} />En attente de confirmation</span> : null}</>
+              )}
+            </p>
+            {view ? <Chart key={`${data?.key}|${mode}|${cmp}`} pts={view.pts} mode={mode} compare={cmp && view.canCompare} /> : <div style={{ height: 312 }} />}
+          </section>
+
+          <section className="v2-card v2-rise flex min-w-0 flex-col p-5" style={{ ["--i" as string]: 6 }}>
+            <p className="v2-card-title">Répartition</p>
+            <p className="mt-0.5 text-[12.5px] text-muted">{staff ? "Qui a vendu" : "Par type de vente"}</p>
+            <div className="mt-5"><Donut key={data?.key} items={ring} /></div>
+            <div className="mt-5 space-y-2">
+              {ring.slice(0, 6).map((o) => (
+                <p key={o.label} className="flex items-center gap-2 text-[12.5px]">
+                  <i className="size-2.5 shrink-0 rounded-full" style={{ background: o.color }} />
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  <span className="text-[11.5px] text-muted">{Math.round((o.value / ringTotal) * 100)} %</span>
+                  <b className="v2-num w-[78px] text-right">{eur(o.value)}</b>
+                </p>
+              ))}
+              {!ring.length ? <p className="text-[12.5px] text-muted">{rev ? "Aucune vente sur la période." : "Chargement…"}</p> : null}
+            </div>
+          </section>
+        </div>
+
+        <div className={`mt-3 grid gap-3 ${staff ? "lg:grid-cols-2" : ""}`}>
+          <section className="v2-card v2-rise min-w-0 p-5" style={{ ["--i" as string]: 7 }}>
+            <div className="flex items-center"><p className="v2-card-title flex-1">Top modèles</p><span className="text-[12px] text-muted">{periodLabel}</span></div>
+            <div className="mt-2">
+              {(view?.rows ?? []).slice(0, 8).map((r, i) => {
+                const c = nameOf(r.creatorId);
+                const mym = isMym(r.platform ?? c?.platform);
+                return (
+                  <div key={`${r.creatorId}:${r.account}`} className="border-b py-3 last:border-b-0" style={{ borderColor: "rgb(255 255 255 / 0.05)" }}>
+                    <div className="flex items-center gap-3">
+                      <span className="v2-num w-4 shrink-0 text-center text-[12.5px] font-semibold text-muted">{i + 1}</span>
+                      <Avatar src={c?.avatar} name={c?.name || r.account} size="size-9" />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2"><b className="truncate text-[14px]">{c?.name || r.account || "Compte"}</b><PfTag mym={mym} /></p>
+                        <p className="truncate text-[11.5px] text-muted">{r.sales.toLocaleString("fr-FR")} vente{r.sales > 1 ? "s" : ""}{total > 0 ? ` · ${Math.round((r.eur / total) * 100)} % du total` : ""}</p>
+                      </div>
+                      <b className="v2-num shrink-0 text-[14.5px]">{eur(r.eur, 2)}</b>
+                      <span className="flex w-[62px] shrink-0 justify-end"><Delta now={r.eur} before={r.prev} /></span>
+                    </div>
+                    <div className="pl-7"><Progress value={r.eur} max={topRow} color={mym ? MYM : OF} i={i} /></div>
+                  </div>
+                );
+              })}
+              {view && !view.rows.length ? <p className="py-6 text-center text-[13px] text-muted">Aucune vente sur la période.</p> : null}
+              {!view ? <p className="py-6 text-center text-[13px] text-muted">Chargement…</p> : null}
+            </div>
+          </section>
+
+          {staff ? (
+            <section className="v2-card v2-rise min-w-0 p-5" style={{ ["--i" as string]: 8 }}>
+              <div className="flex items-center"><p className="v2-card-title flex-1">Top chatteurs</p><Link href="/v2/equipe-ventes" className="flex items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Classement complet <ArrowRight className="size-3.5" /></Link></div>
+              <div className="mt-2">
+                {sellers.map((s, i) => (
+                  <div key={s.key} className="border-b py-3 last:border-b-0" style={{ borderColor: "rgb(255 255 255 / 0.05)" }}>
+                    <div className="flex items-center gap-3">
+                      <span className="v2-num w-6 shrink-0 text-[12.5px] font-semibold text-muted">#{i + 1}</span>
+                      {s.kind === "ai" ? <span className="v2-ico size-9" data-c="blue" style={{ borderRadius: 999 }}><Sparkles className="size-4" /></span> : <Avatar name={s.name} size="size-9" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2"><b className="truncate text-[14px]">{s.name}</b>{s.kind === "bloom" ? <span className="v2-tag">Bloom</span> : null}</p>
+                        <p className="truncate text-[11.5px] text-muted">{s.sales.toLocaleString("fr-FR")} vente{s.sales > 1 ? "s" : ""}{s.buyers ? ` · ${s.buyers.toLocaleString("fr-FR")} acheteur${s.buyers > 1 ? "s" : ""}` : ""}</p>
+                      </div>
+                      <b className="v2-num shrink-0 text-[14.5px]">{eur(s.eur, 2)}</b>
+                      <span className="flex w-[62px] shrink-0 justify-end"><Delta now={s.eur} before={s.prev} /></span>
+                    </div>
+                    <div className="pl-9"><Progress value={s.eur} max={topSeller} color={OF} i={i} /></div>
+                  </div>
+                ))}
+                {data && !sellers.length ? <p className="py-6 text-center text-[13px] text-muted">Le classement de tes chatteurs, dès la première vente.</p> : null}
+                {!data ? <p className="py-6 text-center text-[13px] text-muted">Chargement…</p> : null}
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <section className="v2-card v2-rise mt-3 p-5" style={{ ["--i" as string]: 9 }}>
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="v2-card-title">Dernières ventes</p>
+              <p className="mt-0.5 flex items-center gap-2 text-[12.5px] text-muted"><span className="v2-live" /> En direct, les 10 dernières de la période</p>
+            </div>
+            {staff ? <Link href="/v2/chiffres" className="flex shrink-0 items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Toutes les statistiques <ArrowRight className="size-3.5" /></Link> : null}
+          </div>
+          <div className="mt-2 grid gap-x-8 lg:grid-cols-2">
+            {(rev?.recent ?? []).slice(0, 10).map((s) => {
+              const c = nameOf(s.creatorId);
+              const who = staff ? s.by || (s.origin === "ai" ? "IA Substy" : s.origin === "sub" ? null : ORIGIN[s.origin]?.[0] ?? null) : null;
+              return (
+                <div key={s.id} className="flex items-center gap-3 border-b py-2.5" style={{ borderColor: "rgb(255 255 255 / 0.05)" }}>
+                  <Avatar name={s.fan || "Fan"} size="size-9" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-semibold">{s.fan || "Fan"}</p>
+                    <p className="truncate text-[11.5px] text-muted">{TYPE_ONE[s.type] ?? "Vente"}{who ? ` · par ${who}` : ""}{c ? ` · ${c.name}` : ""} · {ago(s.at)}</p>
+                  </div>
+                  {s.provisional ? <span className="v2-tag shrink-0" title="Vente vue en direct, pas encore confirmée par la plateforme">en attente</span> : null}
+                  <b className="v2-num shrink-0 text-[13.5px]" style={{ color: s.provisional ? "var(--color-muted)" : "var(--v2-up)" }}>+{money(s.net, s.currency)}</b>
+                </div>
+              );
+            })}
+          </div>
+          {rev && !rev.recent.length ? <p className="py-6 text-center text-[13px] text-muted">Tes ventes arriveront ici, à la seconde.</p> : null}
+          {!rev ? <p className="py-6 text-center text-[13px] text-muted">Chargement…</p> : null}
+        </section>
       </div>
     </div>
   );

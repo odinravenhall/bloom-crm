@@ -4,6 +4,11 @@
 const API = process.env.API_URL || "http://api:3000";
 // Adresse dédiée à « Accès MYM (Direct) » : tout ce qui y arrive part vers le relais du site MYM (app/mymsite.mjs).
 const MYM_SITE_HOST = process.env.MYM_SITE_HOST || "mym.ravencrm.xyz";
+// Adresses de la NOUVELLE version (v2) : même site, mais la racine y ouvre /v2. Même liste que app/hosts.mjs.
+// Discord ne connaît que l'adresse principale : « Se connecter avec Discord » y fait l'aller-retour, puis l'API
+// ramène sur l'adresse de départ avec un lien à usage unique (voir /api/auth/callback).
+const V2_HOSTS = (process.env.V2_HOSTS || "bloomcrm.fr,www.bloomcrm.fr").split(",").map((h) => h.trim().toLowerCase()).filter((h) => /^[a-z0-9.-]+$/.test(h));
+const MAIN = (process.env.PUBLIC_URL || "https://bloom.ravencrm.xyz").replace(/\/$/, "");
 
 const nextConfig = {
   output: "standalone",
@@ -13,6 +18,17 @@ const nextConfig = {
   images: { unoptimized: true },
   // MYM → Importer des médias : les vidéos passent par ici vers l'API (10 Mo par défaut).
   experimental: { proxyClientMaxBodySize: "500mb" },
+  async redirects() {
+    return V2_HOSTS.flatMap((host) => {
+      const has = [{ type: "host", value: host.replace(/\./g, "\\.") }];
+      return [
+        { source: "/", has, destination: "/v2", permanent: false },
+        { source: "/app", has, destination: "/v2", permanent: false },
+        { source: "/app/messagerie", has, destination: "/v2/messagerie", permanent: false },
+        { source: "/api/auth/discord", has, destination: `${MAIN}/api/auth/discord?to=${host}`, permanent: false },
+      ];
+    });
+  },
   async rewrites() {
     return {
       beforeFiles: [

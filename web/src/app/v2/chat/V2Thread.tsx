@@ -322,8 +322,8 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
             {model ? <span className="hidden truncate sm:inline">· {model.displayName}</span> : null}
           </p>
         </div>
-        {lockedBy ? <span className="hidden items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold sm:flex" style={{ background: "rgb(124 196 255 / 0.12)", color: "var(--v2-sky)" }}><Lock className="size-3" /> {lockedBy} est dessus</span> : null}
-        {waiting !== null ? <span className="hidden rounded-lg px-2 py-1 text-[11.5px] font-bold whitespace-nowrap tabular-nums sm:inline" style={tone === "good" ? { background: "rgb(52 211 153 / 0.13)", color: "#34d399" } : tone === "warn" ? { background: "rgb(251 191 36 / 0.13)", color: "#fbbf24" } : { background: "rgb(251 113 133 / 0.13)", color: "#fb7185" }}>attend {durSec(waiting)}</span> : null}
+        {lockedBy ? <span className="hidden items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold sm:flex" style={{ background: "rgb(59 130 246 / 0.14)", color: "var(--v2-sky)" }}><Lock className="size-3" /> {lockedBy} est dessus</span> : null}
+        {waiting !== null ? <span className="v2-wait hidden sm:inline-flex" data-tone={tone ?? "bad"}>attend {durSec(waiting)}</span> : null}
         {hasAi ? (
           <button onClick={toggleAi} title={ai ? "L’IA répond à ce fan. Clique pour la couper et répondre toi-même." : "L’IA est coupée sur ce fan. Clique pour la rallumer."} className="v2-ai flex h-9 shrink-0 items-center gap-2 rounded-xl border px-2.5 text-[12px] font-semibold" data-on={ai}>
             <Sparkles className="size-3.5" /><span className="hidden lg:inline">IA</span><i><b /></i>
@@ -358,7 +358,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
           );
         })}
         {fanTyping ? <div className="mt-1 flex items-center gap-2 self-start rounded-2xl rounded-bl-md px-4 py-3" style={{ background: "var(--color-bubble-fan)" }}><span className="v2-dots"><i /><i /><i /></span></div> : null}
-        {aiWriting ? <div className="mt-1 flex items-center gap-2 self-end rounded-2xl rounded-br-md px-4 py-2.5 text-[12.5px] font-semibold" style={{ background: "rgb(124 196 255 / 0.1)", color: "var(--v2-sky)" }}><Sparkles className="size-3.5" /> L’IA écrit <span className="v2-dots"><i /><i /><i /></span></div> : null}
+        {aiWriting ? <div className="mt-1 flex items-center gap-2 self-end rounded-2xl rounded-br-md px-4 py-2.5 text-[12.5px] font-semibold" style={{ background: "rgb(59 130 246 / 0.12)", color: "var(--v2-sky)" }}><Sparkles className="size-3.5" /> L’IA écrit <span className="v2-dots"><i /><i /><i /></span></div> : null}
       </div>
 
       {/* Zone d'écriture */}
@@ -371,7 +371,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
               {medias.map((m) => (
                 <span key={m.id} className="relative shrink-0">
                   <MediaTile m={m} className="size-14 rounded-xl" />
-                  <button onClick={() => setMedias((x) => x.filter((y) => y.id !== m.id))} className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full text-white" style={{ background: "#0a1120", boxShadow: "0 0 0 1px var(--color-line)" }}><X className="size-3" /></button>
+                  <button onClick={() => setMedias((x) => x.filter((y) => y.id !== m.id))} className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full text-white" style={{ background: "#121215", boxShadow: "0 0 0 1px rgb(255 255 255 / 0.12)" }}><X className="size-3" /></button>
                 </span>
               ))}
               <label className="ml-auto flex shrink-0 items-center gap-2 pl-3 text-[12px] font-semibold text-muted">
@@ -403,7 +403,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
               {quick.map((e, i) => <button key={`${e}-${i}`} type="button" onClick={() => insert(e)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[17px] leading-none transition hover:scale-125 hover:bg-white/[0.06]" title={`Insérer ${e}`}>{e}</button>)}
             </div>
             <span className="hidden shrink-0 pr-1 text-[11px] text-muted xl:block">Entrée pour envoyer</span>
-            <button onClick={send} disabled={sending || (!text.trim() && !medias.length)} title="Envoyer (Entrée)" className="v2-send">{sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}<span>{priceCents ? `Envoyer · ${money(priceCents, 2, cur)}` : "Envoyer"}</span></button>
+            <button onClick={send} disabled={sending || (!text.trim() && !medias.length)} title="Envoyer (Entrée)" className="v2-btn">{sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}<span>{priceCents ? `Envoyer · ${money(priceCents, 2, cur)}` : "Envoyer"}</span></button>
           </div>
         </div>
       </div>

@@ -43,7 +43,8 @@ import { mymSiteProxy, mymSiteRoutes } from './mymsite.mjs';
 import { nudgeRoutes } from './nudges.mjs';
 import { matchLive, parisDay, performance, toEur, recordLive, revenue, saveKeys, setCreators, setMap, startRevenue, status as revenueStatus } from './revenue.mjs';
 import { canSee, isBoss, setCreatorPlatforms } from './team.mjs';
-import { LoginError, discordReady, guildsOfBot, setExtraGuilds, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
+import { LoginError, discordReady, guildsOfBot, setExtraGuilds, hopLink, oauthFinish, oauthReady, oauthUrl, setupBot, startBot, status as discordStatus, useLink } from './discord.mjs';
+import { isV2Host } from './hosts.mjs';
 
 const COOKIE = 'bloom_session';
 
@@ -259,6 +260,17 @@ function period(req) {
   return { from, to };
 }
 
+/**
+ * Les modèles dont on montre les chiffres : celles que la personne peut voir, réduites si l'adresse porte
+ * « only=of », « only=mym » (une plateforme) ou « only=<identifiant> » (une seule modèle). Sert au filtre de l'accueil v2.
+ */
+function scoped(req, me) {
+  const only = new URL(req.url, 'http://x').searchParams.get('only') || '';
+  const pf = only === 'of' || only === 'mym';
+  const u = pf ? { ...me, pf: only } : me;
+  return state.creators.filter((c) => canSee(u, c.id) && (!only || pf || String(c.id) === only));
+}
+
 const routes = {
   'GET /health': async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' });
@@ -270,7 +282,11 @@ const routes = {
   'GET /api/auth/discord': async (req, res) => {
     if (!oauthReady()) return redirect(res, '/connexion?e=off');
     const state = randomBytes(24).toString('base64url');
-    res.setHeader('set-cookie', [`bloom_oauth=${state}; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=600`]);
+    // Connexion lancée depuis une adresse de la nouvelle version (« ?to=bloomcrm.fr », posé par next.config.mjs) :
+    // on s'en souvient 10 minutes pour y revenir après Discord. Seules les adresses de hosts.mjs sont acceptées.
+    const to = String(new URL(req.url, 'http://x').searchParams.get('to') || '').toLowerCase();
+    const cookie = (v, age) => `bloom_oauth_to=${v}; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+    res.setHeader('set-cookie', [`bloom_oauth=${state}; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, isV2Host(to) ? cookie(to, 600) : cookie('', 0)]);
     redirect(res, oauthUrl(state));
   },
   // Retour de Discord.
@@ -279,28 +295,37 @@ const routes = {
     const got = Buffer.from(p.get('state') || '');
     const want = Buffer.from(/(?:^|;\s*)bloom_oauth=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '');
     const clear = 'bloom_oauth=; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
-    res.setHeader('set-cookie', [clear]);
-    if (p.get('error')) return redirect(res, '/connexion?e=cancel');
-    if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) return redirect(res, '/connexion?e=state');
+    // Adresse de la nouvelle version d'où la connexion est partie (vide = l'adresse principale).
+    const to = /(?:^|;\s*)bloom_oauth_to=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
+    const back = isV2Host(to) ? `https://${to.toLowerCase()}` : '';
+    res.setHeader('set-cookie', [clear, 'bloom_oauth_to=; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=0']);
+    if (p.get('error')) return redirect(res, `${back}/connexion?e=cancel`);
+    if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) return redirect(res, `${back}/connexion?e=state`);
     try {
       const u = await oauthFinish(p.get('code'));
+      // La session s'ouvre sur l'adresse d'où l'on vient (lien à usage unique), pas ici.
+      const hop = back ? hopLink(u.id, to) : null;
+      if (hop) return redirect(res, hop);
       login(res, u.id);
       redirect(res, u.role === 'chatter' ? '/app/messagerie' : '/app');
     } catch (e) {
       if (!(e instanceof LoginError)) console.error('[oauth]', e);
-      redirect(res, '/connexion?e=' + encodeURIComponent(e instanceof LoginError ? e.message : 'Connexion impossible pour le moment.'));
+      redirect(res, `${back}/connexion?e=` + encodeURIComponent(e instanceof LoginError ? e.message : 'Connexion impossible pour le moment.'));
     }
   },
 
   // Lien du bot Discord (/connexion) : usage unique, 5 minutes.
   'GET /api/auth/link': async (req, res) => {
-    const u = useLink(new URL(req.url, 'http://x').searchParams.get('t') || '');
+    const q = new URL(req.url, 'http://x').searchParams;
+    const u = useLink(q.get('t') || '');
     if (!u) {
       res.writeHead(410, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
       return res.end('Lien expiré ou déjà utilisé. Tape /connexion sur le serveur Discord pour en recevoir un nouveau.');
     }
     login(res, u.id);
-    res.writeHead(303, { location: u.role === 'chatter' ? '/app/messagerie' : '/app', 'cache-control': 'no-store' });
+    // « v=2 » : lien posé au retour de Discord pour une adresse de la nouvelle version, on arrive sur son accueil.
+    const home = q.get('v') === '2' ? (u.role === 'chatter' ? '/v2/messagerie' : '/v2') : u.role === 'chatter' ? '/app/messagerie' : '/app';
+    res.writeHead(303, { location: home, 'cache-control': 'no-store' });
     res.end();
   },
 
@@ -364,10 +389,11 @@ const routes = {
     // Managers, team leaders et modèles (une modèle ne voit que son propre chiffre).
     if (!isBoss(me) && me.role !== 'model') return send(res, 403, { error: 'Réservé aux managers, team leaders et modèles' });
     const per = period(req);
-    const creators = state.creators.filter((c) => canSee(me, c.id));
+    const creators = scoped(req, me);
     const out = revenue({ ...per, creators });
     // Ventes de l'IA de Substy (Substy les compte lui-même ; les ventes d'Infloww / MyPulse ne disent pas qui a vendu).
-    if (isBoss(me)) out.ai = await aiStats(per.from, per.to, creators.map((c) => c.id)).catch((e) => (console.warn('[bloom] stats IA :', e.message), null));
+    // « lite=1 » (accueil v2, période de comparaison) : sans cet appel à Substy, on ne veut que les chiffres par jour.
+    if (isBoss(me) && !/[?&]lite=1(&|$)/.test(req.url || '')) out.ai = await aiStats(per.from, per.to, creators.map((c) => c.id)).catch((e) => (console.warn('[bloom] stats IA :', e.message), null));
     send(res, 200, out);
   },
   // Performances : le chiffre par chatteur (Bloom, Infloww / MyPulse, IA) et par créatrice. Admins, managers, team leaders.
@@ -375,7 +401,7 @@ const routes = {
     const me = userFrom(req);
     if (!me) return send(res, 401, { error: 'Connecte-toi' });
     if (!isBoss(me)) return send(res, 403, { error: 'Réservé aux managers et team leaders' });
-    send(res, 200, performance({ ...period(req), creators: state.creators.filter((c) => canSee(me, c.id)) }));
+    send(res, 200, performance({ ...period(req), creators: scoped(req, me) }));
   },
   // Branchements Infloww / MyPulse (admins) : état, clés, créatrices reliées.
   'GET /api/integrations': async (req, res) => {

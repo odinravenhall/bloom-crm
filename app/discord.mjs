@@ -7,6 +7,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { all, getSetting, one, open, run, seal, setSetting } from './store.mjs';
 import { accountFor } from './staff.mjs';
+import { isV2Host } from './hosts.mjs';
 
 const API = 'https://discord.com/api/v10';
 const BASE = (process.env.PUBLIC_URL || 'https://bloom.ravencrm.xyz').replace(/\/$/, '');
@@ -152,12 +153,21 @@ export async function guildsOfBot() {
 }
 
 // ---------------------------------------------------------------- liens de connexion
-function mint(userId) {
+function mint(userId, ttl = LINK_TTL) {
   const token = randomBytes(32).toString('base64url');
   const now = Date.now();
   run('DELETE FROM login_links WHERE expires_at < ?', now - 864e5);
-  run('INSERT INTO login_links (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)', sha(token), userId, now + LINK_TTL, now);
+  run('INSERT INTO login_links (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)', sha(token), userId, now + ttl, now);
   return `${BASE}/api/auth/link?t=${token}`;
+}
+/**
+ * Connexion demandée depuis une adresse de la nouvelle version (bloomcrm.fr) : Discord ne connaît que l'adresse
+ * principale, donc on y fait l'aller-retour, puis ce lien à usage unique (1 minute) ouvre la session sur l'adresse
+ * d'où l'on vient. `host` doit être dans la liste fermée de hosts.mjs, sinon rien.
+ */
+export function hopLink(userId, host) {
+  if (!isV2Host(host)) return null;
+  return `${mint(userId, 60_000).replace(BASE, `https://${String(host).toLowerCase()}`)}&v=2`;
 }
 
 // Rôles du serveur (id → nom), gardés 5 minutes.
