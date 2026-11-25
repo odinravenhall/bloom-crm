@@ -266,3 +266,4 @@
 .dD .mc-ppv { background: #1f2740; }
 .dD .mc-lh b { font-family: var(--f-serif), Georgia, serif; font-size: 25px; font-weight: 400; letter-spacing: 0; }
 .dD .lw-av { background: linear-gradient(135deg, #5a6fd8, #1f2f7a); }
+.dD .mc-wait, .dD .mc-box .lw-num { font-family: var(--font); }

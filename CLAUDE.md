@@ -374,6 +374,14 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   encore les composants actuels (`rv/inbox`, `MymFanPanel`). Pas encore repris : onglets de fans, dictée, réglage des
   sous-inbox, traduction et envoi programmé de Messages Pro.
 - En pause pendant ce chantier : automatisations MyPulse, Nudge IA, config IA (pas dans le menu de la v2).
+- ⚠️ Retour de l'agence le 25/11/2026 sur ce mélange : « ça ressemble trop à Moby » (on garde les fonctionnalités, pas
+  le dessin : Moby ne doit pas se reconnaître) et « ça fait trop mélange de tout ». Bloom doit avoir SON identité, la
+  même partout, et chaque écran doit être redessiné (plus de copie de MyPulse ou d'Infloww derrière le menu, comme les
+  écrans Chiffres aujourd'hui). Page provisoire `/styles` (`web/src/app/styles/`, admins / managers / team leaders) :
+  quatre directions à comparer sur les mêmes écrans avec les vrais chiffres — A « Constellation » (famille Raven),
+  B « Ligne claire » (menu en haut, graphite, dense), C « Pétale » (bleu nuit, formes arrondies), D « Papier » (clair,
+  titres en serif). En attente du choix. Ensuite : construire la direction retenue dans `/v2`, page par page, puis
+  supprimer `/styles`.
 
 ### Nouveau domaine : bloomcrm.fr (25/11/2026) — `app/hosts.mjs`, `web/next.config.mjs`
 

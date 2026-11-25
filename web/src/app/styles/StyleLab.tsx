@@ -309,8 +309,8 @@ function WinB({ d, screen }: { d: Data; screen: ScreenKind }) {
               <header>Gains nets<span className="flex-1" /><span className="flex items-center gap-1.5 normal-case"><i className="size-2 rounded-sm" style={{ background: "var(--of)" }} />Total</span><span className="flex items-center gap-1.5 normal-case"><i className="size-2 rounded-sm" style={{ background: "var(--mym)" }} />dont MYM</span></header>
               <div className="px-[14px] pt-3"><span className="b-total">{eur(d.total, 2)}</span> <Delta now={d.total} before={d.prev} /> <span className="lw-muted text-[12px]">vs {eur(d.prev)} avant</span></div>
               <div className="relative mt-2 px-[14px]">
-                <Area v={tot} color="var(--of)" h={190} max={max} />
-                <div className="absolute inset-x-[14px] top-0"><Area v={d.days.map((x) => x.mym)} color="var(--mym)" h={190} max={max} fill={false} /></div>
+                <Area v={tot} color="var(--of)" h={236} max={max} />
+                <div className="absolute inset-x-[14px] top-0"><Area v={d.days.map((x) => x.mym)} color="var(--mym)" h={236} max={max} fill={false} /></div>
               </div>
               <div className="lw-x lw-num px-[14px] pb-3">{d.days.map((x, i) => <span key={i}>{i % 3 === 0 ? x.label : ""}</span>)}</div>
             </section>
@@ -346,7 +346,7 @@ function WinB({ d, screen }: { d: Data; screen: ScreenKind }) {
             <section className="b-card">
               <header><i className="size-1.5 rounded-full" style={{ background: "var(--up)" }} />En direct</header>
               <div className="b-feed">
-                {d.feed.slice(0, 5).map((f, i) => <div key={i}><span className="lw-num lw-muted text-[11px]">{f.ago}</span><span className="min-w-0 truncate"><b className="font-medium">{f.fan}</b> <span className="lw-muted">· {f.model}{f.by ? ` · ${f.by}` : ""}</span></span><b className="lw-num" style={{ color: "var(--up)" }}>+{f.amount}</b></div>)}
+                {d.feed.slice(0, 6).map((f, i) => <div key={i}><span className="lw-num lw-muted text-[11px]">{f.ago}</span><span className="min-w-0 truncate"><b className="font-medium">{f.fan}</b> <span className="lw-muted">· {f.model}{f.by ? ` · ${f.by}` : ""}</span></span><b className="lw-num" style={{ color: "var(--up)" }}>+{f.amount}</b></div>)}
               </div>
             </section>
           </div>
@@ -466,7 +466,7 @@ function WinD({ d, screen }: { d: Data; screen: ScreenKind }) {
           <div className="mt-5 grid gap-4" style={{ gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)" }}>
             <section className="d-card">
               <div className="flex items-center gap-4"><p className="d-title flex-1">Jour après jour</p><span className="lw-muted flex items-center gap-1.5 text-[11.5px]"><i className="size-2 rounded-sm" style={{ background: "var(--of)" }} />OnlyFans</span><span className="lw-muted flex items-center gap-1.5 text-[11.5px]"><i className="size-2 rounded-sm" style={{ background: "var(--mym)" }} />MYM</span></div>
-              <div className="lw-bars mt-4" style={{ height: 150 }}>
+              <div className="lw-bars mt-4" style={{ height: 218 }}>
                 {d.days.map((x, i) => <span key={i} style={{ flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap: 0 }}><i style={{ height: `${(x.mym / max) * 100}%`, maxWidth: 9, background: "var(--mym)" }} /><i style={{ height: `${(x.of / max) * 100}%`, maxWidth: 9, borderRadius: 0, background: "var(--of)" }} /></span>)}
               </div>
               <div className="lw-x">{d.days.map((x, i) => <span key={i}>{i % 3 === 0 ? x.label : ""}</span>)}</div>
