@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes de l’équipe, Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes et Messages de l’équipe, Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -599,8 +599,16 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     (messages, fans, contenus proposés / achetés, temps de réponse = moyenne des réponses données en moins de
     30 min), ventes par jour par famille de vendeurs ou en comparant trois vendeurs, détail des 500 dernières ventes,
     fiche d'un vendeur. ⚠️ Côté MYM l'auteur d'une vente n'est cherché que sur 14 jours (`attributedSince`).
+  - Messages de l'équipe (`V2TeamMessages.tsx`, `GET /api/v2/team/messages?pf&from&to[&creatorId][&sender][&type]`
+    `[&q][&fan][&sort][&page][&size]`), à la place de `MymMessages` et `MessageDashboard` : chaque message envoyé aux
+    fans d'après `msg_log` (auteur, modèle, fan, message du fan auquel il répond, prix et achat, temps de réponse,
+    script, retiré), le résumé par auteur, le fil autour d'un message, l'export. `sender` = une clé de `whoOf` ou
+    « humans » ; `type` = paid, bought, unbought, free, script, slow (réponse de plus de 10 min), unsent.
+    Retirer un message chez le fan : seulement côté OnlyFans et pendant 24 h (« POST /api/sent/delete »,
+    `messages.unsend` de Substy), derrière une confirmation ; côté MYM le retrait reste dans Modération.
   - `GET /api/v2/team/thread?id=<message>` (ou `creator`, `fan`, `at`, puis `dir=before|after`) : le fil autour d'un
-    message ou d'une vente d'après `msg_log`, pour les deux plateformes (`ThreadModal`).
+    message ou d'une vente d'après `msg_log`, pour les deux plateformes (`ThreadModal`). Autour d'une vente sans
+    message connu, seulement les 7 jours d'avant et le jour d'après.
   - `TeamKit.tsx` : `WhoTag` (nom + pastille IA / Infloww / Auto / Hors Bloom), `ModelMenu`, `ThreadModal`.
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar` (avec les raccourcis semaine et quinzaine, les périodes de paie), `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un

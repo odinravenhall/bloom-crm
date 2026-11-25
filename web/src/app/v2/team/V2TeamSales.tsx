@@ -223,7 +223,7 @@ export function V2TeamSales({ pf }: { pf: Pf }) {
           {stat("Vendu par des chatteurs", d && team ? fmt(team.total) : null, <span>{d && team ? `${share(team.total, d.total)} des ventes · ${plural(team.sales, "vente")}` : ""}</span>, team?.daily ?? [], "#34d399", 4)}
         </div>
         <div className="mt-3 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
-          {(d?.cats ?? []).filter((c, i) => i < 2 || c.n > 0 || c.prevN > 0).map((c, i) => (
+          {(d?.cats ?? []).filter((c) => c.key === "ppv" || c.key === "tip" || c.n > 0 || c.prevN > 0).map((c, i) => (
             <div key={c.key} className="v2-card v2-rise p-3.5" style={{ ["--i" as string]: i + 5 }}>
               <p className="flex items-center gap-2 text-[12px] text-muted"><i className="size-2 shrink-0 rounded-full" style={{ background: CAT_COLOR[c.key] ?? "#6b7280" }} /><span className="truncate">{c.label}</span></p>
               <p className="v2-num mt-1.5 truncate text-[18px] leading-tight font-bold" style={c.total ? undefined : { color: "var(--color-muted)" }}>{fmt(c.total)}</p>
@@ -278,8 +278,8 @@ export function V2TeamSales({ pf }: { pf: Pf }) {
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-[12px] text-muted"><input type="checkbox" checked={teamOnly} onChange={(e) => setTeamOnly(e.target.checked)} className="size-3.5 accent-(--v2-blue)" />Chatteurs seulement</label>
             <div className="v2-segbar">
-              <button type="button" className="v2-seg" data-on={view === "sales"} onClick={() => setView("sales")}>Ventes</button>
-              <button type="button" className="v2-seg" data-on={view === "work"} onClick={() => setView("work")}>Efficacité</button>
+              <button type="button" className="v2-seg" data-on={view === "sales"} onClick={() => (setView("sales"), setSort({ key: "total", rev: false }))}>Ventes</button>
+              <button type="button" className="v2-seg" data-on={view === "work"} onClick={() => (setView("work"), setSort({ key: "messages", rev: false }))}>Efficacité</button>
             </div>
           </div>
           <div className="v2-scroll overflow-x-auto">

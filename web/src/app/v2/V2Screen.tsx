@@ -19,8 +19,7 @@ const V2Medias = load(() => import("./media/V2Medias").then((m) => m.V2Medias));
 const V2Stats = load(() => import("./stats/V2Stats").then((m) => m.V2Stats));
 const V2Analytics = load(() => import("./stats/V2Analytics").then((m) => m.V2Analytics));
 const V2Links = load(() => import("./stats/V2Links").then((m) => m.V2Links));
-const MessageDashboard = load(() => import("@/app/app/analytics/messages/MessageDashboard").then((m) => m.MessageDashboard));
-const MymMessages = load(() => import("@/app/app/mym/MymMessages").then((m) => m.MymMessages));
+const V2TeamMessages = load(() => import("./team/V2TeamMessages").then((m) => m.V2TeamMessages));
 const V2TeamSales = load(() => import("./team/V2TeamSales").then((m) => m.V2TeamSales));
 const MymShifts = load(() => import("@/app/app/mym/MymShifts").then((m) => m.MymShifts));
 const MymActivity = load(() => import("@/app/app/mym/MymActivity").then((m) => m.MymActivity));
@@ -39,7 +38,7 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
-const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois", "equipe-ventes"];
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois", "equipe-ventes", "equipe-messages"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
@@ -53,7 +52,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "chiffres": return <V2Stats pf={pf} />;
     case "analytique": return <V2Analytics pf={pf} />;
     case "liens": return <V2Links pf={pf} />;
-    case "equipe-messages": return m ? <MymMessages /> : <MessageDashboard />;
+    case "equipe-messages": return <V2TeamMessages pf={pf} />;
     case "equipe-ventes": return <V2TeamSales pf={pf} />;
     // Shifts et modération lisent les messages MYM : pas encore de version OnlyFans. Activité et En direct sont communs.
     case "shifts": return m ? <MymShifts /> : null;

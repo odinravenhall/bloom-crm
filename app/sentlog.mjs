@@ -239,7 +239,7 @@ export function sentRoutes({ substy, userFrom, send, body, creators }) {
       const b = await body(req);
       const m = one('SELECT * FROM msg_log WHERE id = ? AND from_fan = 0', String(b.id || ''));
       if (!m) return send(res, 404, { error: 'Message introuvable' });
-      if (!canSee(u, m.creator_id)) return send(res, 403, { error: 'Pas ta créatrice' });
+      if (!canSee({ ...u, pf: null }, m.creator_id)) return send(res, 403, { error: 'Pas ta créatrice' });
       await SUB.unsend(m.creator_id, m.fan_id, m.id);
       run('UPDATE msg_log SET deleted = 1 WHERE id = ?', m.id);
       console.log(`[bloom] message ${m.id} supprimé chez le fan ${m.fan_id} par ${u.name}`);

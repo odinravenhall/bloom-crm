@@ -114,7 +114,7 @@ export function ThreadModal({ query, onClose }: { query: string; onClose: () => 
                       {m.fromFan ? <span>· {d.fan}</span> : m.who ? <span className="flex min-w-0 items-center gap-1">· <WhoTag w={m.who} pf={d.platform} /></span> : null}
                     </p>
                     <div className={`rounded-[14px] px-3 py-2 text-[13px] leading-relaxed break-words whitespace-pre-wrap ${m.fromFan ? "v2-bubble-fan rounded-bl-[4px]" : "v2-bubble-me rounded-br-[4px]"}`} style={{ boxShadow: focus ? "0 0 0 2px #fbbf24" : undefined, opacity: m.deleted ? 0.5 : 1 }}>
-                      {m.text || (m.medias ? `[${m.medias} média${m.medias > 1 ? "s" : ""}]` : "—")}
+                      {m.text || (m.medias ? `[${m.medias} média${m.medias > 1 ? "s" : ""}]` : <i className="opacity-60">sans texte</i>)}
                       {m.text && m.medias ? <span className="ml-1.5 text-[11.5px] opacity-70">· {m.medias} média{m.medias > 1 ? "s" : ""}</span> : null}
                       {m.price ? <span className="mt-1 block text-[11.5px] font-bold" style={{ color: m.paid ? "#6ee7b7" : "#fde68a" }}>{cash(Math.round(m.price * 100), d.currency, m.price % 1 ? 2 : 0)} · {m.paid ? "acheté" : "pas acheté"}</span> : null}
                       {m.deleted ? <span className="mt-1 block text-[11.5px] opacity-80">retiré chez le fan</span> : null}
@@ -123,7 +123,7 @@ export function ThreadModal({ query, onClose }: { query: string; onClose: () => 
                 </div>
               );
             })}
-            {!d.messages.length ? <p className="py-10 text-center text-[13px] text-muted">Bloom n’a noté aucun message de cette conversation à ce moment-là.</p> : null}
+            {!d.messages.length ? <p className="py-10 text-center text-[13px] text-muted">Bloom n’a noté aucun message de cette conversation autour du {dateOf(d.at, true)}.</p> : null}
             {more.after && d.messages.length ? <button type="button" disabled={more.busy} onClick={() => void load("after")} className="mx-auto block text-[12px] font-semibold underline-offset-2 hover:underline" style={{ color: "var(--v2-sky)" }}>Messages suivants</button> : null}
           </div>
           <div className="mt-4 flex flex-wrap justify-end gap-2">

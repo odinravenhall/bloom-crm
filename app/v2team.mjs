@@ -150,6 +150,102 @@ export function teamSales({ pf, list, from, to, gross, seller }) {
   };
 }
 
+// ---------------------------------------------------------------- messages
+const SLOW = 10 * 60_000; // une réponse « lente » : plus de 10 minutes après le fan
+// Message parti d'un script : script de Substy, ou script de la bibliothèque de Bloom envoyé depuis la messagerie.
+const SCRIPT = "(m.kind = 'script' OR EXISTS (SELECT 1 FROM sent_log s WHERE s.message_id = m.id AND s.lib_item IS NOT NULL))";
+const HUMAN = "m.kind IN ('bloom', 'employee')";
+/** Filtre SQL d'un auteur (clé de `whoOf`, ou « humans » = toutes les personnes de l'équipe). */
+function senderSql(key) {
+  if (key === 'humans') return [HUMAN, []];
+  if (key === 'team') return [`${HUMAN} AND (m.by_name IS NULL OR m.by_name IN ('Bloom', 'Employé'))`, []];
+  if (key === 'ai') return ["m.kind = 'ai'", []];
+  if (key === 'auto') return ["m.kind IN ('auto', 'script', 'substy')", []];
+  if (key === 'creator') return ["COALESCE(m.kind, 'creator') NOT IN ('bloom', 'employee', 'ai', 'auto', 'script', 'substy')", []];
+  if (key?.startsWith('n:')) return [`${HUMAN} AND m.by_name = ?`, [key.slice(2)]];
+  return [null, []];
+}
+const TYPES = {
+  paid: 'm.price > 0',
+  bought: 'm.price > 0 AND m.paid = 1',
+  unbought: 'm.price > 0 AND COALESCE(m.paid, 0) = 0',
+  free: 'm.medias > 0 AND m.price = 0',
+  script: SCRIPT,
+  slow: `m.reply_ms >= ${SLOW}`,
+};
+
+/**
+ * Les messages envoyés aux fans sur [from, to] (jours de Paris), message par message, avec le résumé par auteur.
+ * `q` : { sender, type, text, fan (« modèle~fan »), page, size, sort }. Prix dans la devise de la plateforme (unités).
+ */
+export function teamMessages({ pf, list, from, to, q }) {
+  const start = parisMidnight(from);
+  const end = parisMidnight(addDay(to, 1));
+  const ids = list.map((c) => String(c.id));
+  const names = new Map(list.map((c) => [String(c.id), c.name]));
+  const size = [25, 50, 100, 200].includes(q.size) ? q.size : 50;
+  const empty = { platform: pf, currency: pf === 'of' ? 'USD' : 'EUR', from, to, rows: [], total: 0, page: 1, pages: 1, size, kpi: { messages: 0, fans: 0, proposed: 0, bought: 0, boughtAmount: 0, free: 0, slow: 0, replyMs: null }, senders: [], since: null, fan: null };
+  if (!ids.length) return empty;
+  const base = ['m.from_fan = 0', `m.creator_id IN (${ids.map(() => '?').join(',')})`, 'm.at >= ?', 'm.at < ?'];
+  const args = [...ids, start, end];
+  // Les messages retirés chez le fan ne sont montrés que si on les demande.
+  base.push(q.type === 'unsent' ? 'm.deleted = 1' : 'm.deleted = 0');
+  if (TYPES[q.type]) base.push(TYPES[q.type]);
+  const text = String(q.text || '').trim().toLowerCase().replace(/[%_]/g, '');
+  if (text) base.push("LOWER(COALESCE(m.text, '')) LIKE ?"), args.push(`%${text}%`);
+  let fan = null;
+  if (String(q.fan || '').includes('~')) {
+    const [cid, fid] = String(q.fan).split('~', 2);
+    if (ids.includes(cid)) {
+      base.push('m.creator_id = ? AND m.fan_id = ?');
+      args.push(cid, fid);
+      fan = { key: `${cid}~${fid}`, name: inboxChat(cid, fid)?.name || 'Fan' };
+    }
+  }
+  // Résumé par auteur : sur la sélection, SANS le filtre d'auteur (il sert aussi à remplir ce filtre).
+  const group = new Map();
+  for (const r of all(
+    `SELECT m.kind, CASE WHEN ${HUMAN} THEN m.by_name END AS name, COUNT(*) AS messages, COUNT(DISTINCT m.creator_id || ':' || m.fan_id) AS fans, SUM(m.price > 0) AS proposed, SUM(m.price > 0 AND m.paid = 1) AS bought,
+       SUM(CASE WHEN m.paid = 1 THEN m.price ELSE 0 END) AS amount, SUM(m.medias > 0 AND m.price = 0) AS free, SUM(m.reply_ms >= ${SLOW}) AS slow,
+       SUM(CASE WHEN m.reply_ms <= ${REPLY_OK} THEN m.reply_ms END) AS replySum, COUNT(CASE WHEN m.reply_ms <= ${REPLY_OK} THEN 1 END) AS replies
+     FROM msg_log m WHERE ${base.join(' AND ')} GROUP BY 1, 2`, ...args)) {
+    const w = whoOf(pf, r.kind, r.name);
+    const g = group.get(w.key) || { ...w, messages: 0, fans: 0, proposed: 0, bought: 0, boughtAmount: 0, free: 0, slow: 0, replySum: 0, replies: 0 };
+    g.messages += r.messages;
+    g.fans += r.fans; // lignes regroupées : les fans s'additionnent (approximation)
+    g.proposed += r.proposed || 0;
+    g.bought += r.bought || 0;
+    g.boughtAmount += Math.round((r.amount || 0) * 100);
+    g.free += r.free || 0;
+    g.slow += r.slow || 0;
+    g.replySum += r.replySum || 0;
+    g.replies += r.replies || 0;
+    group.set(w.key, g);
+  }
+  const senders = [...group.values()].map(({ replySum, replies, ...g }) => ({ ...g, replyMs: replies ? Math.round(replySum / replies) : null })).sort((a, b) => b.messages - a.messages);
+  const [ss, sa] = senderSql(q.sender);
+  if (ss) base.push(ss), args.push(...sa);
+  const where = base.join(' AND ');
+  const k = one(
+    `SELECT COUNT(*) AS messages, COUNT(DISTINCT m.creator_id || ':' || m.fan_id) AS fans, SUM(m.price > 0) AS proposed, SUM(m.price > 0 AND m.paid = 1) AS bought, SUM(CASE WHEN m.paid = 1 THEN m.price ELSE 0 END) AS amount,
+       SUM(m.medias > 0 AND m.price = 0) AS free, SUM(m.reply_ms >= ${SLOW}) AS slow, SUM(CASE WHEN m.reply_ms <= ${REPLY_OK} THEN m.reply_ms END) AS replySum, COUNT(CASE WHEN m.reply_ms <= ${REPLY_OK} THEN 1 END) AS replies
+     FROM msg_log m WHERE ${where}`, ...args);
+  const total = k.messages || 0;
+  const pages = Math.max(1, Math.ceil(total / size));
+  const page = Math.min(pages, Math.max(1, q.page || 1));
+  const order = q.sort === 'slow' ? 'm.reply_ms DESC NULLS LAST, m.at DESC' : q.sort === 'price' ? 'm.price DESC, m.at DESC' : 'm.at DESC';
+  const rows = all(`SELECT m.id, m.creator_id, m.fan_id, m.at, m.text, m.medias, m.price, m.paid, m.kind, m.by_name, m.reply_ms, m.reply_text, m.deleted, ${SCRIPT} AS is_script FROM msg_log m WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`, ...args, size, (page - 1) * size).map((m) => ({
+    id: m.id, at: m.at, cid: m.creator_id, model: names.get(m.creator_id) || '', fid: m.fan_id, fan: inboxChat(m.creator_id, m.fan_id)?.name || 'Fan',
+    text: m.text != null ? plain(m.text) : null, medias: m.medias || 0, price: m.price || 0, paid: m.price > 0 ? !!m.paid : null, who: whoOf(pf, m.kind, m.by_name),
+    replyMs: m.reply_ms, replyTo: m.reply_text || null, deleted: !!m.deleted, script: !!m.is_script,
+  }));
+  return {
+    ...empty, rows, total, page, pages, senders, fan,
+    kpi: { messages: total, fans: k.fans || 0, proposed: k.proposed || 0, bought: k.bought || 0, boughtAmount: Math.round((k.amount || 0) * 100), free: k.free || 0, slow: k.slow || 0, replyMs: k.replies ? Math.round(k.replySum / k.replies) : null },
+    since: one(`SELECT MIN(at) AS t FROM msg_log WHERE creator_id IN (${ids.map(() => '?').join(',')})`, ...ids)?.t || null,
+  };
+}
+
 export function v2TeamRoutes({ userFrom, send, creators }) {
   /** Team leader ou plus + ce que l'adresse demande (plateforme affichée, période, modèles visibles). */
   const scope = (req, res) => {
@@ -169,6 +265,16 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
       if (!x) return;
       const seller = x.p.get('seller') || '';
       const data = cached(`team-sales|${x.pf}|${x.gross}|${x.from}|${x.to}|${x.list.map((c) => c.id).join(',')}|${seller}`, () => teamSales({ pf: x.pf, list: x.list, from: x.from, to: x.to, gross: x.gross, seller }));
+      send(res, 200, { ...data, today: x.today, all: x.all });
+    },
+
+    // Messages de l'équipe : ?pf, ?from=&to=, &creatorId=, &sender=<clé de whoOf | humans>, &type=paid|bought|unbought|
+    // free|script|slow|unsent, &q=<texte>, &fan=<modèle~fan>, &sort=slow|price, &page=, &size=25|50|100|200.
+    'GET /api/v2/team/messages': (req, res) => {
+      const x = scope(req, res);
+      if (!x) return;
+      const g = (k) => x.p.get(k) || '';
+      const data = teamMessages({ pf: x.pf, list: x.list, from: x.from, to: x.to, q: { sender: g('sender'), type: g('type'), text: g('q'), fan: g('fan'), sort: g('sort'), page: Number(g('page')) || 1, size: Number(g('size')) || 50 } });
       send(res, 200, { ...data, today: x.today, all: x.all });
     },
 
@@ -194,8 +300,12 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
       const view = (m) => ({ id: m.id, at: m.at, fromFan: !!m.from_fan, text: m.text != null ? plain(m.text) : null, medias: m.medias || 0, price: m.price || 0, paid: !!m.paid, deleted: !!m.deleted, who: m.from_fan ? null : whoOf(pf, m.kind, m.by_name) });
       const cols = 'id, at, from_fan, text, medias, price, paid, deleted, kind, by_name';
       const dir = p.get('dir');
-      const before = dir === 'after' ? [] : all(`SELECT ${cols} FROM msg_log WHERE creator_id = ? AND fan_id = ? AND at ${dir === 'before' ? '<' : '<='} ? ORDER BY at DESC LIMIT ?`, String(c.id), fid, at, dir === 'before' ? 15 : 13).reverse();
-      const after = dir === 'before' ? [] : all(`SELECT ${cols} FROM msg_log WHERE creator_id = ? AND fan_id = ? AND at > ? ORDER BY at LIMIT ?`, String(c.id), fid, at, dir === 'after' ? 15 : 6);
+      // Autour d'une VENTE (pas de message connu) : seulement ce qui s'est dit dans les 7 jours d'avant et le jour
+      // d'après — sinon on montrerait comme « contexte » des messages écrits des semaines plus tard.
+      const lo = id || dir ? 0 : at - 7 * DAY;
+      const hi = id || dir ? Number.MAX_SAFE_INTEGER : at + DAY;
+      const before = dir === 'after' ? [] : all(`SELECT ${cols} FROM msg_log WHERE creator_id = ? AND fan_id = ? AND at ${dir === 'before' ? '<' : '<='} ? AND at >= ? ORDER BY at DESC LIMIT ?`, String(c.id), fid, at, lo, dir === 'before' ? 15 : 13).reverse();
+      const after = dir === 'before' ? [] : all(`SELECT ${cols} FROM msg_log WHERE creator_id = ? AND fan_id = ? AND at > ? AND at <= ? ORDER BY at LIMIT ?`, String(c.id), fid, at, hi, dir === 'after' ? 15 : 6);
       const meta = one('SELECT nickname FROM creator_meta WHERE creator_id = ?', String(c.id));
       send(res, 200, { platform: pf, currency: pf === 'of' ? 'USD' : 'EUR', creatorId: String(c.id), creator: meta?.nickname || c.name, fanId: fid, fan: inboxChat(String(c.id), fid)?.name || 'Fan', focus: id || null, at, messages: [...before, ...after].map(view) });
     },
