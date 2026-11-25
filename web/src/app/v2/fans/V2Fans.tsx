@@ -295,7 +295,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
                                 label: "Supprimer", danger: true,
                                 go: () => setWin({
                                   kind: "confirm", title: `Supprimer « ${g.name} » ?`, button: "Supprimer le groupe",
-                                  text: `Le groupe disparaît partout (messagerie, envois groupés). Ses ${plural(g.count, "fan")} ne sont pas touchés.`,
+                                  text: `Le groupe disparaît partout où il sert (cet écran, les envois groupés). Ses ${plural(g.count, "fan")} ne sont pas touchés.`,
                                   go: async () => {
                                     await api("POST", "/api/fanlists/delete", { creatorId: mid, id: g.id });
                                     toast("Groupe supprimé");
@@ -430,7 +430,7 @@ export function V2Fans({ pf }: { pf: Pf }) {
       </div>
 
       {win?.kind === "fan" && d ? <FanSheet pf={pf} creatorId={mid} fanId={win.id} cur={cur} sources={d.sources} chatOk={chatOk} onClose={() => setWin(null)} onSaved={() => (setWin(null), void load())} /> : null}
-      {win?.kind === "group" && d && m ? <GroupForm creatorId={mid} model={m.name} cur={cur} group={win.group} onClose={() => setWin(null)} onDone={() => (setWin(null), void load())} /> : null}
+      {win?.kind === "group" && d && m ? <GroupForm creatorId={mid} model={m.name} cur={cur} mym={mym} group={win.group} onClose={() => setWin(null)} onDone={() => (setWin(null), void load())} /> : null}
       {win?.kind === "add" ? <AddToGroup creatorId={mid} fanIds={[...picked.keys()]} groups={manual} canEdit={canEdit} onClose={() => setWin(null)} onDone={() => (setWin(null), setPicked(new Map()), void load())} /> : null}
       {win?.kind === "confirm" ? <Confirm title={win.title} text={win.text} button={win.button} go={win.go} onClose={() => setWin(null)} /> : null}
     </div>
@@ -603,7 +603,7 @@ const RESETS: [string, string, string][] = [
   ["monthly", "Chaque mois", "Le groupe est vidé chaque mois, le jour et à l’heure choisis."],
   ["after_add", "Quelques heures après l’ajout de chaque fan", "Chaque fan sort du groupe après le nombre d’heures choisi."],
 ];
-function GroupForm({ creatorId, model, cur, group, onClose, onDone }: { creatorId: string; model: string; cur: string; group: Group | null; onClose: () => void; onDone: () => void }) {
+function GroupForm({ creatorId, model, cur, mym, group, onClose, onDone }: { creatorId: string; model: string; cur: string; mym: boolean; group: Group | null; onClose: () => void; onDone: () => void }) {
   const [v, setV] = useState({
     name: group?.name ?? "", color: group?.color ?? PALETTE[0], icon: group?.icon ?? "star", auto: group ? group.kind === "auto" : true, noPay: !!group?.noPay,
     min: group ? strOf(group.min) : "100", max: strOf(group?.max), ppvOnly: !!group?.ppvOnly, ageMin: strOf(group?.ageMin), ageMax: strOf(group?.ageMax),
@@ -646,7 +646,7 @@ function GroupForm({ creatorId, model, cur, group, onClose, onDone }: { creatorI
     </div>
   );
   return (
-    <Modal sticky wide title={group ? "Modifier le groupe" : "Nouveau groupe"} sub={`Pour les fans de ${model}. Un groupe sert à filtrer la messagerie et à choisir à qui envoyer un message groupé.`} onClose={onClose}>
+    <Modal sticky wide title={group ? "Modifier le groupe" : "Nouveau groupe"} sub={`Pour les fans de ${model}. Un groupe sert à retrouver ces fans d’un clic${mym ? ", et à choisir à qui envoyer un Mass DM" : ""}.`} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
         <div className="min-w-0">
           <label className="v2-label" htmlFor="grp-name">Nom</label>
