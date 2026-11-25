@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FolderInput, ListOrdered, MoreHorizontal, MousePointerClick, Pencil, Plus, RefreshCw, Sparkles, Upload, UploadCloud } from "lucide-react";
+import { FolderInput, ListOrdered, MousePointerClick, Pencil, Plus, RefreshCw, Sparkles, Upload, UploadCloud } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import type { Pf } from "@/lib/platform";
 import { Avatar } from "@/rv/components/ui";
-import { Modal, PALETTE, Ring, useDismiss } from "../kit";
+import { Confirm, Modal, PALETTE, Ring, RowMenu } from "../kit";
 import {
   clockOf, countsOf, EMPTY_QUERY, errText, MediaFilters, MediaFolders, MediaGrid, MediaTile, MediaView, plural, priceOf, TYPE_NAME, useDebounced, useMediaHead, useMediaItems,
   type MediaCat, type MediaFolder, type MediaHead, type MediaItem, type MediaQuery,
@@ -225,18 +225,6 @@ export function V2Medias({ pf }: { pf: Pf }) {
       {win?.kind === "upload" && head && m ? <UploadForm creatorId={mid} model={m.name} folders={head.folders} folder={query.folder} onClose={() => setWin(null)} onSent={() => void refresh()} /> : null}
       {win?.kind === "confirm" ? <Confirm title={win.title} text={win.text} button={win.button} go={win.go} onClose={() => setWin(null)} /> : null}
     </div>
-  );
-}
-
-/** Le petit menu « ⋯ » d'une ligne (renommer, supprimer). */
-function RowMenu({ name, items }: { name: string; items: { label: string; danger?: boolean; go: () => void }[] }) {
-  const [open, setOpen] = useState(false);
-  useDismiss(open, () => setOpen(false), name);
-  return (
-    <span data-pop={name} className="relative shrink-0 pr-1">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Actions" className="grid size-6 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MoreHorizontal className="size-3.5" /></button>
-      {open ? <span className="v2-menu right-0 block w-[168px]" style={{ top: "calc(100% + 4px)" }}>{items.map((it) => <button key={it.label} type="button" onClick={() => (setOpen(false), it.go())} className="v2-menu-item" style={it.danger ? { color: "var(--v2-down)" } : undefined}>{it.label}</button>)}</span> : null}
-    </span>
   );
 }
 
@@ -571,29 +559,6 @@ function UploadForm({ creatorId, model, folders, folder, onClose, onSent }: { cr
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} disabled={busy} className="v2-btn" data-kind="ghost">{jobs.some((j) => j.state === "ok") ? "Fermer" : "Annuler"}</button>
         <button type="button" onClick={() => void send()} disabled={busy || !waiting} className="v2-btn">{busy ? "Envoi en cours…" : waiting ? `Envoyer ${plural(waiting, "fichier")}` : "Envoyer"}</button>
-      </div>
-    </Modal>
-  );
-}
-
-function Confirm({ title, text, button, go, onClose }: { title: string; text: string; button: string; go: () => Promise<unknown>; onClose: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const run = async () => {
-    setBusy(true);
-    try {
-      await go();
-      onClose();
-    } catch (e) {
-      toast(errText(e), "err");
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title={title} onClose={onClose}>
-      <p className="text-[13px] leading-relaxed text-muted">{text}</p>
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
-        <button type="button" onClick={() => void run()} disabled={busy} className="v2-btn" data-kind="danger">{busy ? "Un instant…" : button}</button>
       </div>
     </Modal>
   );

@@ -40,6 +40,7 @@ import { v2AnalyticsRoutes } from './v2analytics.mjs';
 import { v2LinksRoutes } from './v2links.mjs';
 import { v2ScriptsRoutes } from './v2scripts.mjs';
 import { v2MediasRoutes } from './v2medias.mjs';
+import { v2FansRoutes } from './v2fans.mjs';
 import { mymTrackRoutes, startMymTrack } from './mymtrack.mjs';
 import { mymTeamRoutes } from './mymteam.mjs';
 import { mymModRoutes, startMymMod } from './mymmod.mjs';
@@ -486,6 +487,7 @@ Object.assign(routes, v2AnalyticsRoutes({ userFrom, send, creators: () => state.
 Object.assign(routes, v2LinksRoutes({ userFrom, send, creators: () => state.creators || [], substy }));
 Object.assign(routes, v2ScriptsRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, v2MediasRoutes({ userFrom, send, creators: () => state.creators || [], substy }));
+Object.assign(routes, v2FansRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymTrackRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymTeamRoutes({ userFrom, send, creators: () => state.creators || [] }));
 Object.assign(routes, mymModRoutes({ userFrom, send, body, creators: () => state.creators || [] }));

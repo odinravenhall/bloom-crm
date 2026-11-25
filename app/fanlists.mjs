@@ -38,7 +38,9 @@ for (const c of ['reset_day INTEGER', 'reset_hour TEXT', 'stay_hours INTEGER']) 
 }
 
 const DAY = 864e5;
-const KINDS = { of: ['spend', 'newfans'], mym: ['manual', 'auto'] };
+// Depuis la v2 (25/11/2026), les groupes « manual » et « auto » existent aussi côté OnlyFans : l'écran Fans est le
+// même des deux côtés. Les « spend » / « newfans » restent ceux de l'ancien écran Smart lists.
+const KINDS = { of: ['spend', 'newfans', 'manual', 'auto'], mym: ['manual', 'auto'] };
 const RESETS = ['never', 'daily', 'weekly', 'monthly', 'after_add'];
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -60,7 +62,8 @@ export function fanData(cid) {
       total: Math.max(Number(c.paid) || 0, Number(c.spent) || 0, m?.gross || 0),
       ppvTips: null,
       since: c.since ? Date.parse(c.since) || null : m?.subscribed_at || null,
-      expired: m ? !/^active$/i.test(m.status) : /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
+      // MYM lu en direct : c'est MYM lui-même qui dit si le fan est abonné (plus frais que la relecture de Substy).
+      expired: c.mym ? !c.sub : m ? !/^active$/i.test(m.status) : /expir|cancel|inactive|unsub|ended/i.test(c.subscribed || ''),
       ppvSent: 0,
       ppvBought: 0,
     });
@@ -179,7 +182,8 @@ export function mymGroups(cid) {
 /** Vider le cache des fans (après une modification). */
 export const forgetFans = (cid) => cache.delete(String(cid));
 
-const view = (l) => ({
+/** Un groupe tel que les écrans le lisent (règle comprise). */
+export const fanListView = (l) => ({
   id: l.id,
   kind: l.kind,
   name: l.name,
@@ -209,7 +213,8 @@ export function fanListRoutes({ userFrom, send, body, creators }) {
   const auth = (req, res, cid, edit) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
-    if (!canChat(u) || !canSee(u, cid) || !creators().some((c) => c.id === cid)) return send(res, 403, { error: 'Tu n’as pas accès à cette créatrice.' }), null;
+    // Le droit porte sur la MODÈLE, pas sur la plateforme choisie dans le menu (cookie commun à tous les onglets).
+    if (!canChat(u) || !canSee({ ...u, pf: null }, cid) || !creators().some((c) => c.id === cid)) return send(res, 403, { error: 'Tu n’as pas accès à cette créatrice.' }), null;
     if (edit && !isBoss(u)) return send(res, 403, { error: 'Réservé aux team leaders, managers et admins' }), null;
     return u;
   };
@@ -234,7 +239,7 @@ export function fanListRoutes({ userFrom, send, body, creators }) {
             const k = f?.expired ? 'old' : 'active';
             if (prev[k].length < 60) prev[k].push({ fanId: id, name: f?.c?.name || 'Fan', avatar: img(f?.c?.avatar) || null });
           }
-          return { ...view(l), count: m.size, active: m.size - expired, expired, revenue: Math.round(revenue * 100) / 100, preview: prev };
+          return { ...fanListView(l), count: m.size, active: m.size - expired, expired, revenue: Math.round(revenue * 100) / 100, preview: prev };
         }),
     };
   };

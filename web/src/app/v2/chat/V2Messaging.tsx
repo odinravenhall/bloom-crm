@@ -156,6 +156,16 @@ function Inner({ me, models, hidden0, mym }: { me: Me; models: Model[]; hidden0:
     if (currentId) api("POST", `/api/conversations/${currentId}/action`, { action: "unlock" }).catch(() => {});
     setCurrentId(null);
   };
+  // « ?c=<modèle>~<fan> » dans l'adresse (lien de l'écran Fans) : on ouvre cette conversation, une seule fois.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("c");
+    if (!id) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    api<{ conversation: Conv }>("GET", `/api/conversations/${encodeURIComponent(id)}`)
+      .then((r) => (byId[r.conversation.modelId] ? (setHeld(r.conversation), setCurrentId(r.conversation.id)) : toast("Cette conversation est sur l’autre plateforme : change de plateforme en haut du menu.", "err")))
+      .catch((e) => toast((e as Error).message, "err"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const next = () => {
     const i = current ? items.findIndex((c) => c.id === current.id) : -1;
     const n = items.slice(i + 1).find((c) => c.needsReply) ?? items.find((c) => c.needsReply && c.id !== current?.id);

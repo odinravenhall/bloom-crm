@@ -379,8 +379,8 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Chiffres, Analytique, Liens de suivi ;
-  les autres sont encore ceux de la version actuelle, à refaire un par un.
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Chiffres, Analytique, Liens de
+  suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
   « /api/rv/… ». Colonne des modèles + liste + fil + zone de saisie refaits ; le choix des médias est la fenêtre de
@@ -509,9 +509,35 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     `MediaGrid`, `MediaTile`, `MediaView` (vidéos MYM en HLS par « /api/mym/hls ») et `MediaPicker`, LA fenêtre de
     choix des médias de la v2 (messagerie : `fanId` côté OnlyFans → pastille « Déjà acheté » ; scripts : `keep`).
     Encore avec leurs anciennes fenêtres : Envoi groupé, Push, Planification.
+- Fans v2 (`v2/fans/V2Fans.tsx`, `app/v2fans.mjs`, 25/11/2026) : un écran pour les deux plateformes, à la place des
+  copies d'Infloww (`SmartLists`) et de MyPulse (`MymFans` : Abonnés / Anciens / Intéressés, `MymGroups`), qui restent
+  dans la version actuelle. (Avant, la v2 ne montrait côté MYM que les abonnés, sans gestion des groupes.)
+  - Les fans affichés = ceux avec qui une CONVERSATION existe (`fanData` de fanlists.mjs), des deux côtés. Les
+    compteurs que MYM donne lui-même (abonnés, anciens, intéressés) sont rappelés à part
+    (`GET /api/v2/fans/official`) ; la liste complète de MYM, fans sans conversation compris, reste dans l'ancien écran.
+  - `GET /api/v2/fans?pf&creatorId[&group][&status][&q][&sort=spent|recent|last|name|rate][&dir=asc][&page]` (toute
+    l'équipe sauf les modèles) : modèles, vues rapides, groupes, chiffres de la liste choisie, 50 fans par page.
+    - Statut : OnlyFans = abonné / ancien d'après Substy ; MYM = abonné / ancien / intéressé d'après MYM lui-même
+      quand la conversation est lue en direct (`is_subscriber`, `is_interested`), sinon d'après Substy (`mym_fans`).
+      `fanData` suit maintenant la même règle (`expired` = pas abonné selon MYM), donc aussi les groupes automatiques.
+    - Dépense (centimes) : OnlyFans = ce que Substy dit que le fan a payé, ou les ventes d'Infloww si elles disent
+      plus ; MYM = les achats et pourboires que Bloom a vus (nets, HORS abonnements). « Abonné depuis » côté MYM :
+      Substy, sinon le premier abonnement vu dans les revenus (`firstSubs`).
+    - Vues rapides (rien à régler) : ont acheté, abonnés sans achat, nouveaux abonnés (7 jours), épinglés.
+  - Groupes = `fan_lists` : « manual » et « auto » existent maintenant AUSSI côté OnlyFans (`KINDS`), le formulaire
+    est le même des deux côtés. Les « spend » / « newfans » de l'ancien écran Smart lists s'affichent et se suppriment
+    mais ne se modifient pas ici (personne n'en avait créé). Créer / modifier / dupliquer / supprimer :
+    « /api/fanlists/save|duplicate|delete » (team leaders et plus ; droit vérifié sur la MODÈLE, plus sur le menu).
+  - Fiche d'un fan (`GET /api/v2/fans/one`, `POST /api/v2/fans/sheet`, toute l'équipe) : elle lit et écrit ce que la
+    MESSAGERIE montre déjà (`fan_meta` : surnom, note, étiquettes) et le profil (`mym_fan_meta` : âge, genre,
+    provenance, langue, promesse d'achat), désormais aussi côté OnlyFans ; seuls les champs envoyés changent. La note
+    de l'ancien écran MYM (`mym_fan_meta.notes`) est proposée tant que celle de la messagerie est vide.
+    `POST /api/v2/fans/members` : mettre des fans dans un groupe manuel ou les en retirer.
+  - Le lien « conversation » ouvre `/v2/messagerie?c=<modèle>~<fan>` (la messagerie de la v2 lit ce paramètre).
 - `v2/kit.tsx` : les briques communes des écrans redessinés (dates de Paris, `cash` en centimes, période commune
   `usePeriod` + `PeriodBar`, `Count`, `Delta`, `Spark`, `Donut`, `Bars`, `Lines`, `Ring`, `Modal` (`sticky` pour un
-  formulaire, `width` pour une grande fenêtre), `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`, `downloadCsv`). Tout nouvel écran de la v2 part de là ;
+  formulaire, `width` pour une grande fenêtre), `Confirm`, `RowMenu`, `Layer`, `Switch`, `PALETTE`, `CAT_COLOR`,
+  `downloadCsv`). Tout nouvel écran de la v2 part de là ;
   l'accueil a encore ses copies.
   ⚠️ Une fenêtre par-dessus l'écran se fait avec `Modal` (posée à la racine `.v2`) : dans `.v2-frame`, une position
   fixe suit le contenu qui défile. ⚠️ Une photo entourée se fait avec `Ring` (anneau DANS la boîte) : un anneau en

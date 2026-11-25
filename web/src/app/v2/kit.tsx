@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownRight, ArrowUpRight, CalendarDays, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, MoreHorizontal, X } from "lucide-react";
+import { toast } from "@/lib/api";
 
 // Bloom v2 — les briques communes des écrans redessinés (direction « Constellation ») : dates, montants, période
 // (onglets + dates au choix), pastille de variation, petite courbe, anneau, barres et courbes, export. Tout nouvel écran
@@ -163,6 +164,42 @@ export function Layer({ children, className }: { children: React.ReactNode; clas
   const [host, setHost] = useState<Element | null>(null);
   useEffect(() => setHost(document.querySelector(".v2")), []);
   return host ? createPortal(<div className={className} style={{ position: "relative", zIndex: 95 }}>{children}</div>, host) : null;
+}
+
+/** Le petit menu « ⋯ » d'une ligne (modifier, dupliquer, supprimer…). `name` : unique sur l'écran. */
+export function RowMenu({ name, items }: { name: string; items: { label: string; danger?: boolean; go: () => void }[] }) {
+  const [open, setOpen] = useState(false);
+  useDismiss(open, () => setOpen(false), name);
+  return (
+    <span data-pop={name} className="relative shrink-0 pr-1">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Actions" className="grid size-6 place-items-center rounded-md text-muted transition hover:bg-white/[0.07] hover:text-(--color-fg)"><MoreHorizontal className="size-3.5" /></button>
+      {open ? <span className="v2-menu right-0 block w-[168px]" style={{ top: "calc(100% + 4px)" }}>{items.map((it) => <button key={it.label} type="button" onClick={() => (setOpen(false), it.go())} className="v2-menu-item" style={it.danger ? { color: "var(--v2-down)" } : undefined}>{it.label}</button>)}</span> : null}
+    </span>
+  );
+}
+
+/** Demander confirmation avant une action qu'on ne peut pas défaire. `go` fait l'action ; une erreur s'affiche. */
+export function Confirm({ title, text, button, go, onClose }: { title: string; text: string; button: string; go: () => Promise<unknown>; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      await go();
+      onClose();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Action impossible", "err");
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p className="text-[13px] leading-relaxed text-muted">{text}</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
+        <button type="button" onClick={() => void run()} disabled={busy} className="v2-btn" data-kind="danger">{busy ? "Un instant…" : button}</button>
+      </div>
+    </Modal>
+  );
 }
 
 /** Interrupteur (actif / inactif). */
