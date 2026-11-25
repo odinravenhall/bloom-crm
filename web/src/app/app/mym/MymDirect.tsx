@@ -9,8 +9,16 @@ import { parisDate, parisTime, tk } from "./MymTeamKit";
 
 // MYM → Accès MYM (Direct). MyPulse y affiche le site de MYM dans sa page. Bloom ne recopie pas le site : il agit
 // sur le compte relié avec SES pages, rubrique par rubrique (les mêmes que le menu du site MYM), sans mot de passe.
-// Afficher le vrai site dans Bloom n'est pas fait : il faudrait une adresse dédiée sur le serveur, et remettre la
-// session MYM de la modèle au navigateur de chaque personne.
+// Le premier onglet, « Site MYM », affiche le vrai site, relayé par Bloom sur son adresse dédiée (mymsite.mjs).
+//
+// Ce relais vit sur une autre adresse que Bloom (mym.ravencrm.xyz). Dans un cadre, le navigateur ne garde son cookie
+// de session que si Bloom est ouvert sur le même site que lui (bloom.ravencrm.xyz). Depuis bloomcrm.fr, le cadre
+// restait sur « Cette page s'ouvre depuis Bloom » (vu le 25/11/2026) : là, le site s'ouvre dans un NOUVEL ONGLET, où
+// le cookie passe. On ne rend pas ce cookie valable entre sites : il partirait alors avec des requêtes venues de
+// n'importe quelle page, vers un relais qui agit sur le compte de la modèle.
+const RELAY_HOST = process.env.NEXT_PUBLIC_MYM_SITE_HOST || "mym.ravencrm.xyz";
+const siteOf = (host: string) => host.toLowerCase().split(".").slice(-2).join(".");
+const framable = (host: string) => typeof window !== "undefined" && siteOf(window.location.hostname) === siteOf(host);
 type LinkRow = { creatorId: string; name: string; username: string | null; linked: boolean; mymId?: string | null; linkedBy?: string | null; linkedAt?: number | null; checkedAt?: number | null; error?: string | null; ok?: boolean };
 type Item = { label: string; desc: string; href: string; direct: boolean };
 const SECTIONS: { key: string; title: string; icon: React.ReactNode; items: Item[] }[] = [
@@ -50,6 +58,11 @@ export function MymDirect() {
   const [tab, setTab] = useState("site");
   // Le vrai site de MYM, relayé par Bloom sur son adresse dédiée (admins et managers).
   const [site, setSite] = useState<{ url: string; host: string } | null>(null);
+  // Ouvert dans un nouvel onglet (Bloom sur un autre site que le relais). `url` = le lien à cliquer quand le
+  // navigateur a bloqué l'onglet ; vide une fois le site ouvert.
+  const [away, setAway] = useState<{ url: string } | null>(null);
+  const [framed, setFramed] = useState(true);
+  useEffect(() => setFramed(framable(RELAY_HOST)), []);
   const [siteErr, setSiteErr] = useState("");
   const [busy, setBusy] = useState(false);
   const openSite = async () => {
@@ -57,18 +70,42 @@ export function MymDirect() {
     setBusy(true);
     setSiteErr("");
     setSite(null);
+    setAway(null);
+    // Nouvel onglet : ouvert tout de suite, pendant le clic (plus tard, le navigateur le bloquerait), puis envoyé
+    // sur le site quand le ticket arrive. Il ne garde aucun lien vers la page de Bloom.
+    const tab = framable(RELAY_HOST) ? null : window.open("", "_blank");
+    if (tab) {
+      tab.opener = null;
+      try {
+        tab.document.title = "Site MYM";
+        tab.document.body.style.cssText = "margin:0;display:grid;place-items:center;height:100vh;background:#1a1d21;color:#ced4da;font:15px system-ui";
+        tab.document.body.textContent = "Ouverture du site MYM…";
+      } catch {}
+    }
     try {
       const r = await api<{ url: string; host: string }>("POST", "/api/mym/site/ticket", { creatorId });
       // L'adresse dédiée existe-t-elle ? (sinon le cadre resterait blanc sans explication)
       const ok = await fetch(`https://${r.host}/__bloom/ping`, { mode: "no-cors", cache: "no-store" }).then(() => true).catch(() => false);
-      if (!ok) setSiteErr(`L’adresse ${r.host} ne répond pas encore : elle doit être créée chez l’hébergeur du nom de domaine et ajoutée sur le serveur.`);
-      else setSite(r);
+      if (!ok) {
+        tab?.close();
+        setSiteErr(`L’adresse ${r.host} ne répond pas encore : elle doit être créée chez l’hébergeur du nom de domaine et ajoutée sur le serveur.`);
+      } else if (framable(r.host)) {
+        tab?.close();
+        setSite(r);
+      } else if (tab && !tab.closed) {
+        tab.location.replace(r.url);
+        setAway({ url: "" });
+      } else setAway({ url: r.url });
     } catch (e) {
+      tab?.close();
       setSiteErr((e as Error).message);
     }
     setBusy(false);
   };
-  useEffect(() => setSite(null), [creatorId]);
+  useEffect(() => {
+    setSite(null);
+    setAway(null);
+  }, [creatorId]);
   useEffect(() => {
     api<{ links: LinkRow[] }>("GET", "/api/mym/links").then((r) => setLinks(r.links)).catch((e) => setErr((e as Error).message));
   }, []);
@@ -101,9 +138,13 @@ export function MymDirect() {
               </>
             ) : (
               <div className="max-w-3xl rounded-2xl p-5" style={tk.card}>
-                <p className="text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>Le site de MYM dans Bloom</p>
-                <p className="mt-2 text-[13px] leading-relaxed">Ouvre creators.mym.fans ici, déjà connecté au compte relié, sans mot de passe. Réservé aux admins et managers. Chaque ouverture est notée dans Activité. Se déconnecter du site y est bloqué (cela couperait la liaison avec Bloom).</p>
-                <button onClick={openSite} disabled={busy || !l?.linked} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[13.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#4a57a8" }}><ExternalLink className="size-4" /> {busy ? "Ouverture…" : "Ouvrir le site MYM"}</button>
+                <p className="text-[15px] font-semibold" style={{ color: "var(--mp-head)" }}>{away ? (away.url ? "Ton navigateur a bloqué le nouvel onglet" : "Le site de MYM est ouvert dans un nouvel onglet") : framed ? "Le site de MYM dans Bloom" : "Le site de MYM, déjà connecté"}</p>
+                <p className="mt-2 text-[13px] leading-relaxed">{away ? (away.url ? "Ouvre-le avec le bouton ci-dessous. Ce lien ne sert qu’une fois et reste valable une minute." : "Il est connecté au compte relié, sans mot de passe : tout ce que tu y fais est fait sur le compte de la modèle. Onglet fermé, ou session expirée (4 heures) ? Rouvre-le d’ici.") : `Ouvre creators.mym.fans ${framed ? "ici" : "dans un nouvel onglet"}, déjà connecté au compte relié, sans mot de passe. Réservé aux admins et managers. Chaque ouverture est notée dans Activité. Se déconnecter du site y est bloqué (cela couperait la liaison avec Bloom).`}</p>
+                {away?.url ? (
+                  <a href={away.url} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(() => setAway({ url: "" }), 0)} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[13.5px] font-semibold text-white" style={{ background: "#4a57a8" }}><ExternalLink className="size-4" /> Ouvrir le site MYM</a>
+                ) : (
+                  <button onClick={openSite} disabled={busy || !l?.linked} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[13.5px] font-semibold text-white disabled:opacity-50" style={{ background: "#4a57a8" }}><ExternalLink className="size-4" /> {busy ? "Ouverture…" : away ? "Rouvrir le site MYM" : "Ouvrir le site MYM"}</button>
+                )}
                 {siteErr ? <p className="mt-3 text-[13px]" style={{ color: "var(--mp-down)" }}>{siteErr}</p> : null}
               </div>
             )}

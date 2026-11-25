@@ -16,6 +16,9 @@ const nextConfig = {
   // Pas de compression ici : le flux temps réel (/api/live) doit passer sans être retenu.
   compress: false,
   images: { unoptimized: true },
+  // L'adresse du relais du site MYM, connue du navigateur : l'écran « Site MYM » sait ainsi, dès le clic, s'il peut
+  // l'afficher dans un cadre (même site que Bloom) ou s'il doit ouvrir un nouvel onglet (MymDirect.tsx).
+  env: { NEXT_PUBLIC_MYM_SITE_HOST: MYM_SITE_HOST },
   // MYM → Importer des médias : les vidéos passent par ici vers l'API (10 Mo par défaut).
   experimental: { proxyClientMaxBodySize: "500mb" },
   async redirects() {

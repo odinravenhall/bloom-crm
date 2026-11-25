@@ -672,6 +672,26 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   vers `bloom.ravencrm.xyz/api/auth/discord?to=bloomcrm.fr` ; au retour de Discord, l'API ne se connecte pas là mais
   renvoie vers `https://bloomcrm.fr/api/auth/link?t=…&v=2` (`hopLink` : lien à usage unique, 1 minute), qui ouvre la
   session sur la nouvelle adresse. `to` n'est accepté que s'il est dans `V2_HOSTS`.
-- Le relais du site MYM (`mymsite.mjs`) accepte d'être affiché dans un cadre des deux adresses.
-- Hors dépôt, à faire pour que l'adresse marche : l'enregistrement DNS de bloomcrm.fr vers le VPS, et un bloc
-  `bloomcrm.fr` dans le Caddyfile de /root/zebre vers `bloom-web:3000` (jamais sans l'accord explicite de l'agence).
+- En service depuis le 25/11/2026 (vérifié de l'extérieur et dans un navigateur) : certificat obtenu, « / » ouvre
+  `/v2`, et la connexion Discord faite en vrai depuis bloomcrm.fr arrive bien sur l'accueil de la v2. La session est
+  propre à chaque adresse : être connecté sur bloom.ravencrm.xyz ne connecte pas sur bloomcrm.fr. Le cookie de
+  plateforme `bloom_pf` et les préférences du navigateur sont eux aussi séparés d'une adresse à l'autre.
+- Le serveur ne vérifie pas l'adresse d'où part une requête (pas de liste d'origines) : tout ce qui marche sur
+  l'adresse principale marche ici, sauf ce qui s'affiche dans un cadre venu d'une autre adresse.
+- ⚠️ Site MYM (`MymDirect.tsx`, relais `mymsite.mjs`) : le relais vit sur `mym.ravencrm.xyz`, un autre SITE que
+  bloomcrm.fr. Dans un cadre, le navigateur refuse alors son cookie de session (`SameSite=Lax`) et le cadre restait
+  sur « Cette page s'ouvre depuis Bloom » (vu le 25/11/2026). Sur bloomcrm.fr l'écran ouvre donc le site de MYM dans
+  un NOUVEL ONGLET (`framable()` compare le site de la page à celui du relais, connu du navigateur par
+  `NEXT_PUBLIC_MYM_SITE_HOST`, posé dans next.config.mjs). Ne PAS passer ce cookie en `SameSite=None` : il partirait
+  avec des requêtes venues de n'importe quelle page vers un relais qui agit sur le compte de la modèle. Pour avoir le
+  cadre aussi sur bloomcrm.fr : une adresse `mym.bloomcrm.fr` (DNS chez LinkScale + bloc Caddy, avec l'accord de
+  l'agence) et le relais choisi selon l'adresse de la page — pas fait.
+- OF Manager : son cadre vient de chez Substy (autre site sur les deux adresses), donc rien ne change ; le navigateur
+  redemande seulement une fois « Ouvrir le compte » sur la nouvelle adresse. Pas essayé sur bloomcrm.fr.
+- Hors dépôt, fait le 25/11/2026 avec l'accord explicite de l'agence, pour cette seule fois (la règle « on ne touche
+  pas au VPS » tient toujours) : bloc `bloomcrm.fr` dans le Caddyfile de /root/zebre vers `bloom-web:3000`, puis un
+  rechargement forcé de Caddy (même configuration) pour redemander le certificat une fois le DNS en place.
+- Le domaine se gère chez LinkScale (pas dans un Cloudflare de l'agence) : chaque changement DNS y attend la
+  validation de leurs admins (un peu moins de 17 h pour l'enregistrement A : envoyé le 25/11/2026 à 01 h 53, appliqué
+  vers 18 h 35, heure de Paris ; il pointe droit sur le VPS, sans proxy devant). Pas d'enregistrement ni de bloc pour
+  `www.bloomcrm.fr` : cette adresse ne répond pas.
