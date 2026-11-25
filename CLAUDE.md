@@ -397,6 +397,11 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     forme de réponse des deux côtés, montants en CENTIMES dans la devise de la plateforme ($ OnlyFans, € MYM). Les
     sources ne changent pas : `rv_sales` (Infloww, net ou brut) + ventes Substy des dernières 24 h « en attente » côté
     OnlyFans ; `rv_live` (src = 'mym', net seulement) côté MYM. Remboursements comptés à part, jamais retirés du total.
+  - Une ligne à 0 (abonnement gratuit, très courant sur MYM) n'est PAS une vente : comptée à part (`cats[].free`),
+    jamais dans le nombre de ventes, d'acheteurs ni le panier moyen. Vérifié le 25/11/2026 contre les anciens écrans
+    (mêmes totaux au centime : OnlyFans mois / semaine / hier / aujourd'hui, net et brut ; MYM jour par jour).
+  - Réponse gardée 20 s (clé = plateforme, période, modèles visibles). ⚠️ `parisDay` / `parisMidnight` (revenue.mjs)
+    gardent leur `Intl.DateTimeFormat` : en recréer un par vente bloquait le serveur 7 à 12 s sur un an de chiffres.
   - Types de vente dans le vocabulaire de la plateforme (`CATS`) ; « Vendeurs » (IA / chatteurs / autre) ne porte que
     sur les contenus payants envoyés en message (estimé côté MYM) ; « Abonnés actifs » seulement côté MYM ; « Brut »
     seulement côté OnlyFans. Au-delà de 180 jours, pas de comparaison avec la période d'avant (historique ≈ 1 an).

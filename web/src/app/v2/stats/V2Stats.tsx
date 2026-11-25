@@ -10,7 +10,8 @@ import { addDay, Bars, cash, Count, daysBetween, Delta, Donut, fmtDay, int, Line
 // v2, la copie de MyPulse (MymStats) et celle du dashboard d'Infloww (OfDashboard). Chiffres : `GET /api/v2/stats`
 // (app/v2stats.mjs), dans la devise de la plateforme choisie dans le menu. Ce que la plateforme ne donne pas n'est pas
 // affiché (abonnés actifs : MYM seulement ; brut : OnlyFans seulement).
-type Cat = { key: string; label: string; total: number; n: number };
+// `n` = ventes payées ; `free` = lignes à 0 (abonnements gratuits, courants sur MYM), jamais comptées comme des ventes.
+type Cat = { key: string; label: string; total: number; n: number; free: number };
 type DayRow = { day: string; total: number; prev: number; n: number; wait: number; cats: Record<string, number>; models: Record<string, number>; subs: number | null; subsEst: boolean };
 type ModelRow = { id: string; name: string; avatar: string | null; total: number; prev: number; sales: number };
 type Stats = {
@@ -115,8 +116,9 @@ export function V2Stats() {
         .then(([s, ctx]) => !stop && (setData({ key: `${from}|${to}|${model}|${gross}`, s, ctx }), setErr("")))
         .catch((e) => !stop && setErr(e instanceof Error ? e.message : "Chiffres indisponibles"));
     load();
-    // La période contient aujourd'hui : les chiffres se rafraîchissent tout seuls.
-    const t = to >= paris() ? setInterval(() => document.visibilityState === "visible" && load(), 60_000) : null;
+    // La période contient aujourd'hui : les chiffres se rafraîchissent tout seuls (moins souvent sur une longue période,
+    // dont le calcul est plus lourd pour le serveur).
+    const t = to >= paris() ? setInterval(() => document.visibilityState === "visible" && load(), len > 62 ? 300_000 : 60_000) : null;
     return () => {
       stop = true;
       if (t) clearInterval(t);
@@ -161,13 +163,18 @@ export function V2Stats() {
     let acc = 0;
     const subs = st.days.map((d) => d.subs);
     const known = subs.filter((x): x is number => x != null);
+    // Période courte : les petites courbes et la moyenne portent sur les 14 derniers jours (un seul point ne dit rien).
+    const trend = short ? ctx!.days : st.days;
     return {
       pts, short, len, colorOf, best,
+      sparkTotal: trend.map((d) => d.total),
+      sparkSales: trend.map((d) => d.n),
+      avg: short ? ctx!.total / ctx!.days.length : st.total / len,
       canCompare: !short && len <= 62,
       // Bloom garde environ un an de ventes : au-delà de six mois, la « période d'avant » serait incomplète.
       noCompare: len > 180,
       unit: len > 62 ? "mois" : "jour",
-      cumul: st.days.map((d) => (acc += d.total)),
+      cumul: trend.map((d) => (acc += d.total)),
       subs: known.length ? { values: subs, last: known[known.length - 1], first: known[0], est: st.days.some((d) => d.subsEst) } : null,
     };
   }, [data]);
@@ -196,6 +203,9 @@ export function V2Stats() {
   const sliceTotal = slices.reduce((a, x) => a + x.value, 0) || 1;
   const bars: BarPt[] = !s || !v ? [] : v.pts.map((p) => ({ key: p.key, label: p.label, title: p.title, dim: p.dim, prev: p.prev, parts: compare ? [{ v: p.total, color: "#3b82f6", label: "Total" }] : s.cats.map((c) => ({ v: p.cats[c.key] || 0, color: CAT_COLOR[c.key] ?? "#6b7280", label: c.label })) }));
   const len = v?.len ?? 1;
+  // Une carte par type de vente : toujours les trois premiers de la plateforme, les autres seulement s'il s'y est passé
+  // quelque chose sur la période (sinon une rangée de cartes à zéro).
+  const tiles = (s?.cats ?? []).filter((c, i) => i < 3 || c.n > 0 || c.free > 0);
 
   const stat = (label: string, value: React.ReactNode, sub: React.ReactNode, spark: number[], color: string, i: number, hi = false) => (
     <div className={`v2-card v2-rise p-4 ${hi ? "hi" : ""}`} style={{ ["--i" as string]: i }}>
@@ -262,18 +272,18 @@ export function V2Stats() {
       <div style={{ opacity: busy ? 0.55 : 1, transition: "opacity 0.2s ease" }}>
         {/* Les trois grandes cartes */}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {stat(`Chiffre d’affaires${s?.canGross ? (s.mode === "gross" ? " brut" : " net") : ""}`, s ? <Count value={s.total} format={(n) => fmt(n)} /> : null, <>{v?.noCompare ? <span>période trop longue pour être comparée</span> : <>{s ? <Delta now={s.total} before={s.prev} /> : null}<span>vs période d’avant{s && s.prev > 0 ? ` (${fmt(s.prev, 0)})` : ""}</span></>}{s?.provisional ? <span title="Ventes vues en direct, pas encore confirmées par la plateforme">· dont {fmt(s.provisional, 0)} en attente</span> : null}</>, s?.days.map((d) => d.total) ?? [], "#3b82f6", 2, true)}
-          {stat("Ventes", s ? int(s.sales) : null, <span>{s?.sales ? `panier moyen ${fmt(s.total / s.sales)}` : "aucune vente"}{s?.buyers ? ` · ${int(s.buyers)} acheteur${s.buyers > 1 ? "s" : ""}` : ""}</span>, s?.days.map((d) => d.n) ?? [], "#a78bfa", 3)}
-          {stat("Moyenne par jour", s ? fmt(s.total / len) : null, <span>{v?.best && v.best.total > 0 ? `meilleur jour : ${fmtDay(v.best.day, { day: "numeric", month: "short" })} (${fmt(v.best.total, 0)})` : "sur la période"}</span>, v?.cumul ?? [], "#34d399", 4)}
+          {stat(`Chiffre d’affaires${s ? (s.mode === "gross" ? " brut" : " net") : ""}`, s ? <Count value={s.total} format={(n) => fmt(n)} /> : null, <>{v?.noCompare ? <span>période trop longue pour être comparée</span> : <>{s ? <Delta now={s.total} before={s.prev} /> : null}<span>vs période d’avant{s && s.prev > 0 ? ` (${fmt(s.prev, 0)})` : ""}</span></>}{s?.provisional ? <span title="Ventes vues en direct, pas encore confirmées par la plateforme">· dont {fmt(s.provisional, 0)} en attente</span> : null}</>, v?.sparkTotal ?? [], "#3b82f6", 2, true)}
+          {stat("Ventes", s ? int(s.sales) : null, <span>{s?.sales ? `panier moyen ${fmt(s.total / s.sales)}` : "aucune vente"}{s?.buyers ? ` · ${int(s.buyers)} acheteur${s.buyers > 1 ? "s" : ""}` : ""}</span>, v?.sparkSales ?? [], "#a78bfa", 3)}
+          {stat("Moyenne par jour", s && v ? fmt(v.avg) : null, <span>{v?.short ? "sur les 14 derniers jours" : v?.best && v.best.total > 0 ? `meilleur jour : ${fmtDay(v.best.day, { day: "numeric", month: "short" })} (${fmt(v.best.total, 0)})` : "sur la période"}</span>, v?.cumul ?? [], "#34d399", 4)}
         </div>
 
         {/* Par type de vente */}
         <div className="mt-3 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
-          {(s?.cats ?? []).map((c, i) => (
+          {tiles.map((c, i) => (
             <div key={c.key} className="v2-card v2-rise p-3.5" style={{ ["--i" as string]: i + 5 }}>
               <p className="flex items-center gap-2 text-[12px] text-muted"><i className="size-2 shrink-0 rounded-full" style={{ background: CAT_COLOR[c.key] ?? "#6b7280" }} /><span className="truncate">{c.label}</span></p>
               <p className="v2-num mt-1.5 truncate text-[18px] leading-tight font-bold" style={c.total ? undefined : { color: "var(--color-muted)" }}>{fmt(c.total)}</p>
-              <p className="mt-0.5 truncate text-[11.5px] text-muted">{c.n ? `${int(c.n)} vente${c.n > 1 ? "s" : ""} · ${pct(c.total, s!.total)} %` : "—"}</p>
+              <p className="mt-0.5 truncate text-[11.5px] text-muted">{c.n && c.free ? `${int(c.n)} payant${c.n > 1 ? "s" : ""} · ${int(c.free)} gratuit${c.free > 1 ? "s" : ""}` : c.n ? `${int(c.n)} vente${c.n > 1 ? "s" : ""} · ${pct(c.total, s!.total)} %` : c.free ? `${int(c.free)} gratuit${c.free > 1 ? "s" : ""}` : "—"}</p>
             </div>
           ))}
           {s?.refunds ? (

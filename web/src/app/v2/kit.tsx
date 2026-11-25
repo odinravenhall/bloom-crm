@@ -137,7 +137,7 @@ export function Donut({ items }: { items: Slice[] }) {
       <div className="absolute inset-0 grid place-items-center text-center">
         <div>
           <p className="v2-num text-[22px] leading-none font-bold">{total > 0 && items[0] ? pct(items[0].value, total) : 0} %</p>
-          <p className="mx-auto mt-1 max-w-[84px] truncate text-[10.5px] text-muted">{items[0]?.label ?? "Aucune vente"}</p>
+          <p className="mx-auto mt-1 line-clamp-2 max-w-[88px] text-[10.5px] leading-tight text-muted">{items[0]?.label ?? "Aucune vente"}</p>
         </div>
       </div>
     </div>

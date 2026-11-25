@@ -10,7 +10,8 @@ import { isLinked, isNative, mymFollowerCounts } from './mym.mjs';
 import { mymIncome, mymIncomeOn } from './mymincome.mjs';
 
 const DAY = 864e5;
-const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t));
+const YMD = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }); // créé une fois (coûteux à recréer à chaque appel)
+const ymd = (t) => YMD.format(new Date(t));
 
 export function mymAccountRoutes({ substy, userFrom, send, creators }) {
   const cache = new Map();

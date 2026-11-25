@@ -10,7 +10,7 @@
 import { all, one } from './store.mjs';
 import { canSee, isBoss } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
-import { catOf, firstSubs, statsOf } from './mymstats.mjs';
+import { catOf, firstSubs, subsOf } from './mymstats.mjs';
 
 const DAY = 864e5;
 const REFUND = /refund|chargeback|revers|rembours|annul|^undo$/i; // Infloww : « undo » = remboursée
@@ -100,7 +100,7 @@ export function v2Stats({ pf, list, from, to, gross }) {
   const g = pf === 'of' && !!gross;
   const { rows, refunds, unmapped } = rowsOf(pf, list, mid[0], start, end, g);
 
-  const cats = new Map(CATS[pf].map(([key, label]) => [key, { key, label, total: 0, n: 0 }]));
+  const cats = new Map(CATS[pf].map(([key, label]) => [key, { key, label, total: 0, n: 0, free: 0 }]));
   const perDay = days.map((day) => ({ day, total: 0, prev: 0, n: 0, wait: 0, cats: {}, models: {}, subs: null, subsEst: false }));
   const models = new Map(list.map((c) => [String(c.id), { id: String(c.id), name: c.name, avatar: c.avatar || null, total: 0, prev: 0, sales: 0 }]));
   const who = { ai: 0, team: 0, other: 0 };
@@ -123,17 +123,22 @@ export function v2Stats({ pf, list, from, to, gross }) {
     const d = perDay[i - len];
     if (!d) continue;
     total += r.v;
-    sales++;
     d.total += r.v;
-    d.n++;
     d.cats[r.cat] = (d.cats[r.cat] || 0) + r.v;
     d.models[r.cid] = (d.models[r.cid] || 0) + r.v;
     if (r.wait) (d.wait += r.v), (provisional += r.v);
     const c = cats.get(r.cat) || cats.get('other');
     c.total += r.v;
-    c.n++;
-    if (m) (m.total += r.v), m.sales++;
-    if (r.fan) buyers.add(`${r.cid}:${r.fan}`);
+    if (m) m.total += r.v;
+    // Une ligne à 0 (abonnement gratuit, très courant sur MYM) n'est pas une VENTE : elle est comptée à part (`free`),
+    // sinon le nombre de ventes, d'acheteurs et le panier moyen ne veulent plus rien dire.
+    if (r.v > 0) {
+      sales++;
+      d.n++;
+      c.n++;
+      if (m) m.sales++;
+      if (r.fan) buyers.add(`${r.cid}:${r.fan}`);
+    } else c.free++;
     if (PAID[pf].has(r.cat)) who[r.who] += r.v;
     if (SLOT[pf].has(r.cat) && r.v > 0) {
       const wd = new Date(`${d.day}T12:00:00Z`).getUTCDay(); // 0 = dimanche
@@ -147,13 +152,14 @@ export function v2Stats({ pf, list, from, to, gross }) {
   }
   // MYM : abonnés actifs par jour (relevés de Bloom, estimés avant le premier relevé), additionnés sur les modèles choisies.
   if (pf === 'mym') {
+    const at = new Map(perDay.map((d) => [d.day, d]));
     for (const c of list) {
-      const st = statsOf(String(c.id), from, to);
-      st.forEach((x, i) => {
-        if (x.subs == null || !perDay[i]) return;
-        perDay[i].subs = (perDay[i].subs || 0) + x.subs;
-        if (x.subsEst) perDay[i].subsEst = true;
-      });
+      for (const [day, x] of subsOf(String(c.id), from, to)) {
+        const d = at.get(day);
+        if (!d || x.subs == null) continue;
+        d.subs = (d.subs || 0) + x.subs;
+        if (x.subsEst) d.subsEst = true;
+      }
     }
   }
   return {
@@ -179,6 +185,17 @@ export function v2Stats({ pf, list, from, to, gross }) {
 }
 
 export function v2StatsRoutes({ userFrom, send, creators }) {
+  // Le calcul relit toutes les ventes de la période (et de celle d'avant) : le résultat est gardé 20 s, pour que
+  // plusieurs personnes sur l'écran — ou son rafraîchissement automatique — ne le refassent pas à chaque fois.
+  const cache = new Map();
+  const cached = (key, make) => {
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < 20_000) return hit.data;
+    const data = make();
+    if (cache.size > 300) cache.clear();
+    cache.set(key, { at: Date.now(), data });
+    return data;
+  };
   return {
     // Chiffres de la plateforme choisie : ?from=&to= (jours de Paris), &creatorId= (une seule modèle), &mode=gross (OnlyFans).
     'GET /api/v2/stats': (req, res) => {
@@ -200,7 +217,9 @@ export function v2StatsRoutes({ userFrom, send, creators }) {
       const list = mine.filter((c) => !only || String(c.id) === only);
       const meta = new Map(all('SELECT creator_id, nickname FROM creator_meta').map((m) => [String(m.creator_id), m.nickname]));
       const named = (c) => ({ ...c, name: meta.get(String(c.id)) || c.name });
-      send(res, 200, { ...v2Stats({ pf, list: list.map(named), from, to, gross: p.get('mode') === 'gross' }), today, all: mine.map(named).map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })) });
+      const gross = pf === 'of' && p.get('mode') === 'gross';
+      const stats = cached(`${pf}|${gross}|${from}|${to}|${list.map((c) => c.id).join(',')}`, () => v2Stats({ pf, list: list.map(named), from, to, gross }));
+      send(res, 200, { ...stats, today, all: mine.map(named).map((c) => ({ id: String(c.id), name: c.name, avatar: c.avatar || null })) });
     },
   };
 }

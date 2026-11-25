@@ -90,10 +90,26 @@ export function statsOf(cid, from, to) {
     if ((cat === 'ppv' || cat === 'mod' || cat === 'push') && r.gross > 0) d.nPpv++;
     if (cat === 'tip' && r.gross > 0) d.nTips++;
   }
-  for (const r of all('SELECT day, active FROM mym_subs_daily WHERE creator_id = ? AND day >= ? AND day <= ?', cid, from, to)) if (days.has(r.day)) days.get(r.day).subs = r.active;
-  // Avant le premier relevé : estimation en remontant (relevé − nouveaux abonnés arrivés depuis).
+  for (const [day, x] of subsOf(cid, from, to)) {
+    const d = days.get(day);
+    if (!d) continue;
+    d.subs = x.subs;
+    if (x.subsEst) d.subsEst = true;
+  }
+  return [...days.values()];
+}
+
+/**
+ * Abonnés actifs d'une créatrice, jour par jour sur [from, to] : jour → { subs, subsEst }. Relevés de Bloom
+ * (`mym_subs_daily`) ; avant le premier relevé, une estimation en remontant (relevé − nouveaux abonnés arrivés depuis).
+ * À part de `statsOf` pour que Chiffres v2 (v2stats.mjs) n'ait pas à relire toutes les ventes une deuxième fois.
+ */
+export function subsOf(cid, from, to) {
+  const out = new Map();
+  for (const r of all('SELECT day, active FROM mym_subs_daily WHERE creator_id = ? AND day >= ? AND day <= ?', cid, from, to)) out.set(r.day, { subs: r.active, subsEst: false });
   const snap = one('SELECT day, active FROM mym_subs_daily WHERE creator_id = ? ORDER BY day LIMIT 1', cid);
   if (snap && from < snap.day) {
+    const first = firstSubs(cid);
     const news = new Map();
     for (const r of all("SELECT at, fan_id, fan_name FROM rv_live WHERE creator_id = ? AND src = 'mym' AND type = 'sub' AND at >= ? AND at < ?", cid, parisMidnight(addDay(from, 1)), parisMidnight(addDay(snap.day, 1)))) {
       if ((first.get(String(r.fan_name || r.fan_id || '').toLowerCase()) ?? r.at) < r.at) continue;
@@ -104,11 +120,10 @@ export function statsOf(cid, from, to) {
     for (let d = snap.day; d > from; ) {
       v -= news.get(d) || 0;
       d = addDay(d, -1);
-      const x = days.get(d);
-      if (x) (x.subs = Math.max(0, v)), (x.subsEst = true);
+      if (d <= to) out.set(d, { subs: Math.max(0, v), subsEst: true });
     }
   }
-  return [...days.values()];
+  return out;
 }
 
 const slotFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', hourCycle: 'h23' });

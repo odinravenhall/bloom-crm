@@ -253,7 +253,8 @@ async function tick(cid) {
 /** Les revenus MYM de cette créatrice sont lus en direct (au moins une lecture réussie). */
 export const mymIncomeOn = (cid) => isLinked(String(cid)) && !!getSetting(`mym_tx_on:${cid}`);
 
-const ymd = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t));
+const YMD = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }); // créé une fois : `ymd` est appelé pour chaque vente
+const ymd = (t) => YMD.format(new Date(t));
 /** Chiffres d'une créatrice sur `days` jours (jour en cours compris), au format de « Compte Creator ». */
 export function mymIncome(cid, days) {
   const from = Date.now() - days * DAY;

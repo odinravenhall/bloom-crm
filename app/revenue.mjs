@@ -18,13 +18,23 @@ const sleep = (t) => new Promise((r) => setTimeout(r, t));
 const num = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? 0 : Math.round(Number(v)));
 const msOf = (v) => (v === null || v === undefined || v === '' ? null : /^\d+$/.test(String(v)) ? Number(v) : Date.parse(v) || null);
 const cents = (v) => (v === null || v === undefined || v === '' ? 0 : Math.round(Number(v) * 100) || 0);
-export const parisDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t));
+// ⚠️ Les deux « Intl.DateTimeFormat » sont créés UNE fois : en recréer un à chaque appel coûte 30 fois plus cher, et ces
+// deux fonctions sont appelées pour chaque vente (25/11/2026 : un an de chiffres MYM bloquait le serveur 7 à 12 s).
+const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+const HOUR_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: 'numeric', hourCycle: 'h23' });
+export const parisDay = (t) => DAY_FMT.format(new Date(t));
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const midnights = new Map();
 /** Minuit (heure de Paris) du jour donné, en millisecondes. */
 export function parisMidnight(day) {
+  const hit = midnights.get(day);
+  if (hit !== undefined) return hit;
   const utc = Date.parse(`${day}T00:00:00Z`);
-  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: 'numeric', hourCycle: 'h23' }).format(new Date(utc)));
-  return utc - (h >= 12 ? h - 24 : h) * 3600_000;
+  const h = Number(HOUR_FMT.format(new Date(utc)));
+  const out = utc - (h >= 12 ? h - 24 : h) * 3600_000;
+  if (midnights.size > 4000) midnights.clear();
+  if (!Number.isNaN(out)) midnights.set(day, out);
+  return out;
 }
 
 db.exec(`
