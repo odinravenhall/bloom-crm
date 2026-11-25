@@ -40,6 +40,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
   const [nick, setNick] = useState<string | null>(conv.nickname);
   const [renaming, setRenaming] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const stick = useRef(true);
   const lastTyping = useRef(0);
@@ -116,6 +117,14 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
   useLayoutEffect(() => {
     if (stick.current && box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [msgs, fanTyping, aiWriting]);
+  // Une photo qui finit de charger allonge le fil : on reste en bas si on y était.
+  useEffect(() => {
+    const el = inner.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => stick.current && box.current && (box.current.scrollTop = box.current.scrollHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const loadOlder = async () => {
     if (!cursor || !box.current) return;
     const h = box.current.scrollHeight;
@@ -338,7 +347,8 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
       </header>
 
       {/* Messages */}
-      <div ref={box} onScroll={(e) => (stick.current = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 120)} className="v2-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 md:px-8">
+      <div ref={box} onScroll={(e) => (stick.current = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 120)} className="v2-scroll min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
+        <div ref={inner} className="flex min-h-full flex-col gap-1">
         {cursor ? <button onClick={loadOlder} className="mx-auto mb-3 flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-[12px] font-medium text-muted transition hover:text-fg" style={{ borderColor: "var(--color-line)", background: "var(--color-card)" }}><ChevronUp className="size-3.5" /> Messages plus anciens</button> : null}
         {error && !msgs ? <p className="m-auto max-w-sm text-center text-[13px]" style={{ color: "#fb7185" }}>{error}</p> : null}
         {!msgs && !error ? <Loader2 className="m-auto size-6 animate-spin text-muted" /> : null}
@@ -359,6 +369,7 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
         })}
         {fanTyping ? <div className="mt-1 flex items-center gap-2 self-start rounded-2xl rounded-bl-md px-4 py-3" style={{ background: "var(--color-bubble-fan)" }}><span className="v2-dots"><i /><i /><i /></span></div> : null}
         {aiWriting ? <div className="mt-1 flex items-center gap-2 self-end rounded-2xl rounded-br-md px-4 py-2.5 text-[12.5px] font-semibold" style={{ background: "rgb(59 130 246 / 0.12)", color: "var(--v2-sky)" }}><Sparkles className="size-3.5" /> L’IA écrit <span className="v2-dots"><i /><i /><i /></span></div> : null}
+        </div>
       </div>
 
       {/* Zone d'écriture */}

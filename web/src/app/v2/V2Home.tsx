@@ -93,8 +93,8 @@ function Count({ value, format }: { value: number; format: (n: number) => string
 }
 
 /** Pastille de variation par rapport à la période d'avant. */
-function Delta({ now, before }: { now: number; before: number }) {
-  if (!(before > 0)) return now > 0 ? <span className="v2-delta" data-dir="up">nouveau</span> : <span className="v2-delta" data-dir="flat">—</span>;
+function Delta({ now, before, quiet }: { now: number; before: number; quiet?: boolean }) {
+  if (!(before > 0)) return now > 0 && !quiet ? <span className="v2-delta" data-dir="up">nouveau</span> : <span className="v2-delta" data-dir="flat">—</span>;
   const p = ((now - before) / before) * 100;
   const dir = Math.abs(p) < 0.5 ? "flat" : p > 0 ? "up" : "down";
   const a = Math.abs(p);
@@ -204,7 +204,7 @@ function Chart({ pts, mode, compare }: { pts: Pt[]; mode: "bars" | "line"; compa
         </svg>
       ) : <div style={{ height: H }} />}
       {h && hover != null ? (
-        <div className="pointer-events-none absolute top-1 z-10 w-[196px] rounded-xl border p-3 text-[12px]" style={{ left: Math.max(0, Math.min(w - 196, cx(hover) - 98)), background: "#121215", borderColor: "rgb(255 255 255 / 0.1)", boxShadow: "0 18px 40px -18px rgb(0 0 0 / 0.9)" }}>
+        <div className="pointer-events-none absolute top-1 z-10 w-[212px] rounded-xl border p-3 text-[12px]" style={{ left: Math.max(0, Math.min(w - 212, cx(hover) - 106)), background: "#121215", borderColor: "rgb(255 255 255 / 0.1)", boxShadow: "0 18px 40px -18px rgb(0 0 0 / 0.9)" }}>
           <b className="block text-[12.5px] first-letter:uppercase">{h.title}</b>
           {compare ? null : (
             <>
@@ -214,7 +214,7 @@ function Chart({ pts, mode, compare }: { pts: Pt[]; mode: "bars" | "line"; compa
             </>
           )}
           <p className={`flex justify-between ${compare ? "mt-2" : "mt-2 border-t pt-2"}`} style={{ borderColor: "rgb(255 255 255 / 0.08)" }}><span>Total</span><b className="v2-num">{eur(tot(h))}</b></p>
-          {compare && h.prev != null ? <p className="mt-0.5 flex items-center justify-between text-muted"><span>Période d’avant</span><span className="flex items-center gap-1.5"><span className="v2-num">{eur(h.prev)}</span><Delta now={tot(h)} before={h.prev} /></span></p> : null}
+          {compare && h.prev != null ? <p className="mt-0.5 flex items-center justify-between text-muted"><span>Avant</span><span className="flex items-center gap-1.5"><span className="v2-num">{eur(h.prev)}</span><Delta now={tot(h)} before={h.prev} /></span></p> : null}
         </div>
       ) : null}
     </div>
@@ -393,7 +393,7 @@ export function V2Home({ me }: { me: Me }) {
   return (
     <div className="mx-auto max-w-[1320px] px-5 py-7 md:px-8 md:py-8">
       {/* En-tête : titre à gauche, modèle et période à droite */}
-      <div className="v2-rise flex flex-wrap items-end gap-x-6 gap-y-4">
+      <div className="v2-rise relative z-30 flex flex-wrap items-end gap-x-6 gap-y-4">
         <div className="min-w-0 flex-1">
           <p className="v2-eyebrow">Pilotage · {fmtDay(paris(), { month: "long", year: "numeric" })}</p>
           <h1 className="v2-h1 mt-1.5">Vue d’ensemble</h1>
@@ -544,7 +544,7 @@ export function V2Home({ me }: { me: Me }) {
           </section>
 
           {staff ? (
-            <section className="v2-card v2-rise min-w-0 p-5" style={{ ["--i" as string]: 8 }}>
+            <section className="v2-card v2-rise min-w-0 p-5 lg:row-span-2" style={{ ["--i" as string]: 8 }}>
               <div className="flex items-center"><p className="v2-card-title flex-1">Top chatteurs</p><Link href="/v2/equipe-ventes" className="flex items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Classement complet <ArrowRight className="size-3.5" /></Link></div>
               <div className="mt-2">
                 {sellers.map((s, i) => (
@@ -557,7 +557,8 @@ export function V2Home({ me }: { me: Me }) {
                         <p className="truncate text-[11.5px] text-muted">{s.sales.toLocaleString("fr-FR")} vente{s.sales > 1 ? "s" : ""}{s.buyers ? ` · ${s.buyers.toLocaleString("fr-FR")} acheteur${s.buyers > 1 ? "s" : ""}` : ""}</p>
                       </div>
                       <b className="v2-num shrink-0 text-[14.5px]">{eur(s.eur, 2)}</b>
-                      <span className="flex w-[62px] shrink-0 justify-end"><Delta now={s.eur} before={s.prev} /></span>
+                      {/* L'auteur d'une vente n'est connu que sur les 14 derniers jours : pas de « nouveau » pour l'IA et les chatteurs de Bloom. */}
+                      <span className="flex w-[62px] shrink-0 justify-end"><Delta now={s.eur} before={s.prev} quiet={s.kind !== "platform"} /></span>
                     </div>
                     <div className="pl-9"><Progress value={s.eur} max={topSeller} color={OF} i={i} /></div>
                   </div>
@@ -567,18 +568,17 @@ export function V2Home({ me }: { me: Me }) {
               </div>
             </section>
           ) : null}
-        </div>
 
-        <section className="v2-card v2-rise mt-3 p-5" style={{ ["--i" as string]: 9 }}>
+        <section className="v2-card v2-rise min-w-0 p-5" style={{ ["--i" as string]: 9 }}>
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="v2-card-title">Dernières ventes</p>
-              <p className="mt-0.5 flex items-center gap-2 text-[12.5px] text-muted"><span className="v2-live" /> En direct, les 10 dernières de la période</p>
+              <p className="mt-0.5 flex items-center gap-2 text-[12.5px] text-muted"><span className="v2-live" /> En direct, les dernières de la période</p>
             </div>
             {staff ? <Link href="/v2/chiffres" className="flex shrink-0 items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--v2-sky)" }}>Toutes les statistiques <ArrowRight className="size-3.5" /></Link> : null}
           </div>
-          <div className="mt-2 grid gap-x-8 lg:grid-cols-2">
-            {(rev?.recent ?? []).slice(0, 10).map((s) => {
+          <div className={`mt-2 grid gap-x-8 ${staff ? "" : "lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-5"}`}>
+            {(rev?.recent ?? []).slice(0, staff ? 6 : 10).map((s) => {
               const c = nameOf(s.creatorId);
               const who = staff ? s.by || (s.origin === "ai" ? "IA Substy" : s.origin === "sub" ? null : ORIGIN[s.origin]?.[0] ?? null) : null;
               return (
@@ -597,6 +597,7 @@ export function V2Home({ me }: { me: Me }) {
           {rev && !rev.recent.length ? <p className="py-6 text-center text-[13px] text-muted">Tes ventes arriveront ici, à la seconde.</p> : null}
           {!rev ? <p className="py-6 text-center text-[13px] text-muted">Chargement…</p> : null}
         </section>
+        </div>
       </div>
     </div>
   );
