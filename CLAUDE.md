@@ -399,8 +399,9 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   Toutes les écritures restent derrière une confirmation ; ⚠️ aucune n'a été essayée sur un vrai compte depuis ces
   écrans (créer un bon, un push, planifier, changer une liste d'amis). Les anciens composants (`MymPush`,
   `MymPlanning`, `MymFeed`, `MymFriends`, `MymVouchers`, `MymNotifs`, `MymDirect`) restent pour la version actuelle.
-- OF Manager (`v2/of/V2OfManager.tsx`, écran `of-manager`, 25/11/2026) : l'écran de la version actuelle posé tel quel
-  dans le cadre de la v2, ses pages (Home, Vault, Queue…) en onglets au-dessus (« ?p=vault »). Avant, le menu de la v2
+- OF Manager (`v2/of/V2OfManager.tsx`, écran `of-manager`, 25/11/2026) : refait au nouveau design (colonne des
+  modèles avec les fans à répondre, pages en onglets au-dessus « ?p=vault », même autorisation Substy et même clé
+  `bloom.ofb.authorized` que l'ancien `OfManager`, qui reste pour la version actuelle). Avant, le menu de la v2
   renvoyait vers `/app/of-manager`, donc vers l'ancien menu. Admins et managers (`manage` de screens.ts, comme Site
   MYM), et la case d'accès « OF Manager » du rôle reste appliquée (`canOpen`). Pas encore redessiné.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
