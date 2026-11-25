@@ -331,6 +331,8 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
         {g.items.map((i, n) => {
           const own = i.groupId === g.id;
           const also = i.tags.filter((id) => id !== g.id).map((id) => groups.find((x) => x.id === id)?.name).filter(Boolean);
+          // Étape de séquence sans titre (un simple numéro), gratuite et sans condition : le texte prend la première ligne.
+          const bare = g.kind === "sequence" && /^\d*$/.test(i.name.trim()) && !i.price && !i.cond;
           return (
             <div key={i.id} className={g.kind === "sequence" ? "relative pl-11" : ""}>
               {g.kind === "sequence" ? (
@@ -341,11 +343,15 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
               ) : null}
               <div className="mb-2.5 rounded-xl border p-3.5" style={{ borderColor: "var(--color-line)", background: "rgb(255 255 255 / 0.02)" }}>
                 <div className="flex flex-wrap items-start gap-2">
-                  <p className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-2">
-                    {/^\d*$/.test(i.name.trim()) ? (g.kind === "sequence" ? null : <b className="text-[14px] text-muted">Message {n + 1}</b>) : <b className="text-[14px]">{i.name}</b>}
-                    {i.price ? <span className="v2-delta" data-dir="up" title="Contenu payant">{price(i.price)}</span> : null}
-                    {i.cond ? <span className="v2-tag" style={{ color: "#c4b5fd", background: "rgb(124 58 237 / 0.16)" }}>{i.cond === "bought" ? "si le précédent est acheté" : "si le précédent n’est pas acheté"}</span> : null}
-                  </p>
+                  {bare ? (
+                    <p className="min-w-0 flex-1 pt-0.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{i.text ? <Rich text={i.text} /> : <span className="text-muted">Média seul</span>}</p>
+                  ) : (
+                    <p className="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-2">
+                      {/^\d*$/.test(i.name.trim()) ? (g.kind === "sequence" ? null : <b className="text-[14px] text-muted">Message {n + 1}</b>) : <b className="text-[14px]">{i.name}</b>}
+                      {i.price ? <span className="v2-delta" data-dir="up" title="Contenu payant">{price(i.price)}</span> : null}
+                      {i.cond ? <span className="v2-tag" style={{ color: "#c4b5fd", background: "rgb(124 58 237 / 0.16)" }}>{i.cond === "bought" ? "si le précédent est acheté" : "si le précédent n’est pas acheté"}</span> : null}
+                    </p>
+                  )}
                   {canEdit ? (
                     <span className="flex shrink-0 gap-0.5">
                       {own && g.items.length > 1 ? <><button onClick={() => moveItem(g, i, -1)} disabled={n === 0} title="Monter" className="grid size-7 place-items-center rounded-md text-muted transition disabled:opacity-25 hover:bg-white/[0.07] hover:text-(--color-fg)"><ArrowUp className="size-3.5" /></button><button onClick={() => moveItem(g, i, 1)} disabled={n === g.items.length - 1} title="Descendre" className="grid size-7 place-items-center rounded-md text-muted transition disabled:opacity-25 hover:bg-white/[0.07] hover:text-(--color-fg)"><ArrowDown className="size-3.5" /></button></> : null}
@@ -355,7 +361,7 @@ function ScriptView({ g, groups, canEdit, price, cur, setWin, post, moveItem, af
                     </span>
                   ) : null}
                 </div>
-                {i.text ? <p className="mt-2 text-[13.5px] leading-relaxed whitespace-pre-wrap"><Rich text={i.text} /></p> : null}
+                {i.text && !bare ? <p className="mt-2 text-[13.5px] leading-relaxed whitespace-pre-wrap"><Rich text={i.text} /></p> : null}
                 <Thumbs medias={i.medias} />
                 {i.note ? <p className="mt-2.5 flex items-start gap-1.5 text-[12px]" style={{ color: "#fbbf24" }} title="Consigne pour l’équipe : jamais envoyée au fan"><StickyNote className="mt-0.5 size-3.5 shrink-0" /><span>{i.note}</span></p> : null}
                 {also.length || i.creatorTags.length ? <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">{also.length ? <>aussi dans {also.map((x) => <span key={x} className="v2-tag">{x}</span>)}</> : null}{i.creatorTags.map((x) => <span key={x} className="v2-tag">@{x}</span>)}</p> : null}
