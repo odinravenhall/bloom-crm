@@ -362,9 +362,9 @@ export function V2Analytics({ pf }: { pf: Pf }) {
                     <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
                       <Tile label="Messages envoyés" value={int(chat.sent)} chip={chat.prev ? delta(chat.sent, chat.prev.sent) : null} />
                       <Tile label="Fans contactés" value={int(chat.fans)} chip={chat.prev ? delta(chat.fans, chat.prev.fans) : null} />
-                      <Tile label="Temps de réponse moyen" value={fmtDuration(chat.reply)} chip={chat.prev && chat.reply != null && chat.prev.reply != null ? delta(chat.reply, chat.prev.reply, true) : null} title="Du premier message du fan resté sans réponse jusqu’à la réponse (au plus 24 h)." />
-                      <Tile label="Contenus payants envoyés" value={int(chat.ppv)} chip={chat.prev ? delta(chat.ppv, chat.prev.ppv) : null} />
-                      <Tile label="Achetés" value={int(chat.bought)} chip={chat.prev ? delta(chat.bought, chat.prev.bought) : null} />
+                      <Tile label="Temps de réponse" value={fmtDuration(chat.reply)} chip={chat.prev && chat.reply != null && chat.prev.reply != null ? delta(chat.reply, chat.prev.reply, true) : null} title="En moyenne, du premier message du fan resté sans réponse jusqu’à la réponse (au plus 24 h)." />
+                      <Tile label="Payants envoyés" title="Contenus payants envoyés en conversation, vus par Bloom." value={int(chat.ppv)} chip={chat.prev ? delta(chat.ppv, chat.prev.ppv) : null} />
+                      <Tile label="Payants achetés" title="Achats repérés sur ces envois." value={int(chat.bought)} chip={chat.prev ? delta(chat.bought, chat.prev.bought) : null} />
                       <Tile label="Taux d’achat" value={chat.ppv ? `${pct(chat.bought, chat.ppv)} %` : "—"} chip={chat.prev && chat.ppv && chat.prev.ppv ? delta(chat.bought / chat.ppv, chat.prev.bought / chat.prev.ppv) : null} title="Contenus payants achetés ÷ contenus payants envoyés." />
                     </div>
                     {authors.length ? (
@@ -391,7 +391,7 @@ export function V2Analytics({ pf }: { pf: Pf }) {
                         </table>
                       </div>
                     ) : <p className="mt-3 text-[12.5px] text-muted">Aucun message envoyé sur la période.</p>}
-                    {s.platform === "mym" ? <p className="mt-2 text-[11.5px] text-muted">Côté MYM, la part de l’IA est estimée : Substy ne dit pas quels messages viennent de son IA.</p> : null}
+                    <p className="mt-2 text-[11.5px] text-muted">« Achetés » = les achats repérés sur ces envois en conversation. Un contenu acheté autrement (envoi groupé fait sur la plateforme, ancien message) n’y est pas : ce nombre peut être plus petit que les ventes du haut de la page.{s.platform === "mym" ? " Côté MYM, la part de l’IA est estimée : Substy ne dit pas quels messages viennent de son IA." : ""}</p>
                   </>
                 ) : <p className="mt-3 text-[12.5px] text-muted">Bloom n’a pas encore vu de message pour cette modèle sur cette période.</p>}
               </section>

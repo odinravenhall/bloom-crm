@@ -95,7 +95,14 @@ export function usePeriod() {
     preset, from, to, pick,
     len: daysBetween(from, to) + 1,
     label: preset === "custom" ? `${fmtDay(from, { day: "numeric", month: "short" })} → ${fmtDay(to, { day: "numeric", month: "short" })}` : PRESETS.find(([k]) => k === preset)?.[1] ?? "",
-    setRange: (a: string, b: string) => (setCustom(a <= b ? [a, b] : [b, a]), setPreset("custom")),
+    // Dates au choix : dans l'ordre, et pas plus de 400 jours (ce que le serveur accepte) — une année mal tapée
+    // (« 0026 ») donnerait sinon une période affichée qui n'est pas celle des chiffres.
+    setRange: (a: string, b: string) => {
+      const [lo, hi] = a <= b ? [a, b] : [b, a];
+      const min = addDay(hi, -400);
+      setCustom([lo < min ? min : lo, hi]);
+      setPreset("custom");
+    },
   };
 }
 export type Period = ReturnType<typeof usePeriod>;
