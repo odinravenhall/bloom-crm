@@ -34,6 +34,7 @@ const V2Vouchers = load(() => import("./mym/V2Vouchers").then((m) => m.V2Voucher
 const V2Notifs = load(() => import("./mym/V2Notifs").then((m) => m.V2Notifs));
 const V2SiteMym = load(() => import("./mym/V2SiteMym").then((m) => m.V2SiteMym));
 const V2OfManager = load(() => import("./of/V2OfManager").then((m) => m.V2OfManager));
+const V2OfAccounts = load(() => import("./of/V2OfAccounts").then((m) => m.V2OfAccounts));
 
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym", "of-manager"];
@@ -68,6 +69,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "notifications": return m ? <V2Notifs /> : null;
     case "site-mym": return m ? <V2SiteMym /> : null;
     case "of-manager": return m ? null : <V2OfManager />;
+    case "comptes-of": return m ? null : <V2OfAccounts />;
   }
 }
 

@@ -29,6 +29,7 @@ import { aiScriptRoutes } from './aiscripts.mjs';
 import { mymAccountRoutes } from './mymaccounts.mjs';
 import { mymFanRoutes } from './mymfans.mjs';
 import { adoptNatives, mymRoutes, nativeCreators } from './mym.mjs';
+import { onlyfansRoutes } from './onlyfans.mjs';
 import { mymMediaRoutes } from './mymmedia.mjs';
 import { mymVoucherRoutes } from './mymvouchers.mjs';
 import { mySalesRoutes } from './mysales.mjs';
@@ -479,6 +480,7 @@ Object.assign(routes, mymAccountRoutes({ substy, userFrom, send, creators: () =>
 Object.assign(routes, mymFanRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
 // Un compte MYM vient d'être relié : la liste des créatrices est refaite tout de suite (il apparaît sans attendre).
 Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [], onLinked: () => syncCreators().catch(() => applyCreators((state.creators || []).filter((c) => !c.native))) }));
+Object.assign(routes, onlyfansRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymMediaRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymVoucherRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.creators || [] }));

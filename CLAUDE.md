@@ -748,3 +748,21 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   validation de leurs admins (un peu moins de 17 h pour l'enregistrement A : envoyé le 25/11/2026 à 01 h 53, appliqué
   vers 18 h 35, heure de Paris ; il pointe droit sur le VPS, sans proxy devant). Pas d'enregistrement ni de bloc pour
   `www.bloomcrm.fr` : cette adresse ne répond pas.
+
+## OnlyFans en direct (sans Substy) — `app/onlyfans.mjs`, extension `extension-of/`, écran `comptes-of` (26/11/2026)
+
+- Liaison DIRECTE d'une modèle à son compte OnlyFans, à côté de Substy : RIEN ne bascule. Messagerie, chiffres, IA…
+  passent toujours par Substy tant qu'un écran n'est pas branché sur `of(creatorId, chemin)`. Revenir en arrière =
+  ne pas s'en servir (ou délier).
+- Relier (admins / managers), v2 → OnlyFans → Comptes : code à usage unique (15 min) + extension « Bloom – Relier
+  OnlyFans » (`web/public/bloom-relier-of.zip`, source `extension-of/`) dans le Chrome connecté à onlyfans.com, onglet
+  ouvert. Elle envoie les cookies `sess` et `auth_id`, `bcTokenSha` (en-tête `x-bc`) et le User-Agent (la session y est
+  liée). Le mot de passe n'est jamais lu. Session gardée chiffrée (`of_links`). Bloom vérifie avec `/api2/v2/users/me`
+  et refuse si le compte n'est pas celui de la modèle choisie (`pid` de Substy = `auth_id`).
+- Chaque requête à `https://onlyfans.com/api2/v2/...` est signée (`sign`, `time`, `app-token`) : sha1 de
+  `static_param \n time \n chemin \n user-id`, somme des caractères aux `checksum_indexes` + `checksum_constant`.
+  Les règles CHANGENT régulièrement : jamais en dur, un admin donne une adresse (`of_rules_url`, relue toutes les
+  30 min) ou colle le JSON (`of_rules`) via « Règles de signature » (`POST /api/of/rules`).
+- ⚠️ Au 26/11/2026 : aucune règle configurée, aucune modèle reliée, aucun appel fait au vrai OnlyFans. Pas encore de
+  proxy par modèle (toutes les sessions partiraient de l'IP du VPS : risque de déconnexion / signalement). OnlyFans
+  interdit les outils tiers non autorisés : le risque de suspension est pour le compte de la modèle, à décider avec elle.

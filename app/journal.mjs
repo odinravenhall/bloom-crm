@@ -31,6 +31,9 @@ export function logAction(u, action, { creatorId = null, fanId = null, details =
 // Requête réussie → action. `null` = ne rien noter. Une fonction reçoit le corps de la requête.
 const conv = (b) => ({ read: 'Conversation lue', unread: 'Conversation marquée non lue', pin: 'Conversation épinglée ou désépinglée' })[b?.action] || null;
 const ACTIONS = [
+  ['POST', /^\/api\/of\/link-code$/, 'Code de liaison OnlyFans créé'],
+  ['POST', /^\/api\/of\/unlink$/, 'Modèle déliée d’OnlyFans'],
+  ['POST', /^\/api\/of\/rules$/, 'Règles de signature OnlyFans modifiées'],
   ['POST', /^\/api\/rv\/conversations\/[^/]+\/action$/, conv],
   ['DELETE', /^\/api\/rv\/conversations\/[^/]+\/messages\/[^/]+$/, 'Message supprimé (unsend)'],
   ['POST', /^\/api\/sent\/delete$/, 'Message supprimé (unsend)'],

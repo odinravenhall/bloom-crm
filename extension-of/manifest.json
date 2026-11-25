@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Bloom – Relier OnlyFans",
+  "version": "1.0",
+  "description": "Relie le compte OnlyFans ouvert dans ce Chrome à Bloom CRM (avec un code à usage unique donné par Bloom). Le mot de passe n'est jamais lu.",
+  "permissions": ["cookies", "scripting", "tabs"],
+  "host_permissions": ["https://onlyfans.com/*", "https://bloom.ravencrm.xyz/*"],
+  "action": { "default_title": "Bloom – Relier OnlyFans", "default_popup": "popup.html" }
+}
