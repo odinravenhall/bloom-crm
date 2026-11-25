@@ -27,7 +27,7 @@ const V2TeamLive = load(() => import("./team/V2TeamLive").then((m) => m.V2TeamLi
 const V2TeamMod = load(() => import("./team/V2TeamMod").then((m) => m.V2TeamMod));
 const V2TeamAccess = load(() => import("./team/V2TeamAccess").then((m) => m.V2TeamAccess));
 const MymPush = load(() => import("@/app/app/mym/MymPush").then((m) => m.MymPush));
-const MymPlanning = load(() => import("@/app/app/mym/MymPlanning").then((m) => m.MymPlanning));
+const V2Planning = load(() => import("./mym/V2Planning").then((m) => m.V2Planning));
 const V2Feed = load(() => import("./mym/V2Feed").then((m) => m.V2Feed));
 const V2Friends = load(() => import("./mym/V2Friends").then((m) => m.V2Friends));
 const V2Vouchers = load(() => import("./mym/V2Vouchers").then((m) => m.V2Vouchers));
@@ -61,7 +61,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "moderation": return <V2TeamMod pf={pf} />;
     case "acces": return <V2TeamAccess />;
     case "push": return m ? <MymPush /> : null;
-    case "planification": return m ? <MymPlanning /> : null;
+    case "planification": return m ? <V2Planning /> : null;
     case "feed": return m ? <V2Feed /> : null;
     case "amis": return m ? <V2Friends /> : null;
     case "bons": return m ? <V2Vouchers /> : null;

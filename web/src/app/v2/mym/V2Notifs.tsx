@@ -92,7 +92,7 @@ export function V2Notifs() {
         {!d && !err ? <p className="py-20 text-center text-[13px] text-muted">Chargement…</p> : null}
         {days.map((g) => (
           <section key={g.key}>
-            <p className="mb-2 flex items-baseline gap-2 px-1 text-[12px] font-bold tracking-[0.1em] text-muted uppercase"><span>{g.name}</span><span className="font-semibold tracking-normal normal-case">· {plural(g.list.length, "notification")}</span></p>
+            <p className="mb-2 flex items-baseline gap-2 px-1 text-[12px] font-bold tracking-[0.1em] text-muted uppercase"><span>{g.name}</span><span className="font-semibold tracking-normal normal-case">· {plural(g.list.length, "notification")}{d?.more && g === days[days.length - 1] ? " affichées, la suite plus bas" : ""}</span></p>
             <div className="v2-card divide-y" style={{ borderColor: "var(--color-line)" }}>
               {g.list.map((n) => {
                 const L = LOOK[n.kind];

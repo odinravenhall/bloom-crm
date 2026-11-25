@@ -18,7 +18,7 @@ type Sort = "recent" | "likes" | "views";
 type Show = "" | "public" | "private" | "photo" | "video";
 const SORTS: [Sort, string][] = [["recent", "Récents"], ["likes", "Plus aimés"], ["views", "Plus vus"]];
 const SHOWS: [Show, string][] = [["", "Tout"], ["public", "Public"], ["private", "Privé"], ["photo", "Photos"], ["video", "Vidéos"]];
-const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "date inconnue");
+const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString("fr-FR", { day: "numeric", month: "short", ...(new Date(ms).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) }) : "date inconnue");
 
 export function V2Feed() {
   const { creators } = useCreators();
