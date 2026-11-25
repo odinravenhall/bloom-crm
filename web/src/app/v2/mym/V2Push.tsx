@@ -130,7 +130,7 @@ export function V2Push() {
                             <td className="px-3 whitespace-nowrap">{planned(p) ? <span style={{ color: "#fbbf24" }}>Programmé · {when(p.scheduledAt)}</span> : when(p.sentAt || p.scheduledAt)}</td>
                             <td className="v2-num px-3 text-right">{p.sales != null ? int(p.sales) : "—"}</td>
                             <td className="v2-num px-3 text-right font-semibold">{p.revenue != null ? eur(p.revenue) : "—"}</td>
-                            <td className="px-2 text-right" onClick={(e) => e.stopPropagation()}><RowMenu name={`push-${p.id}`} items={[{ label: "Voir le détail", go: () => setOpen(p) }, ...(planned(p) && d?.canSend ? [{ label: "Annuler (programmé)", danger: true, go: () => setStop(p) }] : [])]} /></td>
+                            <td className="px-2" onClick={(e) => e.stopPropagation()}><span className="flex justify-end"><RowMenu name={`push-${p.id}`} items={[{ label: "Voir le détail", go: () => setOpen(p) }, ...(planned(p) && d?.canSend ? [{ label: "Annuler (programmé)", danger: true, go: () => setStop(p) }] : [])]} /></span></td>
                           </tr>
                         ))}
                         {d && !rows.length ? <tr><td colSpan={8} className="py-12 text-center text-muted"><Megaphone className="mx-auto mb-2 size-6 opacity-50" />{tab === "mod" ? "Aucun MoD parmi ces pushs." : "Aucun push trouvé."}</td></tr> : null}

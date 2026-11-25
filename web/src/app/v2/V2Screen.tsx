@@ -6,7 +6,7 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe, Chiffres, Analytique, Liens de suivi. Les autres (propres à MYM) sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe, Chiffres, Analytique, Liens de suivi, et les écrans propres à MYM (Push et MoDs, Planification, Feed, Liste d'amis, Bons, Notifications, Site MYM). OF Manager est encore celui de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
@@ -32,7 +32,7 @@ const V2Feed = load(() => import("./mym/V2Feed").then((m) => m.V2Feed));
 const V2Friends = load(() => import("./mym/V2Friends").then((m) => m.V2Friends));
 const V2Vouchers = load(() => import("./mym/V2Vouchers").then((m) => m.V2Vouchers));
 const V2Notifs = load(() => import("./mym/V2Notifs").then((m) => m.V2Notifs));
-const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.MymDirect));
+const V2SiteMym = load(() => import("./mym/V2SiteMym").then((m) => m.V2SiteMym));
 const V2OfManager = load(() => import("./of/V2OfManager").then((m) => m.V2OfManager));
 
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
@@ -66,7 +66,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "amis": return m ? <V2Friends /> : null;
     case "bons": return m ? <V2Vouchers /> : null;
     case "notifications": return m ? <V2Notifs /> : null;
-    case "site-mym": return m ? <MymDirect /> : null;
+    case "site-mym": return m ? <V2SiteMym /> : null;
     case "of-manager": return m ? null : <V2OfManager />;
   }
 }
