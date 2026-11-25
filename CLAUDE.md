@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Shifts, Activité, En direct et Modération (Équipe), Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe (Messages, Ventes, Shifts, Activité, En direct, Modération, Accès), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -630,6 +630,15 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     messages déjà partis (« /api/mym/mod/find », « …/retire ») : MYM seulement, admins et managers, ⚠️ toujours
     jamais essayé sur un vrai message ; côté OnlyFans le retrait se fait un message à la fois depuis l'écran
     Messages (24 h).
+  - Accès (`V2TeamAccess.tsx`), à la place de `MymAccess`, `ManageEmployees` et `RoleSettings` : personnes
+    (rôle, modèles des DEUX plateformes, groupe, statut ; inviter par pseudo Discord, modifier, couper ou rendre
+    l'accès, supprimer, actions sur plusieurs personnes), groupes, et onglet Rôles (admins : créer, modifier,
+    couper). Tout passe par les routes « /api/staff… » d'avant ; `GET /api/v2/team/models` donne les modèles des
+    deux plateformes et `GET /api/v2/team/person?id=` la fiche d'une personne sur 30 jours (messages, ventes
+    OnlyFans et MYM parties de Bloom, temps). « /api/staff/batch » (action `creators`) garde maintenant les modèles
+    que le demandeur ne voit pas : avant, un team leader qui donnait une modèle à un chatteur lui retirait celles
+    des autres team leaders. ⚠️ Les cases « pages ouvertes » d'un rôle (`PERMS`) ne ferment que les pages de la
+    version actuelle (/app, /pro) : le menu de la v2 suit seulement le type du rôle (`boss` de screens.ts).
   - Présence : `PresencePing` envoie l'adresse de la page toutes les 30 s (v2, version actuelle et, depuis le
     25/11/2026, Messages Pro et `/app/messagerie`, qui n'envoyaient rien) ; la messagerie de la v2 envoie elle-même
     la conversation ouverte toutes les 20 s (`V2Messaging`). « Sur le chat » (`CHAT_PAGE` de team.mjs) compte

@@ -6,7 +6,7 @@ import { getPf, PF_LABEL, type Pf } from "@/lib/platform";
 import type { ScreenKey } from "./screens";
 
 // Un écran de la v2 = le même nom dans le menu, et derrière le composant de la plateforme choisie. Refaits pour la v2
-// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Envois groupés, Chiffres, Analytique, Liens de suivi. Les autres sont encore ceux de la version actuelle,
+// (un seul écran pour les deux plateformes) : Messagerie, Scripts, Médias, Fans, Envois groupés, toute la rubrique Équipe, Chiffres, Analytique, Liens de suivi. Les autres (propres à MYM) sont encore ceux de la version actuelle,
 // repeints par les variables de v2.css ; ils seront refaits un par un.
 const Wait = () => <div className="grid h-full min-h-[50vh] place-items-center text-[13px] text-muted">Chargement…</div>;
 const load = <P extends object>(f: () => Promise<ComponentType<P>>) => dynamic(f, { ssr: false, loading: Wait });
@@ -25,8 +25,7 @@ const V2TeamShifts = load(() => import("./team/V2TeamShifts").then((m) => m.V2Te
 const V2TeamActivity = load(() => import("./team/V2TeamActivity").then((m) => m.V2TeamActivity));
 const V2TeamLive = load(() => import("./team/V2TeamLive").then((m) => m.V2TeamLive));
 const V2TeamMod = load(() => import("./team/V2TeamMod").then((m) => m.V2TeamMod));
-const ManageEmployees = load(() => import("@/app/app/employees/ManageEmployees").then((m) => m.ManageEmployees));
-const MymAccess = load(() => import("@/app/app/mym/MymAccess").then((m) => m.MymAccess));
+const V2TeamAccess = load(() => import("./team/V2TeamAccess").then((m) => m.V2TeamAccess));
 const MymPush = load(() => import("@/app/app/mym/MymPush").then((m) => m.MymPush));
 const MymPlanning = load(() => import("@/app/app/mym/MymPlanning").then((m) => m.MymPlanning));
 const MymFeed = load(() => import("@/app/app/mym/MymFeed").then((m) => m.MymFeed));
@@ -59,7 +58,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "activite": return <V2TeamActivity />;
     case "en-direct": return <V2TeamLive />;
     case "moderation": return <V2TeamMod pf={pf} />;
-    case "acces": return m ? <MymAccess /> : <ManageEmployees />;
+    case "acces": return <V2TeamAccess />;
     case "push": return m ? <MymPush /> : null;
     case "planification": return m ? <MymPlanning /> : null;
     case "feed": return m ? <MymFeed /> : null;

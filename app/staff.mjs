@@ -246,7 +246,10 @@ export function staffRoutes({ userFrom, send, body, creators }) {
         // personne sur l'AUTRE plateforme sont gardés tels quels (sinon ils seraient effacés sans qu'on le voie).
         const scope = b.scope === 'mym' || b.scope === 'of' ? b.scope : null;
         const isMym = new Set(creators().filter((c) => /mym/i.test(c.platform || '')).map((c) => String(c.id)));
-        const keep = (id) => (scope ? all('SELECT creator_id FROM user_creators WHERE user_id = ?', id).map((r) => r.creator_id).filter((c) => isMym.has(c) !== (scope === 'mym')) : []);
+        // Un team leader ne voit que SES modèles : celles qu'il ne voit pas ne sont pas dans sa fenêtre non plus, on les
+        // garde aussi (sinon donner une modèle à un chatteur lui retirait celles d'un autre team leader).
+        const blind = seesAll(u) ? null : (c) => !canSee({ ...u, pf: null }, c);
+        const keep = (id) => all('SELECT creator_id FROM user_creators WHERE user_id = ?', id).map((r) => r.creator_id).filter((c) => (scope && isMym.has(c) !== (scope === 'mym')) || (blind && blind(c)));
         for (const t of targets) if (!seesAll(t)) setAccess(t.id, { all: !!b.all, creators: [...new Set([...keep(t.id), ...(b.creators || []).map(String)])] });
         permsChanged(targets.map((t) => t.id));
         return send(res, 200, { employees: view() });

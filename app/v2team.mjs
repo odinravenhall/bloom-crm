@@ -390,6 +390,36 @@ export function v2TeamRoutes({ userFrom, send, body, creators }) {
       send(res, 200, { ok: true });
     },
 
+    // Accès : les modèles que la personne voit, les deux plateformes (pour donner des accès). Les personnes, les groupes
+    // et les rôles se lisent et s'écrivent par les routes « /api/staff… » (staff.mjs), qui ne dépendent d'aucune plateforme.
+    'GET /api/v2/team/models': (req, res) => {
+      const x = people(req, res);
+      if (!x) return;
+      send(res, 200, { models: x.models });
+    },
+    // La fiche d'une personne sur 30 jours : ce qu'elle a écrit depuis Bloom, les ventes qui lui reviennent (message
+    // envoyé depuis Bloom puis acheté), et le temps passé avec Bloom ouvert. Sur les modèles que le demandeur voit.
+    'GET /api/v2/team/person': (req, res) => {
+      const x = people(req, res);
+      if (!x) return;
+      const t = one('SELECT id, name FROM users WHERE id = ? AND deleted = 0', Number(x.p.get('id')));
+      if (!t) return send(res, 404, { error: 'Personne inconnue' });
+      const since = Date.now() - 30 * DAY;
+      const ids = [...x.names.keys()];
+      const mymIds = ids.filter((id) => x.names.get(id).mym);
+      const ph = (l) => l.map(() => '?').join(',');
+      const m = ids.length ? one(`SELECT COUNT(*) AS n, SUM(price > 0) AS ppv, MAX(at) AS last, COUNT(DISTINCT creator_id) AS models FROM msg_log WHERE from_fan = 0 AND deleted = 0 AND kind IN ('bloom', 'employee') AND by_name = ? AND creator_id IN (${ph(ids)}) AND at >= ?`, t.name, ...ids, since) : null;
+      const accs = all('SELECT creator_id, account FROM rv_map WHERE account IS NOT NULL').filter((r) => x.names.has(String(r.creator_id)) && !x.names.get(String(r.creator_id)).mym).map((r) => r.account);
+      const ofRows = accs.length ? all(`SELECT net, status FROM rv_sales WHERE account IN (${ph(accs)}) AND origin = 'bloom' AND origin_by = ? AND type <> 'sub' AND at >= ?`, ...accs, t.name, since).filter((r) => !/refund|chargeback|revers|rembours|annul|^undo$/i.test(r.status || '')) : [];
+      const mym = mymIds.length ? one(`SELECT COUNT(*) AS n, COALESCE(SUM(gross), 0) AS s FROM rv_live WHERE creator_id IN (${ph(mymIds)}) AND src = 'mym' AND gross > 0 AND origin IN ('bloom', 'employee') AND origin_by = ? AND at >= ?`, ...mymIds, t.name, since) : null;
+      const w = one('SELECT SUM(active) AS a, SUM(idle) AS i, COUNT(*) AS d FROM work_log WHERE user_id = ? AND day >= ?', t.id, parisDay(since));
+      send(res, 200, {
+        name: t.name, messages: m?.n || 0, ppv: m?.ppv || 0, lastMessage: m?.last || null, models: m?.models || 0,
+        of: { sales: ofRows.length, net: ofRows.reduce((a, r) => a + r.net, 0) }, mym: { sales: mym?.n || 0, net: mym?.s || 0 },
+        activeMs: w?.a || 0, idleMs: w?.i || 0, days: w?.d || 0,
+      });
+    },
+
     // Shifts : les heures de travail de chacun, déduites des messages qu'il a envoyés DEPUIS Bloom (les seuls dont
     // Bloom connaît l'auteur), sur toutes les modèles que la personne voit, les deux plateformes ensemble.
     // Un « shift » = une suite de messages sans trou de plus de `cut` minutes ; le temps actif additionne les écarts
