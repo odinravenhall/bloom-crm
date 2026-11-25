@@ -76,7 +76,7 @@ const ACTIONS = [
   ['POST', /^\/api\/mym\/link$/, 'Compte MYM relié'],
   ['POST', /^\/api\/mym\/unlink$/, 'Compte MYM délié'],
   ['POST', /^\/api\/mym\/mod\/banned$/, 'Liste des mots interdits modifiée'],
-  ['POST', /^\/api\/mym\/mod\/allow$/, 'Sortie autorisée modifiée'],
+  ['POST', /^\/api\/(mym\/mod|v2\/team\/mod)\/allow$/, 'Sortie autorisée modifiée'],
 ];
 const SAFE = ['action', 'type', 'name', 'title', 'enabled', 'on', 'active', 'role', 'word'];
 /** Appelé par le serveur après chaque requête : note l'action si elle a réussi et qu'elle est dans la table. */

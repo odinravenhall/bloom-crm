@@ -10,12 +10,14 @@
 //    « IA Substy » (OnlyFans, certain), « Hors Bloom » (MYM : IA déduite ou autre outil), « Automatisation » ou le compte
 //    de la modèle. Côté OnlyFans, une vente dont Bloom ne connaît pas l'auteur garde le chatteur qu'Infloww lui attribue
 //    (type « platform ») : c'est la seule donnée d'Infloww utilisée ici, elle vient avec la vente.
-import { all, one } from './store.mjs';
+import { all, one, run } from './store.mjs';
 import { canSee, isBoss, liveView, seesAll } from './team.mjs';
 import { parisDay, parisMidnight } from './revenue.mjs';
 import { inboxChat, plain } from './chat.mjs';
 import { askOf, cached, CATS, rowsOf, whoOf } from './v2stats.mjs';
 import { vacations } from './mymteam.mjs';
+import { CATS as MOD_CATS, suspects } from './mymmod.mjs';
+import { bannedCount } from './journal.mjs';
 
 const DAY = 864e5;
 const addDay = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -247,7 +249,7 @@ export function teamMessages({ pf, list, from, to, q }) {
   };
 }
 
-export function v2TeamRoutes({ userFrom, send, creators }) {
+export function v2TeamRoutes({ userFrom, send, body, creators }) {
   /** Team leader ou plus + ce que l'adresse demande (plateforme affichée, période, modèles visibles). */
   const scope = (req, res) => {
     const u = userFrom(req);
@@ -330,6 +332,62 @@ export function v2TeamRoutes({ userFrom, send, creators }) {
         })),
         since: one('SELECT MIN(at) AS t FROM bl_actions')?.t || null,
       });
+    },
+
+    // Modération : les messages envoyés aux fans que les règles jugent suspects (`bl_alerts`, relus chaque minute par
+    // mymmod.mjs), pour les modèles de la plateforme affichée. Les motifs sont RECALCULÉS ici avec les règles de la
+    // plateforme (un lien onlyfans.com n'est pas suspect sur OnlyFans) et sans les « sorties autorisées » du compte.
+    // ?pf, &hours=24|168|720. Mots interdits et messages refusés : routes « /api/mym/mod/banned » (communes).
+    'GET /api/v2/team/mod': (req, res) => {
+      const x = scope(req, res);
+      if (!x) return;
+      const hours = [24, 168, 720].includes(Number(x.p.get('hours'))) ? Number(x.p.get('hours')) : 168;
+      const since = Date.now() - hours * 3600_000;
+      const ids = x.mine.map((c) => String(c.id));
+      const names = new Map(x.mine.map((c) => [String(c.id), c.name]));
+      const base = { platform: x.pf, cats: MOD_CATS, hours, models: x.all, canAct: seesAll(x.u), banned: bannedCount(), refused: one('SELECT COUNT(*) AS n FROM bl_refused WHERE at > ?', since)?.n || 0 };
+      if (!ids.length) return send(res, 200, { ...base, total: 0, high: 0, fans: 0, counts: {}, authors: [], alerts: [], allowed: [] });
+      const ph = ids.map(() => '?').join(',');
+      const allowed = all(`SELECT creator_id, cat, by_name, at FROM bl_allowed WHERE creator_id IN (${ph})`, ...ids);
+      const ok = new Set(allowed.map((a) => `${a.creator_id}:${a.cat}`));
+      const rows = [];
+      for (const a of all(`SELECT a.*, COALESCE(m.deleted, 0) AS deleted FROM bl_alerts a LEFT JOIN msg_log m ON m.id = a.msg_id WHERE a.creator_id IN (${ph}) AND a.at > ? ORDER BY a.at DESC`, ...ids, since)) {
+        const s = suspects(a.text, x.pf);
+        const cats = (s?.cats || []).filter((c) => !ok.has(`${a.creator_id}:${c}`));
+        if (cats.length) rows.push({ ...a, cats, severity: s.severity });
+      }
+      const counts = Object.fromEntries(Object.keys(MOD_CATS).map((c) => [c, rows.filter((a) => a.cats.includes(c)).length]));
+      const by = new Map();
+      for (const a of rows) {
+        const w = whoOf(x.pf, a.kind, a.by_name);
+        const g = by.get(w.key) || { ...w, alerts: 0, high: 0, cats: new Set(), last: 0, models: new Set() };
+        g.alerts++;
+        if (a.severity === 'high') g.high++;
+        a.cats.forEach((c) => g.cats.add(c));
+        g.last = Math.max(g.last, a.at);
+        g.models.add(names.get(a.creator_id) || '');
+        by.set(w.key, g);
+      }
+      send(res, 200, {
+        ...base,
+        total: rows.length, high: rows.filter((a) => a.severity === 'high').length, fans: new Set(rows.map((a) => `${a.creator_id}:${a.fan_id}`)).size, counts,
+        authors: [...by.values()].map((g) => ({ ...g, cats: [...g.cats], models: [...g.models] })).sort((a, b) => b.high - a.high || b.alerts - a.alerts),
+        alerts: rows.slice(0, 200).map((a) => ({ id: a.msg_id, at: a.at, cid: a.creator_id, model: names.get(a.creator_id) || '', fid: a.fan_id, fan: a.fan_id ? inboxChat(a.creator_id, a.fan_id)?.name || 'Fan' : null, who: whoOf(x.pf, a.kind, a.by_name), cats: a.cats, severity: a.severity, text: plain(a.text || ''), deleted: !!a.deleted })),
+        allowed: allowed.map((a) => ({ cid: a.creator_id, model: names.get(a.creator_id) || '', cat: a.cat, by: a.by_name, at: a.at })),
+      });
+    },
+    // Sortie autorisée : un motif accepté sur une modèle (ex. son Instagram officiel) n'y est plus signalé.
+    // `on: false` pour l'enlever. Admins et managers ; le droit porte sur la MODÈLE, pas sur le menu.
+    'POST /api/v2/team/mod/allow': async (req, res) => {
+      const u = userFrom(req);
+      if (!u) return send(res, 401, { error: 'Connecte-toi' });
+      if (!seesAll(u)) return send(res, 403, { error: 'Réservé aux admins et managers' });
+      const b = await body(req);
+      const c = creators().find((m) => String(m.id) === String(b.creatorId || ''));
+      if (!c || !canSee({ ...u, pf: null }, c.id) || !MOD_CATS[b.cat]) return send(res, 400, { error: 'Modèle ou motif inconnu' });
+      if (b.on === false) run('DELETE FROM bl_allowed WHERE creator_id = ? AND cat = ?', String(c.id), b.cat);
+      else run('INSERT OR REPLACE INTO bl_allowed (creator_id, cat, by_name, at) VALUES (?, ?, ?, ?)', String(c.id), b.cat, u.name, Date.now());
+      send(res, 200, { ok: true });
     },
 
     // Shifts : les heures de travail de chacun, déduites des messages qu'il a envoyés DEPUIS Bloom (les seuls dont

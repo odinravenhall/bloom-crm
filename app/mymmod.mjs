@@ -12,7 +12,7 @@ import { all, db, getSetting, one, run, setSetting } from './store.mjs';
 import { isLinked } from './mym.mjs';
 import { mymDelete } from './mymchat.mjs';
 import { inboxChat, plain } from './chat.mjs';
-import { canSee, isBoss, liveView, seesAll } from './team.mjs';
+import { canSee, isBoss, liveView, platformOfCreator, seesAll } from './team.mjs';
 import { bannedChanged, bannedCount, logAction } from './journal.mjs';
 import { senderOf } from './mymteam.mjs';
 
@@ -37,11 +37,16 @@ const RULES = [
   ['link', /https?:\/\/(?!(?:[a-z0-9-]+\.)?mym\.fans)|\bwww\.|\b(?!mym\.)[a-z0-9-]{3,}\.(?:com|fr|net|io|me|gg|xyz|link|ly|app)\b/],
   ['pay', /\b(?:paypal|lydia|revolut|virement|rib|iban|wero|cash ?app|crypto|bitcoin|usdt|paysafe(?:card)?|pcs|western union|transcash|sumeria)\b/],
 ];
+// Côté OnlyFans : parler d'OnlyFans ou donner un lien onlyfans.com est normal ; c'est MYM qui est « une autre plateforme ».
+const RULES_OF = RULES.map(([k, re]) =>
+  k === 'platform' ? [k, /\b(?:mym|fansly|fanvue|patreon|swame|uncove|loyalfans|manyvids)\b/]
+  : k === 'link' ? [k, /https?:\/\/(?!(?:[a-z0-9-]+\.)?onlyfans\.com)|\bwww\.|\b(?!onlyfans\.)[a-z0-9-]{3,}\.(?:com|fr|net|io|me|gg|xyz|link|ly|app)\b/]
+  : [k, re]);
 const INVITE = /\b(?:ajoute|ajouter|add|rejoins|viens|ecris|ecrit|contacte|envoie|donne|mon|ma|prends|file|passe)\b/;
-/** Motifs suspects d'un texte + gravité. */
-export function suspects(text) {
+/** Motifs suspects d'un texte + gravité, avec les règles de la plateforme (« mym » par défaut, ou « of »). */
+export function suspects(text, pf = 'mym') {
   const t = String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  const cats = RULES.filter(([, re]) => re.test(t)).map(([k]) => k);
+  const cats = (pf === 'of' ? RULES_OF : RULES).filter(([, re]) => re.test(t)).map(([k]) => k);
   if (!cats.length) return null;
   const high = cats.some((c) => c === 'phone' || c === 'link' || c === 'pay') || INVITE.test(t);
   return { cats, severity: high ? 'high' : 'medium' };
@@ -51,7 +56,7 @@ function scan() {
   const from = Number(getSetting('mod_scan_at')) || Date.now() - 7 * DAY;
   const rows = all("SELECT id, at, creator_id, fan_id, kind, by_name, text FROM msg_log WHERE from_fan = 0 AND at > ? AND text IS NOT NULL AND text <> '' AND COALESCE(kind, '') NOT IN ('auto', 'script') ORDER BY at LIMIT 5000", from);
   for (const m of rows) {
-    const s = suspects(m.text);
+    const s = suspects(m.text, platformOfCreator(m.creator_id) || 'mym');
     if (s) run('INSERT OR IGNORE INTO bl_alerts (msg_id, at, creator_id, fan_id, kind, by_name, cats, severity, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', m.id, m.at, m.creator_id, m.fan_id, m.kind, m.by_name, s.cats.join(','), s.severity, String(m.text).slice(0, 600));
   }
   if (rows.length) setSetting('mod_scan_at', String(rows[rows.length - 1].at));

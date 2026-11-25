@@ -29,22 +29,27 @@ const clamp = (s: string, lo: number, hi: number, d: number) => Math.min(hi, Mat
 const HOUR = 3600_000;
 const PER = 30;
 
-/** L'activité d'une personne en barres : des tranches d'autant plus larges que la période est longue. */
-function timeline(minutes: [number, number][], start: number, end: number): BarPt[] {
+/**
+ * L'activité d'une personne en barres. Jusqu'à trois jours : des tranches de 5 ou 15 minutes, où les vides sont les
+ * pauses. Au-delà : une barre par jour (des tranches fines ne se liraient plus).
+ */
+function timeline(minutes: [number, number][], start: number, end: number): { pts: BarPt[]; daily: boolean } {
   const stop = Math.min(end, Date.now());
   const range = Math.max(HOUR, stop - start);
-  const size = range <= 26 * HOUR ? 5 * 60_000 : range <= 80 * HOUR ? 15 * 60_000 : range <= 15 * 24 * HOUR ? HOUR : range <= 32 * 24 * HOUR ? 3 * HOUR : 6 * HOUR;
+  const daily = range > 80 * HOUR;
+  const size = daily ? 24 * HOUR : range <= 26 * HOUR ? 5 * 60_000 : 15 * 60_000;
   const n = Math.ceil(range / size);
   const v = new Array<number>(n).fill(0);
   for (const [t, c] of minutes) {
     const i = Math.floor((t - start) / size);
     if (i >= 0 && i < n) v[i] += c;
   }
-  const day = range > 26 * HOUR;
-  return v.map((x, i) => {
-    const t = start + i * size;
-    return { key: String(t), label: day ? new Date(t).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit" }) : timeOf(t), title: `${dateOf(t)} · ${timeOf(t)}`, parts: [{ v: x, color: "#3b82f6", label: "Messages" }] };
+  const pts = v.map((x, i) => {
+    // Une barre par jour : on prend le milieu de la journée pour nommer le jour (changement d'heure compris).
+    const t = start + i * size + (daily ? 12 * HOUR : 0);
+    return { key: String(t), label: daily ? new Date(t).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit" }) : timeOf(t), title: daily ? new Date(t).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long" }) : `${dateOf(t)} · ${timeOf(t)}`, parts: [{ v: x, color: "#3b82f6", label: "Messages" }] };
   });
+  return { pts, daily };
 }
 const Chips = ({ list, max = 4 }: { list: M[]; max?: number }) => (
   <span className="flex flex-wrap gap-1">
@@ -83,7 +88,7 @@ export function V2TeamShifts() {
   const pages = Math.max(1, Math.ceil(list.length / PER));
   const shown = list.slice((page - 1) * PER, page * PER);
   const cutNote = !!d && d.from > from;
-  const bars = useMemo(() => (d && me?.minutes ? timeline(me.minutes, d.start, d.end) : []), [d, me]);
+  const chart = useMemo(() => (d && me?.minutes ? timeline(me.minutes, d.start, d.end) : { pts: [], daily: false }), [d, me]);
   const exportCsv = () => {
     if (!d) return;
     const fr = (day: string) => day.split("-").reverse().join("/");
@@ -169,15 +174,15 @@ export function V2TeamShifts() {
                   tile("Temps actif", hmin(me.activeMin), `${plural(me.shifts, "shift")} · pause dès ${d.idle} min`, 2),
                   tile("Messages", int(me.messages), me.activeMin ? `${(me.messages / (me.activeMin / 60)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} par heure active` : " ", 3),
                   tile("Contenus proposés", int(me.ppvPaid + me.ppvFree), `${int(me.ppvPaid)} payant${me.ppvPaid > 1 ? "s" : ""} · ${int(me.ppvFree)} offert${me.ppvFree > 1 ? "s" : ""}`, 4),
-                  tile("Part payante", me.messages ? `${((me.ppvPaid / me.messages) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—", "contenus payants ÷ messages", 5),
+                  tile("Part payante", me.messages ? `${((me.ppvPaid / me.messages) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "—", "payants ÷ messages", 5),
                   tile("Temps de réponse", me.replyAvg == null ? "—" : fmtDuration(me.replyAvg), me.replyMedian == null ? " " : `médiane ${fmtDuration(me.replyMedian)}`, 6),
-                  tile("Bloom ouvert", hmin(me.bloomActiveMin + me.bloomIdleMin), me.bloomDays ? `${hmin(me.bloomActiveMin)} sur le chat · ${hmin(me.bloomIdleMin)} ailleurs` : "pas de relevé sur la période", 7),
+                  tile("Bloom ouvert", hmin(me.bloomActiveMin + me.bloomIdleMin), me.bloomDays ? `dont ${hmin(me.bloomActiveMin)} sur le chat` : "pas de relevé sur la période", 7),
                 ]}
               </div>
               <section className="v2-card v2-rise p-4">
                 <p className="v2-card-title">Activité de {me.name}</p>
-                <p className="mt-0.5 text-[12px] text-muted">Messages envoyés au fil du temps : les vides sont les pauses.</p>
-                <Bars key={data?.key} pts={bars} fmt={(v) => int(Math.round(v))} height={210} whole />
+                <p className="mt-0.5 text-[12px] text-muted">{chart.daily ? "Messages envoyés par jour. Sur trois jours ou moins, le graphique montre aussi les pauses." : "Messages envoyés au fil du temps : les vides sont les pauses."}</p>
+                <Bars key={data?.key} pts={chart.pts} fmt={(v) => int(Math.round(v))} height={210} whole />
               </section>
             </>
           ) : null}

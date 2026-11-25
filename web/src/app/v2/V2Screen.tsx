@@ -24,7 +24,7 @@ const V2TeamSales = load(() => import("./team/V2TeamSales").then((m) => m.V2Team
 const V2TeamShifts = load(() => import("./team/V2TeamShifts").then((m) => m.V2TeamShifts));
 const V2TeamActivity = load(() => import("./team/V2TeamActivity").then((m) => m.V2TeamActivity));
 const V2TeamLive = load(() => import("./team/V2TeamLive").then((m) => m.V2TeamLive));
-const MymModeration = load(() => import("@/app/app/mym/MymModeration").then((m) => m.MymModeration));
+const V2TeamMod = load(() => import("./team/V2TeamMod").then((m) => m.V2TeamMod));
 const ManageEmployees = load(() => import("@/app/app/employees/ManageEmployees").then((m) => m.ManageEmployees));
 const MymAccess = load(() => import("@/app/app/mym/MymAccess").then((m) => m.MymAccess));
 const MymPush = load(() => import("@/app/app/mym/MymPush").then((m) => m.MymPush));
@@ -38,7 +38,7 @@ const MymDirect = load(() => import("@/app/app/mym/MymDirect").then((m) => m.Mym
 // Écrans qui remplissent toute la hauteur (messageries) : pas de marge autour.
 const FULL: ScreenKey[] = ["messagerie", "site-mym"];
 // Écrans refaits qui envoient leur plateforme au serveur (voir « ?pf= » plus bas).
-const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois", "equipe-ventes", "equipe-messages"];
+const OWN_PF: ScreenKey[] = ["chiffres", "analytique", "liens", "scripts", "medias", "fans", "envois", "equipe-ventes", "equipe-messages", "moderation"];
 
 function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null {
   const m = pf === "mym";
@@ -58,7 +58,7 @@ function pick(key: ScreenKey, pf: Pf, canEdit: boolean): React.ReactNode | null 
     case "shifts": return <V2TeamShifts />;
     case "activite": return <V2TeamActivity />;
     case "en-direct": return <V2TeamLive />;
-    case "moderation": return m ? <MymModeration /> : null;
+    case "moderation": return <V2TeamMod pf={pf} />;
     case "acces": return m ? <MymAccess /> : <ManageEmployees />;
     case "push": return m ? <MymPush /> : null;
     case "planification": return m ? <MymPlanning /> : null;

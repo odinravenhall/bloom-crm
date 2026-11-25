@@ -27,7 +27,7 @@ export const SCREENS: Screen[] = [
   { key: "shifts", label: "Shifts", group: "team", boss: true },
   { key: "activite", label: "Activité", group: "team", boss: true },
   { key: "en-direct", label: "En direct", group: "team", boss: true },
-  { key: "moderation", label: "Modération", group: "team", boss: true, pf: "mym" },
+  { key: "moderation", label: "Modération", group: "team", boss: true },
   { key: "acces", label: "Accès", group: "team", boss: true },
   { key: "push", label: "Push et MoDs", group: "platform", boss: true, pf: "mym" },
   { key: "planification", label: "Planification", group: "platform", pf: "mym" },

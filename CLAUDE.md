@@ -379,7 +379,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   `screens.ts` : la liste des écrans (rubrique, `boss`, `pf` si propre à une plateforme). `V2Shell.tsx` : menu.
   `V2Home.tsx` : accueil commun (`/api/revenue` et `/api/performance` avec `pf=all`, et `only=of|mym|<id>` pour le
   filtre « Toutes les modèles » ; `lite=1` = sans l'appel à Substy). `V2Screen.tsx` : pour chaque écran, le composant
-  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Shifts, Activité et En direct (Équipe), Chiffres, Analytique, Liens de
+  de la plateforme choisie. Refaits pour la v2 : Messagerie, Scripts, Médias, Fans, Envois groupés, Ventes, Messages, Shifts, Activité, En direct et Modération (Équipe), Chiffres, Analytique, Liens de
   suivi ; les autres sont encore ceux de la version actuelle, à refaire un par un.
 - Les écrans « plein écran » (position fixe) restent dans la zone de droite grâce à `.v2-frame` (transform).
 - Messagerie v2 (`v2/chat/V2Messaging.tsx`, `V2Thread.tsx`) : UNE messagerie pour les deux plateformes, sur le moteur
@@ -621,6 +621,15 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
     n'est plus réservée à MYM). Même calcul qu'avant (`vacations` de mymteam.mjs) sur les messages envoyés depuis
     Bloom par une personne nommée ; 60 jours au plus ; `person` ajoute son activité minute par minute ; temps de
     réponse en millisecondes.
+  - Modération (`V2TeamMod.tsx`, `GET /api/v2/team/mod?pf&hours`, `POST /api/v2/team/mod/allow`), à la place de
+    `MymModeration` (MYM seulement) : la détection marche maintenant pour les deux plateformes. `suspects(text, pf)`
+    (mymmod.mjs) a les règles de chaque plateforme (sur OnlyFans, parler d'OnlyFans ou donner un lien onlyfans.com
+    n'est pas suspect ; c'est « mym » qui y est une autre plateforme) ; `scan()` les applique à l'enregistrement et
+    la route recalcule les motifs à la lecture (les alertes notées avec les anciennes règles sont donc corrigées).
+    Mots interdits et envois bloqués : routes « /api/mym/mod/banned », communes aux deux plateformes. Retirer des
+    messages déjà partis (« /api/mym/mod/find », « …/retire ») : MYM seulement, admins et managers, ⚠️ toujours
+    jamais essayé sur un vrai message ; côté OnlyFans le retrait se fait un message à la fois depuis l'écran
+    Messages (24 h).
   - Présence : `PresencePing` envoie l'adresse de la page toutes les 30 s (v2, version actuelle et, depuis le
     25/11/2026, Messages Pro et `/app/messagerie`, qui n'envoyaient rien) ; la messagerie de la v2 envoie elle-même
     la conversation ouverte toutes les 20 s (`V2Messaging`). « Sur le chat » (`CHAT_PAGE` de team.mjs) compte
