@@ -1,0 +1,8 @@
+{
+    "name": "bloom-api",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "undici": "^7.13.0"
+    }
+}
