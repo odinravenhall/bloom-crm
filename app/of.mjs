@@ -40,9 +40,7 @@ export function proxyOf(cid) {
 const RULES = ['app-token', 'user-id', 'x-bc', 'time', 'user-agent', 'path'];
 function sign(path, userId, xbc, ua, query) {
   const time = String(Math.floor(Date.now() / 1000));
-  const v = { 'app-token': APP_TOKEN, 'user-id': userId || '', 'x-bc': xbc, time, 'user-agent': ua, path };
-  let s = `${time}\n`;
-  for (const f of RULES) s += `${v[f]}\n`;
+  let s = `${time}\n${APP_TOKEN}\n${userId || ''}\n${xbc}\n${ua}\n${path}\n`;
   for (const k of Object.keys(query).sort()) s += `${k}\n${query[k]}\n`;
   return createHash('md5').update(s).digest('hex');
 }
@@ -53,13 +51,14 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
   if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
   const jar = open(l.cookies);
   const bc = /(?:^|;\s*)bc=([^;]+)/.exec(jar)?.[1] || randomBytes(16).toString('hex');
+  const uid = /(?:^|;\s*)auth_id=([^;]+)/.exec(jar)?.[1] || l.of_id || '';
   const proxy = proxyOf(cid);
   const r = await fetch(`https://onlyfans.com${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
     method,
     headers: {
       cookie: jar, 'user-agent': l.user_agent, accept: 'application/json, text/plain, */*',
-      'app-token': APP_TOKEN, 'x-bc': bc, origin: 'https://onlyfans.com', referer: 'https://onlyfans.com/',
-      sign: sign(path, l.of_id, bc, l.user_agent, query || {}),
+      'app-token': APP_TOKEN, 'x-bc': bc, 'user-id': uid, origin: 'https://onlyfans.com', referer: 'https://onlyfans.com/',
+      sign: sign(path, uid, bc, l.user_agent, query || {}),
       ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
     },
     body: form ? new URLSearchParams(form).toString() : undefined,
@@ -97,11 +96,13 @@ const NOMS = ['sess', 'auth_id', 'fp', 'bc'];
 /** Enregistre une session capturée par le navigateur, puis la vérifie. */
 export async function saveLink(cid, { cookies, userAgent }, by) {
   const jar = String(cookies || '').split(/;\s*/).filter((c) => NOMS.includes(c.split('=')[0])).join('; ');
+  const ofId = /(?:^|;\s*)auth_id=([^;]+)/.exec(jar)?.[1] || null;
   if (!/(?:^|;\s*)sess=[^;\s]+/.test(jar)) throw new OFError(400, 'Cookie « sess » absent : la connexion a échoué.');
   run(`INSERT INTO of_links (creator_id, cookies, user_agent, linked_by, linked_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (creator_id) DO UPDATE SET cookies = excluded.cookies, user_agent = excluded.user_agent,
        linked_by = excluded.linked_by, linked_at = excluded.linked_at, error = NULL`,
     cid, seal(jar), String(userAgent || UA), by, Date.now());
+  if (ofId) run('UPDATE of_links SET of_id = ? WHERE creator_id = ?', ofId, cid);
   const v = await check(cid);
   if (!v.ok) throw new OFError(400, v.error);
   return v;
