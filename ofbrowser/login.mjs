@@ -13,8 +13,8 @@ export const close = (t) => { const j = jobs.get(t); j?.ctx?.close().catch(() =>
 
 const sess = async (ctx) => (await ctx.cookies('https://onlyfans.com')).some((c) => c.name === 'sess');
 const turnstile = async (page) =>
-  (await page.locator('iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-stage, [data-testid="challenge-stage"]').count()) > 0 ||
-  /vérifiez que vous êtes humain|verify you are human|checking your browser|un instant/i.test(await page.locator('body').innerText().catch(() => ''));
+    (await page.locator('iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-stage, [data-testid="challenge-stage"]').count()) > 0 ||
+    /vérifiez que vous êtes humain|verify you are human|checking your browser|un instant/i.test(await page.locator('body').innerText().catch(() => ''));
 const errText = async (page) => {
     const t = await page.locator('.b-errors, .g-error, [class*="error"]').first().textContent().catch(() => '');
     return t && /password|email|incorrect|wrong/i.test(t) ? t.trim() : '';
@@ -62,30 +62,33 @@ export async function start({ cid, email, password, proxy }) {
             });
             await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-            // Un visiteur non connecté a déjà un cookie « sess » : seul son CHANGEMENT prouve la connexion.
+            // L'appli dessine le formulaire en JavaScript : on attend qu'il existe.
+            for (let i = 0; i < 30 && !(await j.page.locator('input[name="email"]').count()); i++) await j.page.waitForTimeout(500);
             const before = await sessValue(j.ctx);
             const form = await j.page.locator('input[name="email"]').count();
-            if (!form && before) return done(j);
-            if (!form) throw new Error('Page de connexion introuvable.');
+            if (!form) {
+                if (!/return_to|login/i.test(j.page.url()) && before) return done(j);
+                throw new Error('Page de connexion introuvable.');
+            }
             await j.page.fill('input[name="email"]', email, { timeout: 20_000 });
             await j.page.fill('input[name="password"]', password);
             j.url = j.page.url();
             j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
 
-for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
-        j.url = j.page.url();
-        j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
-        const now = await sessValue(j.ctx);
-        if (now && now !== before && !/return_to|login/i.test(j.url)) return done(j);
-        if (j.state === 'waiting') {
-          if (await turnstile(j.page)) j.state = 'human';
-          else {
-            const e = await errText(j.page);
-            if (e) throw new Error(e);
-          }
-        }
-        await j.page.waitForTimeout(1000);
-      }
+            for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
+                j.url = j.page.url();
+                j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+                const now = await sessValue(j.ctx);
+                if (now && now !== before && !/return_to|login/i.test(j.url)) return done(j);
+                if (j.state === 'waiting') {
+                    if (await turnstile(j.page)) j.state = 'human';
+                    else {
+                        const e = await errText(j.page);
+                        if (e) throw new Error(e);
+                    }
+                }
+                await j.page.waitForTimeout(1000);
+            }
             if (j.state !== 'done') throw new Error('OnlyFans n’a pas ouvert de session (mot de passe refusé ou blocage Cloudflare).');
         } catch (e) {
             j.state = 'error';
