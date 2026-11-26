@@ -164,7 +164,7 @@ export function ofRoutes({ userFrom, send, body, creators }) {
       const r = await fetch(`${BROWSER}/result?t=${encodeURIComponent(t)}`).then((x) => x.json()).catch(() => ({ state: 'error', error: 'Navigateur injoignable' }));
       if (r.state === 'done') {
         const v = await saveLink(l.creator_id, r, 'navigateur').catch((e) => ({ ok: false, error: e.message }));
-        if (!v.ok) return send(res, 200, { state: 'error', error: v.error + (r.last ? ` [${r.last.url} | ${r.last.keys}]` : '') });
+        if (!v.ok) return send(res, 200, { state: 'error', error: `${v.error}\n\nOnlyFans affiche : ${r.text || '(rien)'}\n${r.url || ''}` });
         await browser('/close', { t }).catch(() => {});
         run('DELETE FROM of_logins WHERE ticket = ?', t);
       }
