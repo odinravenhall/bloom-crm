@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
 Xvfb :99 -screen 0 1400x1000x24 -nolisten tcp &
 export DISPLAY=:99
 # Attend que l'écran virtuel réponde (10 s au plus), sinon Chromium démarre avant lui.

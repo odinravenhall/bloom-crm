@@ -21,9 +21,8 @@ async function done(j) {
   await j.page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
   for (let i = 0; i < 30 && !j.ofId; i++) await j.page.waitForTimeout(500);
   const all = await j.ctx.cookies('https://onlyfans.com');
-  const cookies = all.map((c) => `${c.name}=${c.value}`).join('; ');
+  j.cookies = all.map((c) => `${c.name}=${c.value}`).join('; ');
   j.userAgent = await j.page.evaluate(() => navigator.userAgent).catch(() => UA);
-  j.cookies = cookies;
   j.state = 'done';
   await j.ctx.close().catch(() => {});
 }
@@ -42,10 +41,35 @@ export async function start({ cid, email, password, proxy }) {
         args: ['--disable-blink-features=AutomationControlled'],
       });
       j.page = j.ctx.pages()[0] || (await j.ctx.newPage());
-j.page.on('request', (r) => {
+      j.page.on('request', (r) => {
         const u = r.headers()['user-id'];
         if (u) j.ofId = String(u);
       });
+      await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+      if (await sess(j.ctx)) return done(j);
+      await j.page.fill('input[name="email"]', email, { timeout: 20_000 });
+      await j.page.fill('input[name="password"]', password);
+      await j.page.click('button[type="submit"]');
+      for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
+        if (await sess(j.ctx)) return done(j);
+        if (j.state === 'waiting') {
+          if (await turnstile(j.page)) j.state = 'human';
+          else {
+            const e = await errText(j.page);
+            if (e) throw new Error(e);
+          }
+        }
+        await j.page.waitForTimeout(1000);
+      }
+      if (j.state !== 'done') throw new Error('OnlyFans n’a pas ouvert de session (délai ou blocage).');
+    } catch (e) {
+      j.state = 'error';
+      j.error = e.message;
+      await j.ctx?.close().catch(() => {});
+    }
+  })();
+  return t;
+}
 
 /** Code reçu par mail, ou code de l'application d'authentification. */
 export async function code(t, value) {
