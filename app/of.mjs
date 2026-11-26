@@ -70,23 +70,21 @@ export async function check(cid) {
   try {
     const l = one('SELECT cookies FROM of_links WHERE creator_id = ?', cid);
     if (!l) throw new Error('Compte non relié.');
-    const ck = open(l.cookies);
-    const a = await browser('/json', { cid, goto: '/', match: '/api2/v2/users/me', proxy: proxyOf(cid), cookies: ck });
-    if (!a) throw new Error('OnlyFans ne répond pas.');
-    if (JSON.parse(a.text || '{}').isAuth !== true) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
-    const r = await browser('/json', { cid, goto: '/my/profile', match: '/api2/v2/users/list?a[]=', proxy: proxyOf(cid), cookies: ck });
-    const d = r ? JSON.parse(r.text || '{}') : {};
+    const r = await browser('/json', { cid, goto: '/my/profile', match: '/api2/v2/users/list?a[]=', proxy: proxyOf(cid), cookies: open(l.cookies) });
+    if (!r) throw new Error('OnlyFans ne répond pas.');
+    if (String(r.url || '').includes('return_to')) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
+    const d = JSON.parse(r.text || '{}');
     const id = Object.keys(d)[0];
     const me = d[id] || {};
+    if (!id || !me.username) throw new Error('Profil illisible dans la réponse du site.');
     run('UPDATE of_links SET of_id = ?, username = ?, display_name = ?, avatar = ?, error = NULL, checked_at = ? WHERE creator_id = ?',
-      id || null, me.username || null, me.name || null, me.avatar || null, Date.now(), cid);
+      id, me.username, me.name || null, me.avatar || null, Date.now(), cid);
     return { ok: true, username: me.username };
   } catch (e) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
     return { ok: false, error: e.message };
   }
 }
-
 export async function saveLink(cid, { cookies, userAgent, ofId }, by) {
   const jar = String(cookies || '').trim();
   if (!/(?:^|;\s*)sess=[^;\s]+/.test(jar)) throw new OFError(400, 'Cookie « sess » absent : la connexion a échoué.');

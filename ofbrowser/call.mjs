@@ -111,7 +111,9 @@ export async function pageJson(cid, { goto, match, proxy, cookies }) {
     page.on('response', h);
   });
   await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
-  return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
+  const out = await Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
+  await page.waitForTimeout(1500);
+  return out ? { ...out, url: page.url() } : null;
 }
 
 /** Où en est le navigateur : adresse atteinte et cookies présents. */
