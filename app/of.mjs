@@ -82,7 +82,7 @@ export async function check(cid) {
     return { ok: true, username: me.username };
   } catch (e) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
-    return { ok: false, error: e.message };
+return { ok: false, error: `${e.message} @ ${(e.stack || '').split('\n')[1] || ''}` };
   }
 }
 export async function saveLink(cid, { cookies, userAgent, ofId }, by) {
