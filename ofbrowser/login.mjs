@@ -13,8 +13,8 @@ export const close = (t) => { const j = jobs.get(t); j?.ctx?.close().catch(() =>
 
 const sess = async (ctx) => (await ctx.cookies('https://onlyfans.com')).some((c) => c.name === 'sess');
 const turnstile = async (page) =>
-    (await page.locator('iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-stage, [data-testid="challenge-stage"]').count()) > 0 ||
-    /vérifiez que vous êtes humain|verify you are human|checking your browser|un instant/i.test(await page.locator('body').innerText().catch(() => ''));
+  (await page.locator('iframe[src*="recaptcha"], iframe[src*="challenges.cloudflare.com"], .g-recaptcha, .cf-turnstile').count()) > 0 ||
+  /pas un robot|vérifiez que vous êtes humain|verify you are human/i.test(await page.locator('body').innerText().catch(() => ''));
 const errText = async (page) => {
     const t = await page.locator('.b-errors, .g-error, [class*="error"]').first().textContent().catch(() => '');
     return t && /password|email|incorrect|wrong/i.test(t) ? t.trim() : '';
@@ -74,6 +74,7 @@ export async function start({ cid, email, password, proxy }) {
             await j.page.fill('input[name="password"]', password);
             j.url = j.page.url();
             j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+            if (i % 5 === 0) await j.page.locator('button:has-text("SE CONNECTER"), button[type="submit"]').first().click({ timeout: 3000 }).catch(() => {});
 
             for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
                 j.url = j.page.url();
@@ -105,5 +106,8 @@ export async function code(t, value) {
     j.state = 'waiting';
     const f = j.page.locator('input[name="confirmation_code"], input[autocomplete="one-time-code"], input[name="code"]').first();
     await f.fill(value, { timeout: 10_000 });
-    await j.page.click('button[type="submit"]');
+    await j.page
+        .locator('button:has-text("SE CONNECTER"), button:has-text("Se connecter"), button[type="submit"]')
+        .first()
+        .click({ timeout: 15_000 });
 }
