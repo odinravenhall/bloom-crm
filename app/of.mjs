@@ -67,25 +67,28 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
 }
 
 /** Vérifie la session (relit le profil) et note le résultat. */
+/** Vérifie la session (relit le profil) et note le résultat. */
 export async function check(cid) {
   try {
     const l = one('SELECT cookies FROM of_links WHERE creator_id = ?', cid);
     if (!l) throw new Error('Compte non relié.');
-    const r = await browser('/json', { cid, goto: '/my/profile', match: '/api2/v2/users/list?a[]=', proxy: proxyOf(cid), cookies: open(l.cookies) });
+    const r = await browser('/call', { cid, path: '/api2/v2/users/me', proxy: proxyOf(cid), cookies: open(l.cookies) });
     if (!r) throw new Error('OnlyFans ne répond pas.');
-    if (String(r.url || '').includes('return_to')) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
-    const d = JSON.parse(r.text || '{}');
-    const id = Object.keys(d)[0];
-    const me = d[id] || {};
+    if (r.status === 401 || r.status === 403) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
+    let d = null;
+    try { d = JSON.parse(r.body || ''); } catch { throw new Error('Réponse illisible du site.'); }
+    const me = (d && (d.id ? d : Object.values(d || {})[0])) || {};
+    const id = String(me.id || '');
     if (!id || !me.username) throw new Error('Profil illisible dans la réponse du site.');
     run('UPDATE of_links SET of_id = ?, username = ?, display_name = ?, avatar = ?, error = NULL, checked_at = ? WHERE creator_id = ?',
       id, me.username, me.name || null, me.avatar || null, Date.now(), cid);
     return { ok: true, username: me.username };
   } catch (e) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
-return { ok: false, error: `${e.message} @ ${(e.stack || '').split('\n')[1] || ''}` };
+    return { ok: false, error: `${e.message} @ ${(e.stack || '').split('\n')[1] || ''}` };
   }
 }
+
 export async function saveLink(cid, { cookies, userAgent, ofId }, by) {
   const jar = String(cookies || '').trim();
   if (!/(?:^|;\s*)sess=[^;\s]+/.test(jar)) throw new OFError(400, 'Cookie « sess » absent : la connexion a échoué.');
@@ -110,23 +113,9 @@ const browser = async (path, payload) => {
 };
 
 /** Écran de relais du Cloudflare (page ouverte dans un onglet, à part). */
-const LIVE = (t) => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
-<style>body{margin:0;background:#111;color:#eee;font:13px system-ui}#bar{position:sticky;top:0;background:#1b1b1b;padding:8px;display:flex;gap:10px;align-items:center;z-index:2}#s{display:block;width:1280px;cursor:crosshair}</style>
-<div id="bar"><button onclick="fetch('/api/of/live/solve?t=${t}',{method:'POST'})">Cocher la case</button><span id="w">Clique dans l'image. L'image est en taille réelle, les clics tombent juste.</span></div>
-<img id="s" src="/api/of/live/shot?t=${t}">
-<script>
-const t='${t}',s=document.getElementById('s');
-let busy=false;
-async function tick(){
- if(!busy) await new Promise(r=>{s.onload=r;s.onerror=r;s.src='/api/of/live/shot?t='+t+'&r='+Date.now()});
- const r=await fetch('/api/of/live/result?t='+t).then(x=>x.json()).catch(()=>null);
- if(r&&(r.state==='done'||r.state==='error')){document.getElementById('w').textContent=r.state==='done'?'Connecté ✓':'Échec : '+(r.error||'');return}
- setTimeout(tick,600)}
-s.onclick=async e=>{const b=s.getBoundingClientRect();busy=true;
- await fetch('/api/of/live/click?t='+t,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x:e.clientX-b.left,y:e.clientY-b.top})}).catch(()=>{});
- busy=false};
-tick();
-</script>`;
+const LIVE = () => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
+<style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100vh}</style>
+<iframe src="/api/of/vnc/vnc.html?autoconnect=1&resize=scale&reconnect=1&show_dot=0"></iframe>`;
 
 export function ofRoutes({ userFrom, send, body, creators }) {
   const admin = (req, res) => {

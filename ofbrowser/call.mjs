@@ -104,14 +104,14 @@ export async function pageJson(cid, { goto, match, proxy, cookies }) {
   await inject(page, cookies);
   const p = new Promise((res) => {
     const h = (r) => {
-      if (!r.url().includes(match)) return;
+      if (!decodeURIComponent(r.url()).includes(decodeURIComponent(match))) return;
       page.off('response', h);
       r.text().then((t) => res({ status: r.status(), text: t })).catch(() => res(null));
     };
     page.on('response', h);
   });
   await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
-  const out = await Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
+  const out = await Promise.race([p, new Promise((r) => setTimeout(() => r(null), 30_000))]);
   await page.waitForTimeout(1500);
   return out ? { ...out, url: page.url() } : null;
 }

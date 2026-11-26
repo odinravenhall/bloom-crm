@@ -17,6 +17,8 @@ services:
     networks:
       default:
         aliases: [api]
+      edge:
+        aliases: [bloom-app]
 
   web:
     build:
@@ -37,6 +39,8 @@ services:
     build:
       context: ./ofbrowser
     restart: unless-stopped
+    ports:
+      - "5901:5900"
     environment:
       TZ: Europe/Paris
     volumes:

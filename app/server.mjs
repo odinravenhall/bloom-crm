@@ -510,10 +510,6 @@ Object.assign(routes, relanceRoutes({ substy, userFrom, send, body, creators: ()
 Object.assign(routes, listRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, inboxRoutes({ userFrom, send, body, creators: () => state.creators }));
 
-srv.on('upgrade', (req, socket, head) => {
-  if (!(req.url || '').startsWith('/api/of/vnc/')) return socket.destroy();
-  ofVncUpgrade(req, socket, head);
-});
 // Messagerie façon Raven CRM : toutes les adresses « /api/rv/… ».
 const rv = rvRoutes({ substy, userFrom, send, body, creators: () => state.creators });
 
@@ -521,7 +517,16 @@ const srv = createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
   // Adresse dédiée « Accès MYM (Direct) » : le site de MYM relayé (mymsite.mjs).
   if (path === '/mymsite' || path.startsWith('/mymsite/')) return mymSiteProxy(req, res).catch(() => res.headersSent || res.end());
-  if (path.startsWith('/api/of/vnc/')) return ofVnc(req, res).catch(() => res.headersSent || res.end());
+ if (path.startsWith('/api/of/vnc/')) {
+      try {
+        const r = ofVnc(req, res);
+        if (r && typeof r.catch === 'function') r.catch(() => { if (!res.headersSent) res.writeHead(502); res.end(); });
+      } catch (e) {
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' });
+        res.end(String(e && e.stack || e));
+      }
+      return;
+    }
   const h = routes[`${req.method} ${path}`];
   try {
     if (h) await h(req, res);
@@ -534,9 +539,9 @@ const srv = createServer(async (req, res) => {
     if (res.headersSent) return res.end();
     send(res, status, { error: e instanceof SubstyError ? `Substy : ${e.message}` : e.message || 'Erreur serveur' });
   }
-}), { requestTimeout: 0 })
-  // Envois de vidéos (MYM → Importer des médias) : plus que les 5 min par défaut de Node.
-  .setTimeout(0)
+}, { requestTimeout: 0 });
+
+srv.setTimeout(0)
   .listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => {
   console.log('Bloom CRM (API) prêt');
   startStreams();
@@ -559,4 +564,9 @@ const srv = createServer(async (req, res) => {
   setTimeout(pollSales, 8_000);
   setInterval(pollSales, 30_000);
   // (La liste des créatrices est relue toutes les minutes par syncCreators : une nouvelle modèle est prise en compte toute seule.)
+});
+
+srv.on('upgrade', (req, socket, head) => {
+  if (!(req.url || '').startsWith('/api/of/vnc/')) return socket.destroy();
+  ofVncUpgrade(req, socket, head);
 });
