@@ -6,10 +6,12 @@ import { Bot, Images, Inbox, Search } from "lucide-react";
 import { PLATFORM, PlatformBadge, platformOf, useCreators, type Platform } from "@/lib/creators";
 import { cn } from "@/lib/fmt";
 import { Avatar, Page, PageHeader, Pill, inputCls } from "@/components/ui";
+import { OfLinkChip, useOfLinks } from "./OfLink";
 
 /** Les créatrices reliées à Substy, rangées par plateforme (OnlyFans, MYM), avec recherche. */
 export default function Creatrices() {
   const { creators, setCreator, loaded } = useCreators();
+  const { links: ofLinks, canEdit, load } = useOfLinks();
   const [q, setQ] = useState("");
   const s = q.trim().toLowerCase();
   const shown = creators.filter((c) => !s || (c.name + " " + (c.username || "")).toLowerCase().includes(s));
@@ -40,6 +42,7 @@ export default function Creatrices() {
                       {c.username ? <p className="truncate text-xs text-muted">@{c.username}</p> : null}
                     </div>
                     {c.ai === false ? <Pill>IA off</Pill> : c.ai ? <Pill tone="accent">IA active</Pill> : null}
+                     {platformOf(c) !== "mym" ? <OfLinkChip state={ofLinks.find((l) => l.creatorId === c.id)} canEdit={canEdit} onChange={load} /> : null}
                     {(
                       [
                         ["/app/messagerie", "Messagerie", Inbox],
