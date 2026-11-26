@@ -1,15 +1,30 @@
-// Exécute un appel d'API dans la page OnlyFans du modèle : le site signe lui-même ses requêtes.
+// Exécute des appels dans la page OnlyFans du modèle : le site signe lui-même ses requêtes.
 import { chromium } from 'playwright';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
 const open = new Map();
 const IDLE = 5 * 60_000;
+const KEEP = ['time', 'sign', 'x-bc', 'app-token', 'x-of-rev', 'x-hash'];
 
 function shut(cid) {
   const o = open.get(cid);
   if (!o) return;
   open.delete(cid);
   o.ctx.close().catch(() => {});
+}
+
+/** Remet la session enregistrée dans le contexte, sans dépendre du profil sur disque. */
+async function inject(page, cookies) {
+  if (!cookies) return;
+  const list = String(cookies)
+    .split(/;\s*/)
+    .filter(Boolean)
+    .map((kv) => {
+      const i = kv.indexOf('=');
+      return { name: kv.slice(0, i), value: kv.slice(i + 1), domain: '.onlyfans.com', path: '/' };
+    })
+    .filter((c) => c.name && c.value);
+  if (list.length) await page.context().addCookies(list).catch(() => {});
 }
 
 async function pageOf(cid, proxy) {
@@ -29,13 +44,11 @@ async function pageOf(cid, proxy) {
   page.on('request', (r) => {
     if (/\/api2\//.test(r.url())) page.__last = { url: r.url().slice(28, 120), keys: Object.keys(r.headers()).join(',') };
   });
-  await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
   for (let i = 0; i < 30 && !page.__last; i++) await page.waitForTimeout(500);
   open.set(cid, { ctx, page, timer: setTimeout(() => shut(cid), IDLE) });
   return page;
 }
-
-const KEEP = ['time', 'sign', 'x-bc', 'app-token', 'x-of-rev', 'x-hash'];
 
 /** Recharge la page et retient les en-têtes d'authentification d'une vraie requête du site. */
 async function freshAuth(page) {
@@ -51,8 +64,10 @@ async function freshAuth(page) {
   return page.__auth;
 }
 
-export async function call(cid, { path, method = 'GET', query, form, proxy, headers = {} }) {
+/** Appel fabriqué avec les en-têtes signés d'une requête du site. */
+export async function call(cid, { path, method = 'GET', query, form, proxy, headers = {}, cookies }) {
   const page = await pageOf(cid, proxy);
+  await inject(page, cookies);
   const auth = await freshAuth(page);
   if (!auth) throw new Error('Le site n’a pas signé de requête.');
   const picked = Object.fromEntries(KEEP.filter((k) => auth[k]).map((k) => [k, auth[k]]));
@@ -72,22 +87,54 @@ export async function call(cid, { path, method = 'GET', query, form, proxy, head
   return { ...out, last: { url: path, keys: Object.keys(picked).join(',') } };
 }
 
-/** Relève de vrais appels du site, en-têtes compris, pour reconstituer le hash. */
-export async function sample(cid, proxy) {
+/** Ouvre une page du site et renvoie le texte d'une de ses propres réponses. */
+export async function pageJson(cid, { goto, match, proxy, cookies }) {
   const page = await pageOf(cid, proxy);
-  const got = [];
-  const h = (r) => {
-    if (/\/api2\//.test(r.url()) && got.length < 5) got.push({ url: r.url(), method: r.method(), postData: r.postData()?.slice(0, 300) || null, headers: r.headers() });
+  await inject(page, cookies);
+  const p = new Promise((res) => {
+    const h = (r) => {
+      if (!r.url().includes(match)) return;
+      page.off('response', h);
+      r.text().then((t) => res({ status: r.status(), text: t })).catch(() => res(null));
+    };
+    page.on('response', h);
+  });
+  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
+}
+
+/** Où en est le navigateur : adresse atteinte et cookies présents. */
+export async function state(cid, { proxy, cookies } = {}) {
+  const page = await pageOf(cid, proxy);
+  await inject(page, cookies);
+  await page.goto('https://onlyfans.com/my/profile', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+  const ck = await page.context().cookies('https://onlyfans.com');
+  return { url: page.url(), cookies: ck.map((c) => c.name) };
+}
+
+/** Liste les appels d'API que la page déclenche, avec leur contenu. */
+export async function probe(cid, { goto = '/', proxy, cookies } = {}) {
+  const page = await pageOf(cid, proxy);
+  await inject(page, cookies);
+  const out = [];
+  const h = async (r) => {
+    if (!r.url().includes('/api2/') || out.length >= 12) return;
+    let txt = '';
+    try {
+      txt = (await r.text()).slice(0, 200);
+    } catch {}
+    out.push({ url: r.url().replace('https://onlyfans.com', '').slice(0, 70), status: r.status(), txt });
   };
-  page.on('request', h);
-  await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
-  for (let i = 0; i < 30 && got.length < 3; i++) await page.waitForTimeout(500);
-  page.off('request', h);
-  return got;
+  page.on('response', h);
+  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  for (let i = 0; i < 30 && out.length < 6; i++) await page.waitForTimeout(500);
+  page.off('response', h);
+  return out;
 }
 
 /** Cherche un motif dans les scripts du site et rend le code autour. */
-export async function bundle(cid, proxy, q = 'x-hash') {
+export async function bundle(cid, { q = 'x-hash', proxy } = {}) {
   const page = await pageOf(cid, proxy);
   return page.evaluate(async (q) => {
     const srcs = [...document.querySelectorAll('script[src]')].map((s) => s.src);
@@ -101,49 +148,17 @@ export async function bundle(cid, proxy, q = 'x-hash') {
   }, q);
 }
 
-/** Ouvre une page du site et renvoie la réponse JSON d'une de ses propres requêtes. */
-export async function pageJson(cid, { goto, match, proxy }) {
+/** Relève de vrais appels du site, en-têtes compris. */
+export async function sample(cid, { proxy, cookies } = {}) {
   const page = await pageOf(cid, proxy);
-  const p = new Promise((res) => {
-    const h = (r) => {
-      if (!r.url().includes(match)) return;
-      page.off('response', h);
-      r.text().then((t) => res({ status: r.status(), text: t })).catch(() => res(null));
-    };
-    page.on('response', h);
-  });
-  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
-  return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
-}
-
-/** Liste les appels d'API que la page déclenche, avec leur forme. */
-export async function probe(cid, { goto = '/', proxy }) {
-  const page = await pageOf(cid, proxy);
-  const out = [];
-  const h = async (r) => {
-    if (!r.url().includes('/api2/') || out.length >= 12) return;
-    let keys = null;
-    try {
-      const j = await r.json();
-      keys = j && typeof j === 'object' ? Object.keys(j).slice(0, 15) : typeof j;
-    } catch {
-      keys = 'texte';
-    }
-    let txt = '';
-    try { txt = (await r.text()).slice(0, 200); } catch {}
-    out.push({ url: r.url().replace('https://onlyfans.com', '').slice(0, 70), status: r.status(), txt });
+  await inject(page, cookies);
+  const got = [];
+  const h = (r) => {
+    if (/\/api2\//.test(r.url()) && got.length < 5) got.push({ url: r.url(), method: r.method(), postData: r.postData()?.slice(0, 300) || null, headers: r.headers() });
   };
-  page.on('response', h);
-  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
-  for (let i = 0; i < 30 && out.length < 6; i++) await page.waitForTimeout(500);
-  page.off('response', h);
-  return out;
-}
-
-export async function state(cid, proxy) {
-  const page = await pageOf(cid, proxy);
-  await page.goto('https://onlyfans.com/my/profile', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
-  await page.waitForTimeout(3000);
-  const ck = await page.context().cookies('https://onlyfans.com');
-  return { url: page.url(), cookies: ck.map((c) => c.name) };
+  page.on('request', h);
+  await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+  for (let i = 0; i < 30 && got.length < 3; i++) await page.waitForTimeout(500);
+  page.off('request', h);
+  return got;
 }

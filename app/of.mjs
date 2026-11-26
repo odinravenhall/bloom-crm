@@ -47,8 +47,10 @@ function sign(path, userId, xbc, ua, query) {
 
 /** Appel à l'API d'OnlyFans au nom d'une modèle, par son proxy. */
 export async function of(cid, path, { method = 'GET', query, form } = {}) {
-  if (!one('SELECT 1 AS x FROM of_links WHERE creator_id = ?', cid)) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
-  const r = await browser('/call', { cid, path, method, query, form, proxy: proxyOf(cid) }).catch(() => null);
+ const l = one('SELECT * FROM of_links WHERE creator_id = ?', cid); if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
+ const r = await browser('/call', { cid, path, method, query, form, proxy: proxyOf(cid), cookies: open(l.cookies) }).catch((e) => {
+    throw new OFError(502, `Navigateur : ${e.message}`);
+  });
  if (r.last && !r.last.keys.includes('sign')) throw new OFError(502, 'Le site n’a pas signé la requête.');
   if (!r) throw new OFError(502, 'Navigateur injoignable.');
   if (!r.status) throw new OFError(502, 'OnlyFans ne répond pas.');
@@ -66,9 +68,18 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
 /** Vérifie la session (relit le profil) et note le résultat. */
 export async function check(cid) {
   try {
-    const me = await of(cid, '/api2/v2/users/me');
+    const l = one('SELECT cookies FROM of_links WHERE creator_id = ?', cid);
+    if (!l) throw new Error('Compte non relié.');
+    const ck = open(l.cookies);
+    const a = await browser('/json', { cid, goto: '/', match: '/api2/v2/users/me', proxy: proxyOf(cid), cookies: ck });
+    if (!a) throw new Error('OnlyFans ne répond pas.');
+    if (JSON.parse(a.text || '{}').isAuth !== true) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
+    const r = await browser('/json', { cid, goto: '/my/profile', match: '/api2/v2/users/list?a[]=', proxy: proxyOf(cid), cookies: ck });
+    const d = r ? JSON.parse(r.text || '{}') : {};
+    const id = Object.keys(d)[0];
+    const me = d[id] || {};
     run('UPDATE of_links SET of_id = ?, username = ?, display_name = ?, avatar = ?, error = NULL, checked_at = ? WHERE creator_id = ?',
-      String(me.id), me.username || null, me.name || null, me.avatar || null, Date.now(), cid);
+      id || null, me.username || null, me.name || null, me.avatar || null, Date.now(), cid);
     return { ok: true, username: me.username };
   } catch (e) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
