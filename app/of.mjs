@@ -3,9 +3,16 @@
 // Chaque modèle a SON proxy résidentiel FIXE, dérivé de son identifiant : tout passe par lui, jamais en direct.
 // Connexion : un vrai Chromium dans le conteneur « browser » (ofbrowser/), avec un écran de relais pour le Cloudflare.
 import { createHash, randomBytes } from 'node:crypto';
-import { ProxyAgent } from 'undici';
 import { all, db, getSetting, one, run, seal, open, setSetting } from './store.mjs';
 import { seesAll } from './team.mjs';
+
+let Agent = null;
+/** Charge undici seulement quand un proxy existe : l'API démarre donc même sans lui. */
+async function via(proxy) {
+  if (!proxy) return {};
+  if (!Agent) Agent = (await import('undici')).ProxyAgent;
+  return { dispatcher: new Agent(proxy) };
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS of_links (
@@ -56,7 +63,7 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
       ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
     },
     body: form ? new URLSearchParams(form).toString() : undefined,
-    ...(proxy ? { dispatcher: new ProxyAgent(proxy) } : {}),
+    ...(await via(proxy)),
     redirect: 'manual',
     signal: AbortSignal.timeout(30_000),
   }).catch(() => null);
