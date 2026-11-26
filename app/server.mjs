@@ -15,6 +15,7 @@ import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
 import { fanListRoutes } from './fanlists.mjs';
 import { ofBrowserRoutes } from './ofbrowser.mjs';
+import { ofRoutes } from './of.mjs';
 import { ofDashRoutes } from './ofdash.mjs';
 import { ofReportRoutes } from './ofreports.mjs';
 import { ofEmployeeRoutes } from './ofemployees.mjs';
@@ -500,6 +501,7 @@ Object.assign(routes, mymSiteRoutes({ userFrom, send, body, creators: () => stat
 Object.assign(routes, nudgeRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
+Object.assign(routes, ofRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
 Object.assign(routes, ofb.routes);
 Object.assign(routes, fanListRoutes({ userFrom, send, body, creators: () => state.creators }));
