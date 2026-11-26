@@ -1,6 +1,7 @@
 // Connexion OnlyFans d'une modèle dans un vrai Chromium, par son proxy, avec un profil persistant par modèle.
 // Un « ticket » suit la connexion : waiting → human (Cloudflare) / code (mail ou 2FA) → done | error.
 import { chromium } from 'playwright';
+import { rm } from 'node:fs/promises';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
 const jobs = new Map();
