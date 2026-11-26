@@ -17,6 +17,19 @@ const errText = async (page) => {
 };
 
 async function done(j) {
+  let uid = null;
+  for (let i = 0; i < 20 && !uid; i++) {
+    uid = await j.page.evaluate(() => window.__of?.uid || null).catch(() => null);
+    if (!uid) uid = await j.page.evaluate(() => {
+      for (const k of Object.keys(localStorage)) {
+        if (!/user/i.test(k)) continue;
+        try { const v = JSON.parse(localStorage.getItem(k) || ''); if (v?.id) return String(v.id); } catch {}
+      }
+      return null;
+    }).catch(() => null);
+    if (!uid) await j.page.waitForTimeout(500);
+  }
+  j.ofId = uid ? String(uid) : null;
   const all = await j.ctx.cookies('https://onlyfans.com');
   const cookies = all.map((c) => `${c.name}=${c.value}`).join('; ');
   j.userAgent = await j.page.evaluate(() => navigator.userAgent).catch(() => UA);
@@ -39,6 +52,18 @@ export async function start({ cid, email, password, proxy }) {
         args: ['--disable-blink-features=AutomationControlled'],
       });
       j.page = j.ctx.pages()[0] || (await j.ctx.newPage());
+      await j.ctx.addInitScript(() => {
+        const orig = window.fetch;
+        window.fetch = function (input, init) {
+          try {
+            const h = init?.headers;
+            const g = (n) => (h instanceof Headers ? h.get(n) : h ? h[n] ?? h[n.toLowerCase()] : null);
+            const uid = g('user-id');
+            if (uid) window.__of = { uid, sign: g('sign') };
+          } catch {}
+          return orig.apply(this, arguments);
+        };
+      });
       await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
       if (await sess(j.ctx)) return done(j);
       await j.page.fill('input[name="email"]', email, { timeout: 20_000 });

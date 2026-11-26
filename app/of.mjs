@@ -93,15 +93,15 @@ export async function check(cid) {
   }
 }
 
-export async function saveLink(cid, { cookies, userAgent }, by) {
+export async function saveLink(cid, { cookies, userAgent, ofId }, by) {
   const jar = String(cookies || '').trim();
   if (!/(?:^|;\s*)sess=[^;\s]+/.test(jar)) throw new OFError(400, 'Cookie « sess » absent : la connexion a échoué.');
-  const ofId = /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || null;
+  const uid = String(ofId || /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || '');
   run(`INSERT INTO of_links (creator_id, cookies, user_agent, linked_by, linked_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (creator_id) DO UPDATE SET cookies = excluded.cookies, user_agent = excluded.user_agent,
        linked_by = excluded.linked_by, linked_at = excluded.linked_at, error = NULL`,
     cid, seal(jar), String(userAgent || UA), by, Date.now());
-  if (ofId) run('UPDATE of_links SET of_id = ? WHERE creator_id = ?', ofId, cid);
+  if (uid) run('UPDATE of_links SET of_id = ? WHERE creator_id = ?', uid, cid);
   const v = await check(cid);
   if (!v.ok) throw new OFError(400, v.error);
   return v;
