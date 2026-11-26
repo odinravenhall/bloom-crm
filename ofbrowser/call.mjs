@@ -176,3 +176,16 @@ export async function sample(cid, { proxy, cookies } = {}) {
   page.off('request', h);
   return got;
 }
+
+/** Coche la case reCAPTCHA directement dans la page. */
+export async function solve(cid, { proxy, cookies } = {}) {
+  const page = await pageOf(cid, proxy);
+  await inject(page, cookies);
+  try {
+    await page.frameLocator('iframe[src*="recaptcha"]').locator('#recaptcha-anchor').click({ timeout: 15_000 });
+  } catch {
+    const box = await page.locator('iframe[src*="recaptcha"]').first().boundingBox();
+    if (box) await page.mouse.click(box.x + 28, box.y + box.height / 2);
+  }
+  return { ok: true };
+}

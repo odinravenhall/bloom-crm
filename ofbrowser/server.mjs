@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { code, close, job, start } from './login.mjs';
-import { call, sample, bundle, pageJson, probe, state } from './call.mjs';
+import { call, sample, bundle, pageJson, probe, state, solve } from './call.mjs';
 
 const read = async (req) => { const b = []; for await (const c of req) b.push(c); return JSON.parse(Buffer.concat(b).toString() || '{}'); };
 const json = (res, s, d) => { res.writeHead(s, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(d)); };
@@ -60,6 +60,11 @@ if (req.method === 'POST' && u.pathname === '/bundle') {
     if (req.method === 'POST' && u.pathname === '/state') {
       const b = await read(req);
       return json(res, 200, await state(b.cid, b.proxy));
+    }
+
+    if (req.method === 'POST' && u.pathname === '/solve') {
+      const b = await read(req);
+      return json(res, 200, await solve(b.cid, b));
     }
 
     if (req.method === 'POST' && u.pathname === '/close') { close(t); return json(res, 200, { ok: true }); }

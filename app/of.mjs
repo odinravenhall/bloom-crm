@@ -111,7 +111,7 @@ const browser = async (path, payload) => {
 /** Écran de relais du Cloudflare (page ouverte dans un onglet, à part). */
 const LIVE = (t) => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
 <style>body{margin:0;background:#111;color:#eee;font:14px system-ui}#s{display:block;width:100%;cursor:crosshair}#b{padding:8px 12px}</style>
-<div id="b">Clique dans la page comme dans un navigateur. <span id="w"></span></div>
+<div id="b"><button onclick="fetch('/api/of/live/solve?t=${t}',{method:'POST'})">Cocher la case</button> <span id="w"></span></div>
 <img id="s" src="/api/of/live/shot?t=${t}">
 <script>
 const t='${t}',s=document.getElementById('s');
@@ -156,6 +156,13 @@ export function ofRoutes({ userFrom, send, body, creators }) {
         run('INSERT INTO of_logins (ticket, creator_id, by, at) VALUES (?, ?, ?, ?)', r.ticket, cid, u.name, Date.now());
         send(res, 200, { ticket: r.ticket });
       } catch (e) { send(res, 400, { error: e.message }); }
+    },
+    'POST /api/of/live/solve': async (req, res) => {
+      const t = ticketOf(req);
+      const l = one('SELECT creator_id FROM of_logins WHERE ticket = ?', t);
+      if (!l) return send(res, 404, { error: 'Connexion inconnue' });
+      await browser(`/solve?t=${encodeURIComponent(t)}`, { cid: l.creator_id, cookies: null }).catch(() => {});
+      send(res, 200, { ok: true });
     },
     'GET /api/of/live/result': async (req, res) => {
       const t = ticketOf(req);
