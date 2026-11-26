@@ -67,22 +67,23 @@ export async function start({ cid, email, password, proxy }) {
             if (!form) throw new Error('Page de connexion introuvable.');
             await j.page.fill('input[name="email"]', email, { timeout: 20_000 });
             await j.page.fill('input[name="password"]', password);
-            await j.page.waitForTimeout(4000);
             j.url = j.page.url();
             j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
 
-            for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
-const now = await sessValue(j.ctx);
-        if (now && now !== before && !/return_to|login/i.test(j.page.url())) return done(j);
-                if (j.state === 'waiting') {
-                    if (await turnstile(j.page)) j.state = 'human';
-                    else {
-                        const e = await errText(j.page);
-                        if (e) throw new Error(e);
-                    }
-                }
-                await j.page.waitForTimeout(1000);
-            }
+for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
+        j.url = j.page.url();
+        j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+        const now = await sessValue(j.ctx);
+        if (now && now !== before && !/return_to|login/i.test(j.url)) return done(j);
+        if (j.state === 'waiting') {
+          if (await turnstile(j.page)) j.state = 'human';
+          else {
+            const e = await errText(j.page);
+            if (e) throw new Error(e);
+          }
+        }
+        await j.page.waitForTimeout(1000);
+      }
             if (j.state !== 'done') throw new Error('OnlyFans n’a pas ouvert de session (mot de passe refusé ou blocage Cloudflare).');
         } catch (e) {
             j.state = 'error';
