@@ -85,3 +85,18 @@ export async function sample(cid, proxy) {
   page.off('request', h);
   return got;
 }
+
+/** Cherche le calcul de signature dans les scripts du site. */
+export async function bundle(cid, proxy) {
+  const page = await pageOf(cid, proxy);
+  return page.evaluate(async () => {
+    const srcs = [...document.querySelectorAll('script[src]')].map((s) => s.src);
+    const out = [];
+    for (const u of srcs) {
+      const t = await (await fetch(u)).text().catch(() => '');
+      const i = t.indexOf('x-hash');
+      if (i > -1 && out.length < 3) out.push({ u: u.slice(-40), snippet: t.slice(Math.max(0, i - 900), i + 900) });
+    }
+    return out;
+  });
+}

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { code, close, job, start } from './login.mjs';
-import { call, sample } from './call.mjs';
+import { call, sample, bundle } from './call.mjs';
 
 const read = async (req) => { const b = []; for await (const c of req) b.push(c); return JSON.parse(Buffer.concat(b).toString() || '{}'); };
 const json = (res, s, d) => { res.writeHead(s, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(d)); };
@@ -40,6 +40,11 @@ createServer(async (req, res) => {
     if (req.method === 'POST' && u.pathname === '/sample') {
       const b = await read(req);
       return json(res, 200, await sample(b.cid, b.proxy));
+    }
+
+    if (req.method === 'POST' && u.pathname === '/bundle') {
+      const b = await read(req);
+      return json(res, 200, await bundle(b.cid, b.proxy));
     }
 
     if (req.method === 'POST' && u.pathname === '/close') { close(t); return json(res, 200, { ok: true }); }
