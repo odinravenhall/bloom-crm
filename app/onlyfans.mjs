@@ -18,7 +18,14 @@ db.exec(`
     linked_by TEXT, linked_at INTEGER NOT NULL, checked_at INTEGER, error TEXT
   );
   CREATE TABLE IF NOT EXISTS of_link_codes (code TEXT PRIMARY KEY, creator_id TEXT NOT NULL, created_by TEXT, expires_at INTEGER NOT NULL, used_at INTEGER);
+  -- Modèles OnlyFans ajoutées dans Bloom SANS Substy (identifiant « of-… ») : pour les ouvrir dans l'application
+  -- Windows (OF Manager → « Ouvrir dans l'app ») et les essayer sans passer par Substy. Pas d'IA pour elles.
+  CREATE TABLE IF NOT EXISTS of_native (id TEXT PRIMARY KEY, name TEXT NOT NULL, username TEXT, created_by TEXT, created_at INTEGER NOT NULL);
 `);
+
+/** Modèle OnlyFans ajoutée dans Bloom sans Substy. */
+export const isOfNative = (cid) => String(cid || '').startsWith('of-');
+export const ofNativeCreators = () => all('SELECT * FROM of_native ORDER BY created_at').map((n) => ({ id: n.id, name: n.name, username: n.username || null, platform: 'onlyfans', avatar: null, native: true }));
 
 export const OF = 'https://onlyfans.com';
 
@@ -110,7 +117,7 @@ export async function of(cid, path, opts) {
 export const isOfLinked = (cid) => !!one('SELECT 1 FROM of_links WHERE creator_id = ? AND error IS NULL', cid);
 
 // ---------- Routes ----------
-export function onlyfansRoutes({ userFrom, send, body, creators }) {
+export function onlyfansRoutes({ userFrom, send, body, creators, onNatives }) {
   const admin = (req, res) => {
     const u = userFrom(req);
     if (!u) return send(res, 401, { error: 'Connecte-toi' }), null;
@@ -133,8 +140,35 @@ export function onlyfansRoutes({ userFrom, send, body, creators }) {
       send(res, 200, {
         canEdit: seesAll(u),
         hasRules,
-        links: ofCreators().filter((c) => canSee({ ...u, pf: null, unlinkedToo: true }, c.id)).map((c) => ({ creatorId: c.id, name: nick.get(c.id) || c.name, username: c.username, pid: c.pid || null, ...linkView(c.id) })),
+        links: ofCreators().filter((c) => canSee({ ...u, pf: null, unlinkedToo: true }, c.id)).map((c) => ({ creatorId: c.id, name: nick.get(c.id) || c.name, username: c.username, pid: c.pid || null, native: !!c.native, ...linkView(c.id) })),
       });
+    },
+    /** Ajouter une modèle OnlyFans sans Substy (admins / managers). */
+    'POST /api/of/native': async (req, res) => {
+      const u = admin(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const name = String(b.name || '').trim().slice(0, 60);
+      const username = String(b.username || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?onlyfans\.com\//i, '').replace(/\/.*$/, '').slice(0, 60);
+      if (!name) return send(res, 400, { error: 'Donne un nom à la modèle.' });
+      if (username && !/^[\w.-]+$/.test(username)) return send(res, 400, { error: 'Pseudo OnlyFans invalide.' });
+      if (username && creators().some((c) => /only/i.test(c.platform || '') && (c.username || '').toLowerCase() === username.toLowerCase())) return send(res, 400, { error: `@${username} est déjà dans Bloom.` });
+      const id = `of-${randomBytes(5).toString('hex')}`;
+      run('INSERT INTO of_native (id, name, username, created_by, created_at) VALUES (?, ?, ?, ?, ?)', id, name, username || null, u.name, Date.now());
+      onNatives?.();
+      send(res, 200, { ok: true, creatorId: id });
+    },
+    /** Retirer une modèle ajoutée sans Substy (sa liaison directe aussi). */
+    'POST /api/of/native/delete': async (req, res) => {
+      const u = admin(req, res);
+      if (!u) return;
+      const b = await body(req);
+      const id = String(b.creatorId || '');
+      if (!isOfNative(id)) return send(res, 400, { error: 'Seules les modèles ajoutées dans Bloom peuvent être retirées ici.' });
+      run('DELETE FROM of_native WHERE id = ?', id);
+      run('DELETE FROM of_links WHERE creator_id = ?', id);
+      onNatives?.();
+      send(res, 200, { ok: true });
     },
     /** Code à usage unique pour relier une modèle (à coller dans l'extension). */
     'POST /api/of/link-code': async (req, res) => {

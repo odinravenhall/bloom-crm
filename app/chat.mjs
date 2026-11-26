@@ -345,7 +345,7 @@ async function crawl(cid) {
     let stale = 0;
     const seen = new Set();
     // Modèle sans Substy : toutes ses conversations viennent de MYM (plus bas).
-    if (!isNative(cid)) do {
+    if (!isNative(cid) && !String(cid).startsWith('of-')) do {
       // Pages de 30 comme le site de Substy : au-delà, sa pagination tourne en boucle.
       const r = await SUB.chats(cid, { limit: 30, cursor });
       let fresh = 0;
@@ -379,7 +379,7 @@ async function refreshTop(cid) {
   if (!SUB) return;
   const b = inboxOf(cid);
   try {
-    if (isNative(cid)) throw new Error('sans Substy');
+    if (isNative(cid) || String(cid).startsWith('of-')) throw new Error('sans Substy');
     const r = await SUB.chats(cid, { limit: 30 });
     for (const it of r?.items || []) put(b, fromSubsty(b, chatView(it)));
   } catch {}

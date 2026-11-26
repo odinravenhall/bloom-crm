@@ -29,7 +29,7 @@ import { aiScriptRoutes } from './aiscripts.mjs';
 import { mymAccountRoutes } from './mymaccounts.mjs';
 import { mymFanRoutes } from './mymfans.mjs';
 import { adoptNatives, mymRoutes, nativeCreators } from './mym.mjs';
-import { onlyfansRoutes } from './onlyfans.mjs';
+import { ofNativeCreators, onlyfansRoutes } from './onlyfans.mjs';
 import { mymMediaRoutes } from './mymmedia.mjs';
 import { mymVoucherRoutes } from './mymvouchers.mjs';
 import { mySalesRoutes } from './mysales.mjs';
@@ -99,7 +99,7 @@ function openStream(id) {
 /** La liste des créatrices de Bloom : celles de Substy, plus les comptes MYM ajoutés directement (sans Substy). */
 function applyCreators(fromSubsty) {
   if (adoptNatives(fromSubsty)) console.log('[bloom] modèles MYM fusionnées avec Substy');
-  state.creators = [...fromSubsty, ...nativeCreators()];
+  state.creators = [...fromSubsty, ...nativeCreators(), ...ofNativeCreators()];
   setCreators(state.creators);
   setCreatorPics(state.creators);
   setCreatorPlatforms(state.creators);
@@ -480,7 +480,7 @@ Object.assign(routes, mymAccountRoutes({ substy, userFrom, send, creators: () =>
 Object.assign(routes, mymFanRoutes({ substy, userFrom, send, body, creators: () => state.creators || [] }));
 // Un compte MYM vient d'être relié : la liste des créatrices est refaite tout de suite (il apparaît sans attendre).
 Object.assign(routes, mymRoutes({ userFrom, send, body, creators: () => state.creators || [], onLinked: () => syncCreators().catch(() => applyCreators((state.creators || []).filter((c) => !c.native))) }));
-Object.assign(routes, onlyfansRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, onlyfansRoutes({ userFrom, send, body, creators: () => state.creators || [], onNatives: () => applyCreators((state.creators || []).filter((c) => !c.native)) }));
 Object.assign(routes, mymMediaRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mymVoucherRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, mySalesRoutes({ userFrom, send, creators: () => state.creators || [] }));

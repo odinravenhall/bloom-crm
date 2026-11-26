@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Copy, Download, Link2, RefreshCw, Settings2, Unlink, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Download, Link2, Plus, RefreshCw, Settings2, Trash2, Unlink, XCircle } from "lucide-react";
 import { api, toast } from "@/lib/api";
 import { Confirm, Modal } from "../kit";
 import { errText } from "../media/MediaKit";
@@ -10,7 +10,7 @@ import { errText } from "../media/MediaKit";
 // Substy (`app/onlyfans.mjs`, extension `extension-of/`). Même principe que « Relier à MYM » : un code à usage unique,
 // puis l'extension envoie la session du Chrome connecté à onlyfans.com. Rien ne change pour Substy : la messagerie,
 // les chiffres et tout le reste continuent de passer par Substy tant que les écrans ne lisent pas cette liaison.
-type Link = { creatorId: string; name: string; username?: string | null; linked: boolean; ok?: boolean; error?: string | null; checkedAt?: number | null; linkedBy?: string | null; linkedAt?: number | null };
+type Link = { creatorId: string; name: string; username?: string | null; native?: boolean; linked: boolean; ok?: boolean; error?: string | null; checkedAt?: number | null; linkedBy?: string | null; linkedAt?: number | null };
 type Data = { canEdit: boolean; hasRules: boolean; links: Link[] };
 const when = (ms?: number | null) => (ms ? new Date(ms).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Paris" }) : "");
 
@@ -20,6 +20,8 @@ export function V2OfAccounts() {
   const [linking, setLinking] = useState<Link | null>(null);
   const [unlink, setUnlink] = useState<Link | null>(null);
   const [rules, setRules] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<Link | null>(null);
   const [busy, setBusy] = useState("");
   const load = useCallback(() => api<Data>("GET", "/api/of/links").then((r) => (setD(r), setErr(""))).catch((e) => setErr(errText(e))), []);
   useEffect(() => void load(), [load]);
@@ -41,6 +43,7 @@ export function V2OfAccounts() {
           <p className="mt-1 text-[13px] text-muted">Relier chaque modèle directement à son compte OnlyFans, sans passer par Substy. Substy reste branché : rien ne change tant qu’on ne bascule pas un écran.</p>
         </div>
         {d?.canEdit ? <button onClick={() => setRules(true)} className="v2-btn" data-kind="ghost" style={{ height: 36 }}><Settings2 className="size-4" />Règles de signature</button> : null}
+        {d?.canEdit ? <button onClick={() => setAdding(true)} className="v2-btn" style={{ height: 36 }}><Plus className="size-4" />Ajouter une modèle</button> : null}
       </div>
 
       {d && !d.hasRules ? (
@@ -61,7 +64,7 @@ export function V2OfAccounts() {
         {d?.links.map((l) => (
           <div key={l.creatorId} className="flex flex-wrap items-center gap-3 border-b px-4 py-3 last:border-b-0" style={{ borderColor: "var(--color-line)" }}>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-semibold">{l.name}</p>
+              <p className="flex items-center gap-2 truncate text-[14px] font-semibold">{l.name}{l.native ? <span className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style={{ background: "rgb(167 139 250 / 0.15)", color: "#c4b5fd" }} title="Ajoutée dans Bloom, pas chez Substy : pas d’IA Substy. À ouvrir dans l’application (OF Manager → Ouvrir dans l’app).">Sans Substy</span> : null}</p>
               <p className="truncate text-[12px] text-muted">
                 {l.linked ? `@${l.username || "?"} · relié${l.linkedBy ? ` par ${l.linkedBy}` : ""}${l.checkedAt ? ` · vérifié le ${when(l.checkedAt)}` : ""}` : l.username ? `@${l.username}` : "Pas encore relié"}
               </p>
@@ -77,6 +80,7 @@ export function V2OfAccounts() {
                 {l.linked ? <button onClick={() => void check(l)} disabled={busy === l.creatorId || !d.hasRules} className="v2-btn" data-kind="ghost" style={{ height: 32, padding: "0 12px" }}><RefreshCw className="size-3.5" />Vérifier</button> : null}
                 <button onClick={() => setLinking(l)} disabled={!d.hasRules} className="v2-btn" data-kind={l.linked ? "ghost" : undefined} style={{ height: 32, padding: "0 12px" }}><Link2 className="size-3.5" />{l.linked ? "Relier à nouveau" : "Relier"}</button>
                 {l.linked ? <button onClick={() => setUnlink(l)} className="v2-sq" style={{ width: 32, height: 32 }} title="Délier"><Unlink className="size-3.5" /></button> : null}
+                {l.native ? <button onClick={() => setRemoving(l)} className="v2-sq" style={{ width: 32, height: 32 }} title="Retirer cette modèle de Bloom"><Trash2 className="size-3.5" /></button> : null}
               </div>
             ) : null}
           </div>
@@ -86,6 +90,8 @@ export function V2OfAccounts() {
       {linking ? <LinkModal link={linking} onClose={() => (setLinking(null), void load())} /> : null}
       {unlink ? <Confirm title={`Délier ${unlink.name} ?`} text="Bloom efface la session OnlyFans de cette modèle. Substy n’est pas touché." button="Délier" go={() => api("POST", "/api/of/unlink", { creatorId: unlink.creatorId }).then(load)} onClose={() => setUnlink(null)} /> : null}
       {rules ? <RulesModal onClose={() => (setRules(false), void load())} /> : null}
+      {adding ? <AddModal onClose={() => (setAdding(false), void load())} /> : null}
+      {removing ? <Confirm title={`Retirer ${removing.name} de Bloom ?`} text="La modèle disparaît de Bloom (elle n’était pas chez Substy). Sa session dans l’application Windows reste sur l’ordinateur jusqu’à ce qu’on la déconnecte." button="Retirer" go={() => api("POST", "/api/of/native/delete", { creatorId: removing.creatorId }).then(load)} onClose={() => setRemoving(null)} /> : null}
     </div>
   );
 }
@@ -207,6 +213,36 @@ function RulesModal({ onClose }: { onClose: () => void }) {
       <div className="mt-5 flex justify-end gap-2">
         <button onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
         <button onClick={() => void save()} disabled={busy || (!url.trim() && !json.trim())} className="v2-btn">{busy ? "Vérification…" : "Enregistrer"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Ajouter une modèle OnlyFans sans Substy : elle apparaît dans tout Bloom (OF Manager compris), sans IA. */
+function AddModal({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api("POST", "/api/of/native", { name: name.trim(), username: username.trim() });
+      toast(`${name.trim()} ajoutée ✓ Recharge la page pour la voir dans le menu et OF Manager.`);
+      onClose();
+    } catch (e) {
+      toast(errText(e), "err");
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="Ajouter une modèle OnlyFans" sub="Sans Substy : pour l’ouvrir dans l’application Windows et s’y connecter sur le vrai site. Pas d’IA Substy pour elle." onClose={onClose}>
+      <label className="v2-label">Nom dans Bloom</label>
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Léa" className="v2-field" />
+      <label className="v2-label mt-4">Pseudo OnlyFans (facultatif)</label>
+      <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@pseudo ou onlyfans.com/pseudo" className="v2-field" />
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onClose} className="v2-btn" data-kind="ghost">Annuler</button>
+        <button onClick={() => void save()} disabled={busy || !name.trim()} className="v2-btn">{busy ? "Ajout…" : "Ajouter"}</button>
       </div>
     </Modal>
   );

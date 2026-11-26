@@ -122,7 +122,7 @@ export class SubstySession {
   /** Appel tRPC (format batch du site). */
   async call(proc, input, meta) {
     // Modèle MYM ajoutée dans Bloom sans Substy (« mym-… ») : rien à demander à Substy.
-    if (typeof input?.creatorId === 'string' && input.creatorId.startsWith('mym-')) throw new SubstyError(409, 'Cette modèle n’est pas chez Substy (pas d’IA Substy pour elle).', 'NOT_ON_SUBSTY');
+    if (typeof input?.creatorId === 'string' && /^(mym|of)-/.test(input.creatorId)) throw new SubstyError(409, 'Cette modèle n’est pas chez Substy (pas d’IA Substy pour elle).', 'NOT_ON_SUBSTY');
     const go = async () => {
       const jwt = await this.token();
       return fetch(`${APP}/api/trpc/${proc}?batch=1`, {

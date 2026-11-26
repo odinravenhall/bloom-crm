@@ -64,6 +64,11 @@ export function V2OfManager() {
     async (force = false) => {
       if (!creatorId || (sites[creatorId] && !force)) return;
       setErr("");
+      // Modèle ajoutée dans Bloom sans Substy (« of-… ») : pas de navigateur Substy, seulement l'application Windows.
+      if (creatorId.startsWith("of-")) {
+        setErr((window as unknown as { bloomDesktop?: unknown }).bloomDesktop ? "Modèle sans Substy : clique sur « Ouvrir dans l’app » en haut à droite pour ouvrir son OnlyFans." : "Modèle sans Substy : elle s’ouvre seulement dans l’application Windows Bloom (« Ouvrir dans l’app »).");
+        return;
+      }
       try {
         const r = await api<Site>("GET", `/api/of-browser/open?creatorId=${encodeURIComponent(creatorId)}`);
         setSites((x) => ({ ...x, [creatorId]: r }));
