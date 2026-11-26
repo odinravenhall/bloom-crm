@@ -5,6 +5,7 @@ import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage, mymDirect, twinOf } from './mymchat.mjs';
 import { isNative, nativeCreators } from './mym.mjs';
+import { ofNativeCreators } from './onlyfans.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 import { refuseBanned } from './journal.mjs';
 
@@ -606,8 +607,8 @@ export function chatRoutes({ substy, userFrom, send, body, streams }) {
       const u = auth(req, res);
       if (!u) return;
       // Les modèles MYM dont le compte n'est pas relié à Bloom ne sont pas affichées.
-      // Créatrices de Substy, plus les comptes MYM ajoutés directement dans Bloom.
-      const list = [...((await substy.creators().catch(() => [])) || []), ...nativeCreators()].map(creatorOf).filter((c) => !mymHidden(c.id));
+      // Créatrices de Substy, plus les comptes MYM et OnlyFans ajoutés directement dans Bloom.
+      const list = [...((await substy.creators().catch(() => [])) || []), ...nativeCreators(), ...ofNativeCreators()].map(creatorOf).filter((c) => !mymHidden(c.id));
       const allowed = creatorsOf(u);
       send(res, 200, allowed === null ? list : list.filter((c) => allowed.has(String(c.id))));
     },

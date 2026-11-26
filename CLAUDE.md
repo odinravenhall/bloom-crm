@@ -791,5 +791,7 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
   pseudo facultatif ; admins / managers) → table `of_native`, identifiant « of-<hex> », ajoutée à `state.creators`
   (`ofNativeCreators`, `native: true`, pas de flux Substy). `substy.call` refuse tout appel pour « mym-… » et « of-… »,
   `crawl` / `refreshTop` (chat.mjs) ne demandent pas ses conversations à Substy. L'OF Manager n'ouvre pas le
-  navigateur de Substy pour elle : seulement « Ouvrir dans l'app ». Pas d'IA, pas de conversations dans la messagerie
+  navigateur de Substy pour elle : seulement « Ouvrir dans l'app ».
+  ⚠️ `GET /api/creators` (chat.mjs) refait SA liste (Substy + `nativeCreators` + `ofNativeCreators`) : toute nouvelle
+  sorte de modèle « sans Substy » doit y être ajoutée aussi, sinon elle n.apparaît pas dans les écrans. Pas d'IA, pas de conversations dans la messagerie
   de Bloom (rien ne les lit encore). « Retirer » efface la modèle et sa liaison directe.
