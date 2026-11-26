@@ -26,6 +26,9 @@ async function pageOf(cid, proxy) {
     viewport: { width: 1280, height: 900 },
   });
   const page = ctx.pages()[0] || (await ctx.newPage());
+  page.on('request', (r) => {
+    if (/\/api2\//.test(r.url())) page.__last = { url: r.url().slice(28, 120), keys: Object.keys(r.headers()).join(',') };
+  });
   await page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
   open.set(cid, { ctx, page, timer: setTimeout(() => shut(cid), IDLE) });
   return page;
@@ -34,17 +37,17 @@ async function pageOf(cid, proxy) {
 export async function call(cid, { path, method = 'GET', query, form, proxy }) {
   const page = await pageOf(cid, proxy);
   const qs = query ? `?${new URLSearchParams(query)}` : '';
-  return page.evaluate(
-    ({ url, method, body }) =>
-      new Promise((res) => {
-        const x = new XMLHttpRequest();
-        x.open(method, url, true);
-        x.setRequestHeader('accept', 'application/json, text/plain, */*');
-        if (body) x.setRequestHeader('content-type', 'application/x-www-form-urlencoded');
-        x.onload = () => res({ status: x.status, body: x.responseText });
-        x.onerror = () => res({ status: 0, body: '' });
-        x.send(body || null);
-      }),
+  const out = await page.evaluate(
+    async ({ url, method, body }) => {
+      const r = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: body ? { 'content-type': 'application/x-www-form-urlencoded' } : {},
+        body,
+      });
+      return { status: r.status, body: await r.text() };
+    },
     { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null },
   );
+  return { ...out, last: page.__last };
 }

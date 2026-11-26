@@ -57,7 +57,7 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', 'Session refusée par OnlyFans : il faut relier le compte à nouveau.', Date.now(), cid);
     throw new OFError(401, 'Session OnlyFans refusée : relie le compte à nouveau.');
   }
-  if (r.status >= 400 || data?.error) throw new OFError(r.status, `OnlyFans ${r.status} : ${data?.error?.message || String(r.body || '').slice(0, 140)}`);
+  if (r.status >= 400 || data?.error) throw new OFError(r.status, `OnlyFans ${r.status} : ${data?.error?.message || String(r.body || '').slice(0, 140)}${r.last ? ` [${r.last.url} | ${r.last.keys}]` : ''}`);
   run('UPDATE of_links SET error = NULL, checked_at = ? WHERE creator_id = ?', Date.now(), cid);
   return data;
 }
