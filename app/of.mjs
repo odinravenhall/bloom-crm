@@ -5,6 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { all, db, getSetting, one, run, seal, open, setSetting } from './store.mjs';
 import { seesAll } from './team.mjs';
+import { request as httpRequest } from 'node:http';
 
 let Agent = null;
 /** Charge undici seulement quand un proxy existe : l'API démarre donc même sans lui. */
@@ -109,20 +110,9 @@ const browser = async (path, payload) => {
 };
 
 /** Écran de relais du Cloudflare (page ouverte dans un onglet, à part). */
-const LIVE = (t) => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
-<style>body{margin:0;background:#111;color:#eee;font:14px system-ui}#s{display:block;width:100%;cursor:crosshair}#b{padding:8px 12px}</style>
-<div id="b"><button onclick="fetch('/api/of/live/solve?t=${t}',{method:'POST'})">Cocher la case</button> <span id="w"></span></div>
-<img id="s" src="/api/of/live/shot?t=${t}">
-<script>
-const t='${t}',s=document.getElementById('s');
-async function tick(){try{const r=await fetch('/api/of/live/result?t='+t);const b=await r.json();
- if(b.state==='done'||b.state==='error'){document.getElementById('w').textContent=b.state==='done'?'Connecté ✓':'Échec : '+(b.error||'');setTimeout(()=>window.close(),1800);return}
- s.src='/api/of/live/shot?t='+t+'&r='+Date.now()}catch{}setTimeout(tick,900)}
-s.onload=()=>setTimeout(tick,500);
-s.onclick=async e=>{const r=s.getBoundingClientRect(),k=s.naturalWidth/r.width;
- await fetch('/api/of/live/click?t='+t,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x:(e.clientX-r.left)*k,y:(e.clientY-r.top)*k})});
- s.src='/api/of/live/shot?t='+t+'&r='+Date.now()};
-</script>`;
+const LIVE = () => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
+<style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100vh}</style>
+<iframe src="/api/of/vnc/vnc.html?autoconnect=1&resize=scale&reconnect=1&show_dot=0"></iframe>`;
 
 export function ofRoutes({ userFrom, send, body, creators }) {
   const admin = (req, res) => {
@@ -223,3 +213,33 @@ export function ofRoutes({ userFrom, send, body, creators }) {
 setInterval(() => {
   for (const { creator_id: cid } of all('SELECT creator_id FROM of_links')) check(cid).catch(() => {});
 }, 15 * 60_000);
+
+const VNC = 'browser';
+const VNC_PORT = 6080;
+
+/** Relaie noVNC (HTML et WebSocket) depuis le conteneur navigateur. */
+export function ofVnc(req, res) {
+  const p = req.url.replace(/^\/api\/of\/vnc/, '') || '/';
+  const up = httpRequest({ host: VNC, port: VNC_PORT, path: p, method: req.method, headers: { ...req.headers, host: `${VNC}:${VNC_PORT}` } }, (r) => {
+    res.writeHead(r.statusCode || 502, r.headers);
+    r.pipe(res);
+  });
+  up.on('error', () => {
+    if (!res.headersSent) res.writeHead(502);
+    res.end();
+  });
+  req.pipe(up);
+}
+
+export function ofVncUpgrade(req, socket, head) {
+  const p = req.url.replace(/^\/api\/of\/vnc/, '') || '/';
+  const up = httpRequest({ host: VNC, port: VNC_PORT, path: p, headers: { ...req.headers, host: `${VNC}:${VNC_PORT}` } });
+  up.on('upgrade', (r, s, h) => {
+    socket.write(`HTTP/1.1 101 Switching Protocols\r\n${Object.entries(r.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n')}\r\n\r\n`);
+    if (h?.length) socket.write(h);
+    s.pipe(socket);
+    socket.pipe(s);
+  });
+  up.on('error', () => socket.destroy());
+  up.end();
+}

@@ -15,7 +15,7 @@ import { relanceRoutes } from './relance.mjs';
 import { sentRoutes } from './sentlog.mjs';
 import { fanListRoutes } from './fanlists.mjs';
 import { ofBrowserRoutes } from './ofbrowser.mjs';
-import { ofRoutes } from './of.mjs';
+import { ofRoutes, ofVnc, ofVncUpgrade } from './of.mjs';
 import { ofDashRoutes } from './ofdash.mjs';
 import { ofReportRoutes } from './ofreports.mjs';
 import { ofEmployeeRoutes } from './ofemployees.mjs';
@@ -509,13 +509,19 @@ Object.assign(routes, sentRoutes({ substy, userFrom, send, body, creators: () =>
 Object.assign(routes, relanceRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, listRoutes({ substy, userFrom, send, body, creators: () => state.creators }));
 Object.assign(routes, inboxRoutes({ userFrom, send, body, creators: () => state.creators }));
+
+srv.on('upgrade', (req, socket, head) => {
+  if (!(req.url || '').startsWith('/api/of/vnc/')) return socket.destroy();
+  ofVncUpgrade(req, socket, head);
+});
 // Messagerie façon Raven CRM : toutes les adresses « /api/rv/… ».
 const rv = rvRoutes({ substy, userFrom, send, body, creators: () => state.creators });
 
-Object.assign(createServer(async (req, res) => {
+const srv = createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0];
   // Adresse dédiée « Accès MYM (Direct) » : le site de MYM relayé (mymsite.mjs).
   if (path === '/mymsite' || path.startsWith('/mymsite/')) return mymSiteProxy(req, res).catch(() => res.headersSent || res.end());
+  if (path.startsWith('/api/of/vnc/')) return ofVnc(req, res).catch(() => res.headersSent || res.end());
   const h = routes[`${req.method} ${path}`];
   try {
     if (h) await h(req, res);
