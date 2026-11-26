@@ -7,6 +7,8 @@ const open = new Map();
 const IDLE = 5 * 60_000;
 const KEEP = ['time', 'sign', 'x-bc', 'app-token', 'x-of-rev', 'x-hash'];
 
+export function closeFor(cid) { shut(cid); }
+
 function shut(cid) {
   const o = open.get(cid);
   if (!o) return;
@@ -57,6 +59,7 @@ const dir = `/data/of/${cid}`;
   });
   await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
   for (let i = 0; i < 30 && !page.__last; i++) await page.waitForTimeout(500);
+  await page.waitForTimeout(1500);
   open.set(cid, { ctx, page, timer: setTimeout(() => shut(cid), IDLE) });
   return page;
 }
@@ -83,7 +86,7 @@ export async function call(cid, { path, method = 'GET', query, form, proxy, head
   if (!auth) throw new Error('Le site n’a pas signé de requête.');
   const picked = Object.fromEntries(KEEP.filter((k) => auth[k]).map((k) => [k, auth[k]]));
   const qs = query ? `?${new URLSearchParams(query)}` : '';
-  const out = await page.evaluate(
+  const once = () => page.evaluate(
     async ({ url, method, body, h }) => {
       const r = await fetch(url, {
         method,
@@ -95,6 +98,9 @@ export async function call(cid, { path, method = 'GET', query, form, proxy, head
     },
     { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null, h: picked },
   );
+  let out = null;
+  for (let i = 0; i < 3 && !out; i++) out = await once().catch(async () => { await page.waitForTimeout(1500); return null; });
+  if (!out) throw new Error('Le site n’a pas répondu à la requête.');
   return { ...out, last: { url: path, keys: Object.keys(picked).join(',') } };
 }
 

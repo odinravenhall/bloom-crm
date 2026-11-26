@@ -5,6 +5,7 @@ import { rm } from 'node:fs/promises';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
 const sessValue = async (ctx) => (await ctx.cookies('https://onlyfans.com')).find((c) => c.name === 'sess')?.value || null;
+const authValue = async (ctx) => (await ctx.cookies('https://onlyfans.com')).find((c) => c.name === 'auth_id')?.value || null;
 const jobs = new Map();
 let seq = 0;
 
@@ -60,28 +61,47 @@ export async function start({ cid, email, password, proxy }) {
                 j.last = { url: r.url().replace('https://onlyfans.com', '').slice(0, 90), keys: Object.keys(h).join(',') };
                 if (h['user-id']) j.ofId = String(h['user-id']);
             });
+            j.posts = [];
+            j.page.on('response', async (r) => {
+                try {
+                    if (r.request().method() !== 'POST' || !/\/api2\//.test(r.url())) return;
+                    const t = await r.text().catch(() => '');
+                    j.posts.push({ s: r.status(), u: r.url().replace('https://onlyfans.com', '').slice(0, 80), t: t.slice(0, 300) });
+                    if (j.posts.length > 6) j.posts.shift();
+                } catch { }
+            });
             await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
             // L'appli dessine le formulaire en JavaScript : on attend qu'il existe.
-            for (let i = 0; i < 30 && !(await j.page.locator('input[name="email"]').count()); i++) await j.page.waitForTimeout(500);
-            const before = await sessValue(j.ctx);
+            for (let i = 0; i < 40 && !(await j.page.locator('input[name="email"]').count()); i++) await j.page.waitForTimeout(500);
             const form = await j.page.locator('input[name="email"]').count();
             if (!form) {
-                if (!/return_to|login/i.test(j.page.url()) && before) return done(j);
+                if (!/return_to|login/i.test(j.page.url()) && (await authValue(j.ctx))) return done(j);
                 throw new Error('Page de connexion introuvable.');
             }
-            await j.page.fill('input[name="email"]', email, { timeout: 20_000 });
-            await j.page.fill('input[name="password"]', password);
-            j.url = j.page.url();
-            j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
-           
 
-            for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
+            // La page redirige parfois vers return_to juste après coup et vide les champs :
+            // on remplit, et on recommence à chaque tour tant qu'ils sont vides.
+            const fill = async () => {
+                const box = j.page.locator('input[name="email"]');
+                if (await box.count() && !(await box.inputValue().catch(() => ''))) await box.fill(email).catch(() => { });
+                const pw = j.page.locator('input[name="password"]');
+                if (await pw.count() && !(await pw.inputValue().catch(() => ''))) await pw.fill(password).catch(() => { });
+            };
+            await fill();
+
+            let lastClick = 0;
+            for (let i = 0; i < 300 && j.state !== 'done' && j.state !== 'error'; i++) {
                 j.url = j.page.url();
                 j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
-                 if (i % 5 === 0) await j.page.locator('button:has-text("SE CONNECTER"), button[type="submit"]').first().click({ timeout: 3000 }).catch(() => {});
-                const now = await sessValue(j.ctx);
-                if (now && now !== before && !/return_to|login/i.test(j.url)) return done(j);
+                // L'en-tête user-id n'est envoyé par le site que sur une session authentifiée.
+                if (j.ofId) return done(j);
+                await fill();
+                const btn = j.page.locator('button:has-text("SE CONNECTER"), button[type="submit"]').first();
+                if (j.state === 'waiting' && Date.now() - lastClick > 8000 && await btn.count() && (await btn.isEnabled().catch(() => false))) {
+                    lastClick = Date.now();
+                    await btn.click({ timeout: 3000 }).catch(() => { });
+                }
                 if (j.state === 'waiting') {
                     if (await turnstile(j.page)) j.state = 'human';
                     else {

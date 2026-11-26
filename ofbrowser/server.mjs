@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { code, close, job, start } from './login.mjs';
-import { call, sample, bundle, pageJson, probe, state, solve } from './call.mjs';
+import { call, sample, bundle, pageJson, probe, state, solve, closeFor } from './call.mjs';
 
 const read = async (req) => { const b = []; for await (const c of req) b.push(c); return JSON.parse(Buffer.concat(b).toString() || '{}'); };
 const json = (res, s, d) => { res.writeHead(s, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(d)); };
@@ -9,11 +9,11 @@ createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   const t = u.searchParams.get('t');
   try {
-    if (req.method === 'POST' && u.pathname === '/login') return json(res, 200, { ticket: await start(await read(req)) });
+    if (req.method === 'POST' && u.pathname === '/login') { const b = await read(req); closeFor(b.cid); return json(res, 200, { ticket: await start(b) }); }
     if (req.method === 'GET' && u.pathname === '/result') {
       const j = job(t);
       if (!j) return json(res, 404, { state: 'error', error: 'Connexion inconnue' });
-     return json(res, 200, { state: j.state, cookies: j.cookies, userAgent: j.userAgent, ofId: j.ofId, last: j.last, text: j.text, url: j.url, error: j.error });
+     return json(res, 200, { state: j.state, posts: j.posts, cookies: j.cookies, userAgent: j.userAgent, ofId: j.ofId, last: j.last, text: j.text, url: j.url, error: j.error });
     }
     if (req.method === 'GET' && u.pathname === '/shot') {
       const j = job(t);
