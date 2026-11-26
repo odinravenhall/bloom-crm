@@ -21,7 +21,7 @@ const ICON: Record<ScreenKey, LucideIcon> = {
   chiffres: TrendingUp, analytique: ChartNoAxesCombined, liens: Link2,
   "equipe-messages": MessagesSquare, "equipe-ventes": BarChart3, shifts: Timer, activite: Activity, "en-direct": Radio, moderation: ShieldAlert, acces: KeyRound,
   push: Megaphone, planification: CalendarClock, feed: ListChecks, amis: UserRound, bons: Ticket, notifications: Bell, "site-mym": Globe,
-  "of-manager": Sparkles, "comptes-of": Link2,
+  "of-manager": Sparkles,
 };
 // Les rubriques du menu : un petit titre en capitales, les écrans dessous, à plat. L'icône ne sert qu'au menu réduit.
 type G = Exclude<GroupKey, "top">;

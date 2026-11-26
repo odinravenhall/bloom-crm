@@ -11,7 +11,7 @@ export type ScreenKey =
   | "chiffres" | "analytique" | "liens"
   | "equipe-messages" | "equipe-ventes" | "shifts" | "activite" | "en-direct" | "moderation" | "acces"
   | "push" | "planification" | "feed" | "amis" | "bons" | "notifications" | "site-mym"
-  | "of-manager" | "comptes-of";
+  | "of-manager";
 export type GroupKey = "top" | "chat" | "stats" | "team" | "platform";
 export type Screen = { key: ScreenKey; label: string; nav?: string; group: GroupKey; boss?: boolean; manage?: boolean; pf?: "of" | "mym" };
 
@@ -39,6 +39,5 @@ export const SCREENS: Screen[] = [
   { key: "notifications", label: "Notifications MYM", nav: "Notifications", group: "platform", pf: "mym" },
   { key: "site-mym", label: "Site MYM", group: "platform", boss: true, manage: true, pf: "mym" },
   { key: "of-manager", label: "OF Manager", group: "platform", boss: true, manage: true, pf: "of" },
-  { key: "comptes-of", label: "Comptes OnlyFans", nav: "Comptes", group: "platform", boss: true, manage: true, pf: "of" },
 ];
 export const screenOf = (key: string) => SCREENS.find((s) => s.key === key) ?? null;

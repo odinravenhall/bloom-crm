@@ -15,5 +15,3 @@ deno.lock
 .DS_Store
 ._*
 *.tgz
-# Application Windows (desktop/) : builds
-desktop/dist/
