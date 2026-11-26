@@ -18,7 +18,7 @@ const errText = async (page) => {
 
 async function done(j) {
   const all = await j.ctx.cookies('https://onlyfans.com');
-  const cookies = all.filter((c) => ['sess', 'auth_id', 'fp', 'bc'].includes(c.name)).map((c) => `${c.name}=${c.value}`).join('; ');
+  const cookies = all.map((c) => `${c.name}=${c.value}`).join('; ');
   j.userAgent = await j.page.evaluate(() => navigator.userAgent).catch(() => UA);
   j.cookies = cookies;
   j.state = 'done';

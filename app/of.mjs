@@ -51,7 +51,8 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
   if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
   const jar = open(l.cookies);
   const bc = /(?:^|;\s*)bc=([^;]+)/.exec(jar)?.[1] || randomBytes(16).toString('hex');
-  const uid = /(?:^|;\s*)auth_id=([^;]+)/.exec(jar)?.[1] || l.of_id || '';
+  const uid = l.of_id || /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || '';
+  if (!uid) throw new OFError(409, `Identifiant OnlyFans introuvable. Cookies reçus : ${jar.split(/;\s*/).map((c) => c.split('=')[0]).join(', ')}`);
   const proxy = proxyOf(cid);
   const r = await fetch(`https://onlyfans.com${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
     method,
@@ -92,12 +93,10 @@ export async function check(cid) {
   }
 }
 
-const NOMS = ['sess', 'auth_id', 'fp', 'bc'];
-/** Enregistre une session capturée par le navigateur, puis la vérifie. */
 export async function saveLink(cid, { cookies, userAgent }, by) {
-  const jar = String(cookies || '').split(/;\s*/).filter((c) => NOMS.includes(c.split('=')[0])).join('; ');
-  const ofId = /(?:^|;\s*)auth_id=([^;]+)/.exec(jar)?.[1] || null;
+  const jar = String(cookies || '').trim();
   if (!/(?:^|;\s*)sess=[^;\s]+/.test(jar)) throw new OFError(400, 'Cookie « sess » absent : la connexion a échoué.');
+  const ofId = /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || null;
   run(`INSERT INTO of_links (creator_id, cookies, user_agent, linked_by, linked_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (creator_id) DO UPDATE SET cookies = excluded.cookies, user_agent = excluded.user_agent,
        linked_by = excluded.linked_by, linked_at = excluded.linked_at, error = NULL`,
