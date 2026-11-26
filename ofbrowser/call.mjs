@@ -123,7 +123,8 @@ export async function state(cid, { proxy, cookies } = {}) {
   await page.goto('https://onlyfans.com/my/profile', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
   await page.waitForTimeout(3000);
   const ck = await page.context().cookies('https://onlyfans.com');
-  return { url: page.url(), cookies: ck.map((c) => c.name) };
+  const txt = await page.locator('body').innerText().catch(() => '');
+  return { url: page.url(), title: await page.title().catch(() => ''), text: String(txt).replace(/\s+/g, ' ').slice(0, 600), cookies: ck.map((c) => c.name) };
 }
 
 /** Liste les appels d'API que la page déclenche, avec leur contenu. */
