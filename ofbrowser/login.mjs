@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { rm } from 'node:fs/promises';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+const sessValue = async (ctx) => (await ctx.cookies('https://onlyfans.com')).find((c) => c.name === 'sess')?.value || null;
 const jobs = new Map();
 let seq = 0;
 
@@ -58,12 +59,19 @@ export async function start({ cid, email, password, proxy }) {
         if (h['user-id']) j.ofId = String(h['user-id']);
       });
       await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
-      if (await sess(j.ctx)) return done(j);
+
+      // Un visiteur non connecté a déjà un cookie « sess » : seul son CHANGEMENT prouve la connexion.
+      const before = await sessValue(j.ctx);
+      const form = await j.page.locator('input[name="email"]').count();
+      if (!form && before) return done(j);
+      if (!form) throw new Error('Page de connexion introuvable.');
       await j.page.fill('input[name="email"]', email, { timeout: 20_000 });
       await j.page.fill('input[name="password"]', password);
       await j.page.click('button[type="submit"]');
+
       for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
-        if (await sess(j.ctx)) return done(j);
+        const now = await sessValue(j.ctx);
+        if (now && now !== before) return done(j);
         if (j.state === 'waiting') {
           if (await turnstile(j.page)) j.state = 'human';
           else {
@@ -73,7 +81,7 @@ export async function start({ cid, email, password, proxy }) {
         }
         await j.page.waitForTimeout(1000);
       }
-      if (j.state !== 'done') throw new Error('OnlyFans n’a pas ouvert de session (délai ou blocage).');
+      if (j.state !== 'done') throw new Error('OnlyFans n’a pas ouvert de session (mot de passe refusé ou blocage Cloudflare).');
     } catch (e) {
       j.state = 'error';
       j.error = e.message;
@@ -82,7 +90,6 @@ export async function start({ cid, email, password, proxy }) {
   })();
   return t;
 }
-
 /** Code reçu par mail, ou code de l'application d'authentification. */
 export async function code(t, value) {
   const j = job(t);
