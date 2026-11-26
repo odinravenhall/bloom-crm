@@ -52,13 +52,12 @@ export async function of(cid, path, { method = 'GET', query, form } = {}) {
   const jar = open(l.cookies);
   const bc = /(?:^|;\s*)bc=([^;]+)/.exec(jar)?.[1] || randomBytes(16).toString('hex');
   const uid = l.of_id || /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || '';
-  if (!uid) throw new OFError(409, `Identifiant OnlyFans introuvable. Cookies reçus : ${jar.split(/;\s*/).map((c) => c.split('=')[0]).join(', ')}`);
   const proxy = proxyOf(cid);
   const r = await fetch(`https://onlyfans.com${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
     method,
     headers: {
       cookie: jar, 'user-agent': l.user_agent, accept: 'application/json, text/plain, */*',
-      'app-token': APP_TOKEN, 'x-bc': bc, 'user-id': uid, origin: 'https://onlyfans.com', referer: 'https://onlyfans.com/',
+      'app-token': APP_TOKEN, 'x-bc': bc, ...(uid ? { 'user-id': uid } : {}), origin: 'https://onlyfans.com', referer: 'https://onlyfans.com/',
       sign: sign(path, uid, bc, l.user_agent, query || {}),
       ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
     },
@@ -172,7 +171,7 @@ export function ofRoutes({ userFrom, send, body, creators }) {
       const r = await fetch(`${BROWSER}/result?t=${encodeURIComponent(t)}`).then((x) => x.json()).catch(() => ({ state: 'error', error: 'Navigateur injoignable' }));
       if (r.state === 'done') {
         const v = await saveLink(l.creator_id, r, 'navigateur').catch((e) => ({ ok: false, error: e.message }));
-        if (!v.ok) return send(res, 200, { state: 'error', error: v.error });
+        if (!v.ok) return send(res, 200, { state: 'error', error: v.error + (r.last ? ` [${r.last.url} | ${r.last.keys}]` : '') });
         await browser('/close', { t }).catch(() => {});
         run('DELETE FROM of_logins WHERE ticket = ?', t);
       }

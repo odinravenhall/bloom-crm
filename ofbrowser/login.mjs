@@ -41,9 +41,10 @@ export async function start({ cid, email, password, proxy }) {
         args: ['--disable-blink-features=AutomationControlled'],
       });
       j.page = j.ctx.pages()[0] || (await j.ctx.newPage());
-      j.page.on('request', (r) => {
-        const u = r.headers()['user-id'];
-        if (u) j.ofId = String(u);
+j.page.on('request', (r) => {
+        const h = r.headers();
+        j.last = { url: r.url().slice(0, 120), keys: Object.keys(h).join(',') };
+        if (h['user-id']) j.ofId = String(h['user-id']);
       });
       await j.page.goto('https://onlyfans.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
       if (await sess(j.ctx)) return done(j);
