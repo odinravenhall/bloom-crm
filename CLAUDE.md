@@ -773,3 +773,17 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - ⚠️ Au 26/11/2026 : aucune règle configurée, aucune modèle reliée, aucun appel fait au vrai OnlyFans. Pas encore de
   proxy par modèle (toutes les sessions partiraient de l'IP du VPS : risque de déconnexion / signalement). OnlyFans
   interdit les outils tiers non autorisés : le risque de suspension est pour le compte de la modèle, à décider avec elle.
+
+## Application Windows « Bloom » (comme Infloww) — `desktop/` (26/11/2026)
+
+- Electron. La fenêtre principale affiche Bloom (`BLOOM_URL`, par défaut https://bloomcrm.fr) : messagerie, IA Substy
+  on/off, scripts… rien n'est copié, c'est le site. Liens Bloom et Discord dans l'app, OnlyFans dans sa fenêtre, le
+  reste dans le navigateur de Windows.
+- OF Manager → « Ouvrir dans l'app » (visible seulement dans l'app : `window.bloomDesktop` de `desktop/preload.js`) :
+  le VRAI onlyfans.com de la modèle, dans une fenêtre à part avec SA session (`persist:of-<creatorId>`), qui reste
+  connectée d'un lancement à l'autre. On s'y connecte soi-même sur le site d'OnlyFans. C'est un navigateur : l'app
+  ne lit pas les formulaires, n'envoie rien à la place du chatteur, ne parle pas à l'API d'OnlyFans.
+- Construire l'installateur : `cd desktop && npm install && npm run dist` → `desktop/dist/Bloom Setup <version>.exe`
+  (pas dans le dépôt). `signAndEditExecutable: false` : sans droits administrateur, l'outil de signature
+  d'electron-builder ne s'installe pas ; l'exe n'est donc pas signé (Windows SmartScreen prévient au 1er lancement).
+- Pas encore fait : icône, proxy par modèle, mise à jour automatique, panneau Bloom à côté du site OnlyFans.

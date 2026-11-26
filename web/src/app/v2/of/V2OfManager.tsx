@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Expand, KeyRound, Loader2, RefreshCw, Search } from "lucide-react";
+import { AppWindow, Expand, KeyRound, Loader2, RefreshCw, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCreators } from "@/lib/creators";
 import { OF_PAGES, ofPage } from "@/lib/ofmanager";
@@ -14,6 +14,7 @@ import { PALETTE, Ring } from "../kit";
 // secondes la petite fenêtre Substy (`access`), au plus toutes les 4 h par modèle (gardé dans `bloom.ofb.authorized`,
 // la même clé que l'ancien écran). La page ouverte est dans l'adresse (« ?p=vault »), la modèle aussi (« c= »).
 type Site = { site: string; access: string };
+type BloomDesktop = { version: string; openOf: (creatorId: string, name: string, path?: string) => Promise<boolean>; logoutOf: (creatorId: string) => Promise<boolean> };
 const KEY = "bloom.ofb.authorized";
 const authorized = (site: string) => {
   try {
@@ -96,6 +97,9 @@ export function V2OfManager() {
   }, [creators, q]);
   const colorOf = (id: string) => PALETTE[Math.max(0, creators.findIndex((c) => c.id === id)) % PALETTE.length];
   const path = p.path.replace("{user}", creator?.username || "");
+  // Dans l'application Windows (desktop/preload.js) : le vrai OnlyFans de la modèle, dans sa propre session.
+  const [desktop, setDesktop] = useState<BloomDesktop | null>(null);
+  useEffect(() => setDesktop((window as unknown as { bloomDesktop?: BloomDesktop }).bloomDesktop ?? null), []);
 
   // Le site OnlyFans fait 1300 px (marge + son menu de 290 px + 1000 px de contenu) : on cache sa marge et son menu
   // à gauche, et on réduit seulement si la place manque (comme l'ancien écran).
@@ -153,6 +157,7 @@ export function V2OfManager() {
           </div>
           <span className="flex shrink-0 items-center gap-1">
             {creator ? <span className="mr-1 hidden max-w-[160px] truncate text-[12.5px] font-semibold lg:inline">{creator.name}</span> : null}
+            {desktop && creator ? <button onClick={() => void desktop.openOf(creator.id, creator.name, path)} title="Ouvrir le vrai OnlyFans de la modèle dans l’application Bloom (sa propre session, reste connectée)" className="v2-btn" style={{ height: 32, padding: "0 12px" }}><AppWindow className="size-3.5" />Ouvrir dans l’app</button> : null}
             {s ? <button onClick={authorize} title="Autoriser ce navigateur à nouveau" aria-label="Autoriser à nouveau" className="v2-sq"><KeyRound className="size-4" /></button> : null}
             <button onClick={() => box.current?.requestFullscreen?.()} title="Plein écran" aria-label="Plein écran" className="v2-sq"><Expand className="size-4" /></button>
             <button onClick={() => setN((x) => x + 1)} title="Recharger la page" aria-label="Recharger" className="v2-sq"><RefreshCw className="size-4" /></button>
