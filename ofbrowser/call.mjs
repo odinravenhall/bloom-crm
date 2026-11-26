@@ -129,7 +129,9 @@ export async function probe(cid, { goto = '/', proxy }) {
     } catch {
       keys = 'texte';
     }
-    out.push({ url: r.url().replace('https://onlyfans.com', '').slice(0, 70), status: r.status(), keys });
+    let txt = '';
+    try { txt = (await r.text()).slice(0, 200); } catch {}
+    out.push({ url: r.url().replace('https://onlyfans.com', '').slice(0, 70), status: r.status(), txt });
   };
   page.on('response', h);
   await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
