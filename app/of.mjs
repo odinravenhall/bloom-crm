@@ -49,7 +49,7 @@ function sign(path, userId, xbc, ua, query) {
 export async function of(cid, path, { method = 'GET', query, form } = {}) {
   if (!one('SELECT 1 AS x FROM of_links WHERE creator_id = ?', cid)) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
   const r = await browser('/call', { cid, path, method, query, form, proxy: proxyOf(cid) }).catch(() => null);
-  if (r.last && !r.last.keys.includes('sign')) throw new OFError(502, 'Le site n’a pas signé la requête (page pas prête).');
+ if (r.last && !r.last.keys.includes('sign')) throw new OFError(502, 'Le site n’a pas signé la requête.');
   if (!r) throw new OFError(502, 'Navigateur injoignable.');
   if (!r.status) throw new OFError(502, 'OnlyFans ne répond pas.');
   let data = r.body;

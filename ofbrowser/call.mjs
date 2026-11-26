@@ -35,31 +35,41 @@ async function pageOf(cid, proxy) {
   return page;
 }
 
+const KEEP = ['time', 'sign', 'x-bc', 'app-token', 'x-of-rev', 'x-hash'];
+
+/** Recharge la page et retient les en-têtes d'authentification d'une vraie requête du site. */
+async function freshAuth(page) {
+  page.__auth = null;
+  const h = (r) => {
+    const hd = r.headers();
+    if (/\/api2\//.test(r.url()) && hd.sign) page.__auth = hd;
+  };
+  page.on('request', h);
+  await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+  for (let i = 0; i < 40 && !page.__auth; i++) await page.waitForTimeout(250);
+  page.off('request', h);
+  return page.__auth;
+}
+
 export async function call(cid, { path, method = 'GET', query, form, proxy, headers = {} }) {
   const page = await pageOf(cid, proxy);
+  const auth = await freshAuth(page);
+  if (!auth) throw new Error('Le site n’a pas signé de requête.');
+  const picked = Object.fromEntries(KEEP.filter((k) => auth[k]).map((k) => [k, auth[k]]));
   const qs = query ? `?${new URLSearchParams(query)}` : '';
-  const once = () =>
-    page.evaluate(
-      async ({ url, method, body, headers }) => {
-        const r = await fetch(url, {
-          method,
-          credentials: 'include',
-          headers: { ...headers, ...(body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}) },
-          body,
-        });
-        return { status: r.status, body: await r.text() };
-      },
-      { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null, headers },
-    );
-
-  let out = null;
-  for (let i = 0; i < 25; i++) {
-    page.__last = null;
-    out = await once();
-    if (page.__last?.keys?.includes('sign')) return { ...out, last: page.__last };
-    await page.waitForTimeout(600);
-  }
-  return { ...out, last: page.__last };
+  const out = await page.evaluate(
+    async ({ url, method, body, h }) => {
+      const r = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: { ...h, accept: 'application/json, text/plain, */*', ...(body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}) },
+        body,
+      });
+      return { status: r.status, body: await r.text() };
+    },
+    { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null, h: picked },
+  );
+  return { ...out, last: { url: path, keys: Object.keys(picked).join(',') } };
 }
 
 /** Relève de vrais appels du site, en-têtes compris, pour reconstituer le hash. */
