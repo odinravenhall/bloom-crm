@@ -86,17 +86,17 @@ export async function sample(cid, proxy) {
   return got;
 }
 
-/** Cherche le calcul de signature dans les scripts du site. */
-export async function bundle(cid, proxy) {
+/** Cherche un motif dans les scripts du site et rend le code autour. */
+export async function bundle(cid, proxy, q = 'x-hash') {
   const page = await pageOf(cid, proxy);
-  return page.evaluate(async () => {
+  return page.evaluate(async (q) => {
     const srcs = [...document.querySelectorAll('script[src]')].map((s) => s.src);
     const out = [];
     for (const u of srcs) {
       const t = await (await fetch(u)).text().catch(() => '');
-      const i = t.indexOf('x-hash');
-      if (i > -1 && out.length < 3) out.push({ u: u.slice(-40), snippet: t.slice(Math.max(0, i - 900), i + 900) });
+      let i = -1;
+      while ((i = t.indexOf(q, i + 1)) > -1 && out.length < 3) out.push({ u: u.slice(-32), snippet: t.slice(Math.max(0, i - 1200), i + 1200) });
     }
     return out;
-  });
+  }, q);
 }

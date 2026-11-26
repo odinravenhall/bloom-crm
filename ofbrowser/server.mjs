@@ -42,9 +42,9 @@ createServer(async (req, res) => {
       return json(res, 200, await sample(b.cid, b.proxy));
     }
 
-    if (req.method === 'POST' && u.pathname === '/bundle') {
+if (req.method === 'POST' && u.pathname === '/bundle') {
       const b = await read(req);
-      return json(res, 200, await bundle(b.cid, b.proxy));
+      return json(res, 200, await bundle(b.cid, b.proxy, b.q));
     }
 
     if (req.method === 'POST' && u.pathname === '/close') { close(t); return json(res, 200, { ok: true }); }
