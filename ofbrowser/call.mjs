@@ -108,7 +108,7 @@ export async function pageJson(cid, { goto, match, proxy }) {
     const h = (r) => {
       if (!r.url().includes(match)) return;
       page.off('response', h);
-      r.json().then(res).catch(() => res(null));
+      r.text().then((t) => res({ status: r.status(), text: t })).catch(() => res(null));
     };
     page.on('response', h);
   });
