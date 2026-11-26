@@ -754,9 +754,16 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Liaison DIRECTE d'une modèle à son compte OnlyFans, à côté de Substy : RIEN ne bascule. Messagerie, chiffres, IA…
   passent toujours par Substy tant qu'un écran n'est pas branché sur `of(creatorId, chemin)`. Revenir en arrière =
   ne pas s'en servir (ou délier).
-- Relier (admins / managers), v2 → OnlyFans → Comptes : code à usage unique (15 min) + extension « Bloom – Relier
-  OnlyFans » (`web/public/bloom-relier-of.zip`, source `extension-of/`) dans le Chrome connecté à onlyfans.com, onglet
-  ouvert. Elle envoie les cookies `sess` et `auth_id`, `bcTokenSha` (en-tête `x-bc`) et le User-Agent (la session y est
+- Relier (admins / managers), v2 → OnlyFans → Comptes, avec l'extension « Bloom – Relier OnlyFans »
+  (`web/public/bloom-relier-of.zip`, source `extension-of/`, v1.1 du 26/11/2026) :
+  - parcours normal (demande de l'agence) : « Se connecter sur OnlyFans » crée un code à usage unique (15 min) et le
+    passe à l'extension (`window.postMessage` → `bloom.js`, script posé seulement sur les pages de Bloom, qui marque
+    aussi la page `data-bloom-of-ext`) ; `background.js` ouvre le VRAI onlyfans.com, la personne s'y connecte elle-même
+    (Bloom et l'extension ne lisent jamais le formulaire), et dès que le cookie `auth_id` apparaît la session part vers
+    `/api/of/link` de l'adresse Bloom d'où vient la demande ; bandeau vert / rouge dans l'onglet. Compte refusé
+    (autre modèle) : on attend une nouvelle connexion, sans renvoyer le même compte.
+  - secours : code à coller dans la fenêtre de l'extension (onglet onlyfans.com connecté et ouvert).
+  Elle envoie les cookies `sess` et `auth_id`, `bcTokenSha` (en-tête `x-bc`) et le User-Agent (la session y est
   liée). Le mot de passe n'est jamais lu. Session gardée chiffrée (`of_links`). Bloom vérifie avec `/api2/v2/users/me`
   et refuse si le compte n'est pas celui de la modèle choisie (`pid` de Substy = `auth_id`).
 - Chaque requête à `https://onlyfans.com/api2/v2/...` est signée (`sign`, `time`, `app-token`) : sha1 de

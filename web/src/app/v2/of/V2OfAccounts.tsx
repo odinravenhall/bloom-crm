@@ -115,16 +115,54 @@ function LinkModal({ link, onClose }: { link: Link; onClose: () => void }) {
   }, [code, done, link]);
   const n = "grid size-6 shrink-0 place-items-center rounded-full text-[12px] font-bold";
   const nst = { background: "var(--v2-blue)", color: "#fff" };
+  // L'extension (bloom.js) marque la page quand elle est installée.
+  const [ext, setExt] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    const see = () => setExt(!!document.documentElement.dataset.bloomOfExt);
+    see();
+    const t = setInterval(see, 1500);
+    return () => clearInterval(t);
+  }, []);
+  // Un clic : code à usage unique, puis l'extension ouvre le vrai site onlyfans.com et relie dès la connexion.
+  const openOf = async () => {
+    try {
+      const c = await api<{ code: string; expiresAt: number }>("POST", "/api/of/link-code", { creatorId: link.creatorId });
+      setCode(c);
+      window.postMessage({ type: "bloom-of-link", code: c.code, name: link.name }, window.location.origin);
+      setOpened(true);
+    } catch (e) {
+      toast(errText(e), "err");
+    }
+  };
   return (
-    <Modal title={`Relier ${link.name} à OnlyFans`} sub="Le mot de passe n’est jamais lu : seule la session est gardée, chiffrée." onClose={onClose}>
+    <Modal title={`Relier ${link.name} à OnlyFans`} sub="Tu te connectes sur le vrai site d’OnlyFans : Bloom ne voit jamais le mot de passe, seule la session est gardée, chiffrée." onClose={onClose}>
       {done ? (
         <div className="text-[13px]">
           <p className="flex items-center gap-2 font-semibold" style={{ color: "var(--v2-up)" }}><CheckCircle2 className="size-4" />Reliée ✓</p>
           <div className="mt-5 flex justify-end"><button onClick={onClose} className="v2-btn">Fermer</button></div>
         </div>
+      ) : ext && !manual ? (
+        <div className="text-[13px]">
+          {opened ? (
+            <>
+              <p className="font-semibold">OnlyFans s’est ouvert dans un nouvel onglet.</p>
+              <p className="mt-1 text-muted">Connecte-toi avec l’email et le mot de passe de {link.name}. Dès que c’est fait, Bloom est relié tout seul (bandeau vert dans l’onglet OnlyFans). En attente…</p>
+              <p className="mt-3 text-[12px] text-muted">Déjà connecté à un autre compte OnlyFans dans ce Chrome ? Déconnecte-toi dans l’onglet puis reconnecte-toi avec le bon : Bloom réessaie tout seul.</p>
+              <div className="mt-5 flex justify-end gap-2"><button onClick={() => void openOf()} className="v2-btn" data-kind="ghost">Rouvrir OnlyFans</button></div>
+            </>
+          ) : (
+            <>
+              <p className="text-muted">Bloom ouvre onlyfans.com dans un nouvel onglet. Tu te connectes normalement (email, mot de passe, code de validation si OnlyFans en demande) et la liaison se fait toute seule.</p>
+              <button onClick={() => void openOf()} className="v2-btn mt-4 w-full" style={{ height: 44 }}><Link2 className="size-4" />Se connecter sur OnlyFans</button>
+            </>
+          )}
+          <button onClick={() => setManual(true)} className="mt-4 text-[12px] text-muted underline">Relier avec un code à la place</button>
+        </div>
       ) : (
         <div className="space-y-4 text-[13px]">
-          <div className="flex gap-3"><span className={n} style={nst}>1</span><div>Une seule fois par ordinateur : installe l’extension. <a href="/bloom-relier-of.zip" download className="inline-flex items-center gap-1 font-semibold underline" style={{ color: "var(--v2-sky)" }}><Download className="size-3.5" />Télécharger</a><p className="mt-1 text-[12px] text-muted">Dézippe, ouvre chrome://extensions, active « Mode développeur », puis « Charger l’extension non empaquetée » et choisis le dossier « bloom-relier-of ».</p></div></div>
+          <div className="flex gap-3"><span className={n} style={nst}>1</span><div>Une seule fois par ordinateur : installe l’extension. <a href="/bloom-relier-of.zip" download className="inline-flex items-center gap-1 font-semibold underline" style={{ color: "var(--v2-sky)" }}><Download className="size-3.5" />Télécharger</a><p className="mt-1 text-[12px] text-muted">Dézippe, ouvre chrome://extensions, active « Mode développeur », puis « Charger l’extension non empaquetée » et choisis le dossier « bloom-relier-of ». Recharge ensuite cette page : un bouton « Se connecter sur OnlyFans » remplacera ces étapes.</p></div></div>
           <div className="flex gap-3"><span className={n} style={nst}>2</span><div>Dans ce Chrome, connecte-toi à <b>onlyfans.com</b> avec le compte de {link.name} et <b>laisse l’onglet ouvert</b>.</div></div>
           <div className="flex gap-3"><span className={n} style={nst}>3</span><div className="flex-1">
             Clique sur l’extension « Bloom – Relier OnlyFans » et colle ce code :
