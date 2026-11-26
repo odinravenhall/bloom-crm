@@ -115,3 +115,25 @@ export async function pageJson(cid, { goto, match, proxy }) {
   await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
   return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
 }
+
+/** Liste les appels d'API que la page déclenche, avec leur forme. */
+export async function probe(cid, { goto = '/', proxy }) {
+  const page = await pageOf(cid, proxy);
+  const out = [];
+  const h = async (r) => {
+    if (!r.url().includes('/api2/') || out.length >= 12) return;
+    let keys = null;
+    try {
+      const j = await r.json();
+      keys = j && typeof j === 'object' ? Object.keys(j).slice(0, 15) : typeof j;
+    } catch {
+      keys = 'texte';
+    }
+    out.push({ url: r.url().replace('https://onlyfans.com', '').slice(0, 70), status: r.status(), keys });
+  };
+  page.on('response', h);
+  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  for (let i = 0; i < 30 && out.length < 6; i++) await page.waitForTimeout(500);
+  page.off('response', h);
+  return out;
+}
