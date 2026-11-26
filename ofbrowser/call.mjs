@@ -137,3 +137,11 @@ export async function probe(cid, { goto = '/', proxy }) {
   page.off('response', h);
   return out;
 }
+
+export async function state(cid, proxy) {
+  const page = await pageOf(cid, proxy);
+  await page.goto('https://onlyfans.com/my/profile', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+  const ck = await page.context().cookies('https://onlyfans.com');
+  return { url: page.url(), cookies: ck.map((c) => c.name) };
+}
