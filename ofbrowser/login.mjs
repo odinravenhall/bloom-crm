@@ -74,11 +74,12 @@ export async function start({ cid, email, password, proxy }) {
             await j.page.fill('input[name="password"]', password);
             j.url = j.page.url();
             j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
-            if (i % 5 === 0) await j.page.locator('button:has-text("SE CONNECTER"), button[type="submit"]').first().click({ timeout: 3000 }).catch(() => {});
+           
 
             for (let i = 0; i < 120 && j.state !== 'done' && j.state !== 'error'; i++) {
                 j.url = j.page.url();
                 j.text = String(await j.page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+                 if (i % 5 === 0) await j.page.locator('button:has-text("SE CONNECTER"), button[type="submit"]').first().click({ timeout: 3000 }).catch(() => {});
                 const now = await sessValue(j.ctx);
                 if (now && now !== before && !/return_to|login/i.test(j.url)) return done(j);
                 if (j.state === 'waiting') {
