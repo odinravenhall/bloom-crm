@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { code, close, job, start } from './login.mjs';
+import { call } from './call.mjs';
 
 const read = async (req) => { const b = []; for await (const c of req) b.push(c); return JSON.parse(Buffer.concat(b).toString() || '{}'); };
 const json = (res, s, d) => { res.writeHead(s, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(d)); };
@@ -30,6 +31,12 @@ createServer(async (req, res) => {
       await code(t, String((await read(req)).code || '').trim());
       return json(res, 200, { ok: true });
     }
+
+    if (req.method === 'POST' && u.pathname === '/call') {
+      const b = await read(req);
+      return json(res, 200, await call(b.cid, b));
+    }
+    
     if (req.method === 'POST' && u.pathname === '/close') { close(t); return json(res, 200, { ok: true }); }
     json(res, 404, { error: 'Introuvable' });
   } catch (e) { json(res, 400, { error: e.message }); }

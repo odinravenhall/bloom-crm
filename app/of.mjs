@@ -47,34 +47,17 @@ function sign(path, userId, xbc, ua, query) {
 
 /** Appel à l'API d'OnlyFans au nom d'une modèle, par son proxy. */
 export async function of(cid, path, { method = 'GET', query, form } = {}) {
-  const l = one('SELECT * FROM of_links WHERE creator_id = ?', cid);
-  if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
-  const jar = open(l.cookies);
-  const bc = /(?:^|;\s*)bc=([^;]+)/.exec(jar)?.[1] || randomBytes(16).toString('hex');
-  const uid = l.of_id || /(?:^|;\s*)(?:auth_id|user_id|u_id)=([^;]+)/.exec(jar)?.[1] || '';
-  const proxy = proxyOf(cid);
-  const r = await fetch(`https://onlyfans.com${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
-    method,
-    headers: {
-      cookie: jar, 'user-agent': l.user_agent, accept: 'application/json, text/plain, */*',
-      'app-token': APP_TOKEN, 'x-bc': bc, ...(uid ? { 'user-id': uid } : {}), origin: 'https://onlyfans.com', referer: 'https://onlyfans.com/',
-      sign: sign(path, uid, bc, l.user_agent, query || {}),
-      ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
-    },
-    body: form ? new URLSearchParams(form).toString() : undefined,
-    ...(await via(proxy)),
-    redirect: 'manual',
-    signal: AbortSignal.timeout(30_000),
-  }).catch(() => null);
-  if (!r) throw new OFError(502, 'OnlyFans ne répond pas (proxy ou réseau).');
-  const text = await r.text();
-  let data = text;
-  try { data = text ? JSON.parse(text) : null; } catch {}
-  if (r.status === 401 || r.status === 403 || (r.status === 200 && /^\s*</.test(text))) {
+  if (!one('SELECT 1 AS x FROM of_links WHERE creator_id = ?', cid)) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
+  const r = await browser('/call', { cid, path, method, query, form, proxy: proxyOf(cid) }).catch(() => null);
+  if (!r) throw new OFError(502, 'Navigateur injoignable.');
+  if (!r.status) throw new OFError(502, 'OnlyFans ne répond pas.');
+  let data = r.body;
+  try { data = r.body ? JSON.parse(r.body) : null; } catch {}
+  if (r.status === 401 || r.status === 403 || (r.status === 200 && /^\s*</.test(String(r.body || '')))) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', 'Session refusée par OnlyFans : il faut relier le compte à nouveau.', Date.now(), cid);
     throw new OFError(401, 'Session OnlyFans refusée : relie le compte à nouveau.');
   }
-  if (!r.ok || data?.error) throw new OFError(r.status, `OnlyFans ${r.status} : ${data?.error?.message || String(text).slice(0, 140)}`);
+  if (r.status >= 400 || data?.error) throw new OFError(r.status, `OnlyFans ${r.status} : ${data?.error?.message || String(r.body || '').slice(0, 140)}`);
   run('UPDATE of_links SET error = NULL, checked_at = ? WHERE creator_id = ?', Date.now(), cid);
   return data;
 }
