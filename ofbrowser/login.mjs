@@ -12,7 +12,9 @@ export const job = (t) => jobs.get(t);
 export const close = (t) => { const j = jobs.get(t); j?.ctx?.close().catch(() => { }); jobs.delete(t); };
 
 const sess = async (ctx) => (await ctx.cookies('https://onlyfans.com')).some((c) => c.name === 'sess');
-const turnstile = async (page) => (await page.locator('iframe[src*="challenges.cloudflare.com"]').count()) > 0;
+const turnstile = async (page) =>
+  (await page.locator('iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-stage, [data-testid="challenge-stage"]').count()) > 0 ||
+  /vérifiez que vous êtes humain|verify you are human|checking your browser|un instant/i.test(await page.locator('body').innerText().catch(() => ''));
 const errText = async (page) => {
     const t = await page.locator('.b-errors, .g-error, [class*="error"]').first().textContent().catch(() => '');
     return t && /password|email|incorrect|wrong/i.test(t) ? t.trim() : '';

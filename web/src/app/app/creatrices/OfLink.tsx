@@ -14,7 +14,7 @@ export function useOfLinks() {
   const load = useCallback(() => {
     api<{ links: OfLinkState[]; canEdit: boolean; proxy: boolean }>("GET", "/api/of/links")
       .then((r) => (setLinks(r.links), setCanEdit(r.canEdit), setProxy(r.proxy)))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
   useEffect(() => {
     load();
@@ -138,7 +138,7 @@ function LinkModal({ state, onClose }: { state: OfLinkState; onClose: () => void
 
   const unlink = async () => {
     if (!confirm(`Délier ${state.name} d’OnlyFans ?`)) return;
-    await api("POST", "/api/of/unlink", { creatorId: state.creatorId }).catch(() => {});
+    await api("POST", "/api/of/unlink", { creatorId: state.creatorId }).catch(() => { });
     onClose();
   };
 
@@ -196,7 +196,10 @@ function LinkModal({ state, onClose }: { state: OfLinkState; onClose: () => void
 
               {ticket ? (
                 <p className="mt-3 text-[12px] text-muted">
-                  Connexion en cours… {phase === "human" ? <a href={`/api/of/live?t=${ticket}`} target="oflive" className="font-semibold text-primary underline">Ouvrir l’écran</a> : null}
+                  Connexion en cours…{" "}
+                  <a href={`/api/of/live?t=${ticket}`} target="oflive" className="font-semibold text-primary underline">
+                    Voir l’écran
+                  </a>
                 </p>
               ) : (
                 <button disabled={busy || !v.email || !v.password || !v.c1 || !v.c2} onClick={submit} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary font-semibold text-(--color-on-primary) disabled:opacity-50">
