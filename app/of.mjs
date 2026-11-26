@@ -110,9 +110,23 @@ const browser = async (path, payload) => {
 };
 
 /** Écran de relais du Cloudflare (page ouverte dans un onglet, à part). */
-const LIVE = () => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
-<style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100vh}</style>
-<iframe src="/api/of/vnc/vnc.html?autoconnect=1&resize=scale&reconnect=1&show_dot=0"></iframe>`;
+const LIVE = (t) => `<!doctype html><meta charset="utf-8"><title>Connexion OnlyFans</title>
+<style>body{margin:0;background:#111;color:#eee;font:13px system-ui}#bar{position:sticky;top:0;background:#1b1b1b;padding:8px;display:flex;gap:10px;align-items:center;z-index:2}#s{display:block;width:1280px;cursor:crosshair}</style>
+<div id="bar"><button onclick="fetch('/api/of/live/solve?t=${t}',{method:'POST'})">Cocher la case</button><span id="w">Clique dans l'image. L'image est en taille réelle, les clics tombent juste.</span></div>
+<img id="s" src="/api/of/live/shot?t=${t}">
+<script>
+const t='${t}',s=document.getElementById('s');
+let busy=false;
+async function tick(){
+ if(!busy) await new Promise(r=>{s.onload=r;s.onerror=r;s.src='/api/of/live/shot?t='+t+'&r='+Date.now()});
+ const r=await fetch('/api/of/live/result?t='+t).then(x=>x.json()).catch(()=>null);
+ if(r&&(r.state==='done'||r.state==='error')){document.getElementById('w').textContent=r.state==='done'?'Connecté ✓':'Échec : '+(r.error||'');return}
+ setTimeout(tick,600)}
+s.onclick=async e=>{const b=s.getBoundingClientRect();busy=true;
+ await fetch('/api/of/live/click?t='+t,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x:e.clientX-b.left,y:e.clientY-b.top})}).catch(()=>{});
+ busy=false};
+tick();
+</script>`;
 
 export function ofRoutes({ userFrom, send, body, creators }) {
   const admin = (req, res) => {
@@ -147,11 +161,11 @@ export function ofRoutes({ userFrom, send, body, creators }) {
         send(res, 200, { ticket: r.ticket });
       } catch (e) { send(res, 400, { error: e.message }); }
     },
-    'POST /api/of/live/solve': async (req, res) => {
+ 'POST /api/of/live/solve': async (req, res) => {
       const t = ticketOf(req);
       const l = one('SELECT creator_id FROM of_logins WHERE ticket = ?', t);
       if (!l) return send(res, 404, { error: 'Connexion inconnue' });
-      await browser(`/solve?t=${encodeURIComponent(t)}`, { cid: l.creator_id, cookies: null }).catch(() => {});
+      await browser('/solve', { cid: l.creator_id }).catch(() => {});
       send(res, 200, { ok: true });
     },
     'GET /api/of/live/result': async (req, res) => {

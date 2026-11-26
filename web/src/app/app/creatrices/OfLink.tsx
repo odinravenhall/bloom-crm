@@ -90,7 +90,7 @@ function LinkModal({ state, onClose }: { state: OfLinkState; onClose: () => void
       if (!r || stopped) return;
       if (r.state === "human") {
         setPhase((p) => {
-          if (p !== "human") window.open(`/api/of/live?t=${ticket}`, "oflive", "width=560,height=960");
+          if (p !== "human") window.open(`/api/of/live?t=${ticket}`, "oflive", "width=1300,height=960");
           return "human";
         });
       } else if (r.state === "code") setPhase("code");
