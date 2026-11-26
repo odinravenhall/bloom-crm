@@ -36,7 +36,12 @@ createServer(async (req, res) => {
       const b = await read(req);
       return json(res, 200, await call(b.cid, b));
     }
-    
+
+    if (req.method === 'POST' && u.pathname === '/sample') {
+      const b = await read(req);
+      return json(res, 200, await sample(b.cid, b.proxy));
+    }
+
     if (req.method === 'POST' && u.pathname === '/close') { close(t); return json(res, 200, { ok: true }); }
     json(res, 404, { error: 'Introuvable' });
   } catch (e) { json(res, 400, { error: e.message }); }

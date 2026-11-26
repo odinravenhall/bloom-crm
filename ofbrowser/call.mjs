@@ -34,20 +34,34 @@ async function pageOf(cid, proxy) {
   return page;
 }
 
-export async function call(cid, { path, method = 'GET', query, form, proxy }) {
+export async function call(cid, { path, method = 'GET', query, form, proxy, headers = {} }) {
   const page = await pageOf(cid, proxy);
   const qs = query ? `?${new URLSearchParams(query)}` : '';
   const out = await page.evaluate(
-    async ({ url, method, body }) => {
+    async ({ url, method, body, headers }) => {
       const r = await fetch(url, {
         method,
         credentials: 'include',
-        headers: body ? { 'content-type': 'application/x-www-form-urlencoded' } : {},
+        headers: { ...headers, ...(body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}) },
         body,
       });
       return { status: r.status, body: await r.text() };
     },
-    { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null },
+    { url: `https://onlyfans.com${path}${qs}`, method, body: form ? new URLSearchParams(form).toString() : null, headers },
   );
   return { ...out, last: page.__last };
+}
+
+/** Relève de vrais appels du site, en-têtes compris, pour reconstituer le hash. */
+export async function sample(cid, proxy) {
+  const page = await pageOf(cid, proxy);
+  const got = [];
+  const h = (r) => {
+    if (/\/api2\//.test(r.url()) && got.length < 5) got.push({ url: r.url(), headers: r.headers() });
+  };
+  page.on('request', h);
+  await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+  for (let i = 0; i < 30 && got.length < 3; i++) await page.waitForTimeout(500);
+  page.off('request', h);
+  return got;
 }
