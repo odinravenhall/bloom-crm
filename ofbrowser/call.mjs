@@ -57,7 +57,7 @@ export async function sample(cid, proxy) {
   const page = await pageOf(cid, proxy);
   const got = [];
   const h = (r) => {
-    if (/\/api2\//.test(r.url()) && got.length < 5) got.push({ url: r.url(), headers: r.headers() });
+    if (/\/api2\//.test(r.url()) && got.length < 5) got.push({ url: r.url(), method: r.method(), postData: r.postData()?.slice(0, 300) || null, headers: r.headers() });
   };
   page.on('request', h);
   await page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
