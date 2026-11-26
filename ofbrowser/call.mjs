@@ -100,3 +100,18 @@ export async function bundle(cid, proxy, q = 'x-hash') {
     return out;
   }, q);
 }
+
+/** Ouvre une page du site et renvoie la réponse JSON d'une de ses propres requêtes. */
+export async function pageJson(cid, { goto, match, proxy }) {
+  const page = await pageOf(cid, proxy);
+  const p = new Promise((res) => {
+    const h = (r) => {
+      if (!r.url().includes(match)) return;
+      page.off('response', h);
+      r.json().then(res).catch(() => res(null));
+    };
+    page.on('response', h);
+  });
+  await page.goto(`https://onlyfans.com${goto}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 20_000))]);
+}
