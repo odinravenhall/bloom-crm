@@ -17,15 +17,14 @@ const errText = async (page) => {
 };
 
 async function done(j) {
-  // Ouvre une page de l'appli : le site envoie alors ses propres requêtes, qui portent « user-id ».
   await j.page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
   for (let i = 0; i < 20 && !j.last; i++) await j.page.waitForTimeout(500);
   for (let i = 0; i < 10 && !j.ofId; i++) await j.page.waitForTimeout(500);
   const all = await j.ctx.cookies('https://onlyfans.com');
   j.cookies = all.map((c) => `${c.name}=${c.value}`).join('; ');
   j.userAgent = await j.page.evaluate(() => navigator.userAgent).catch(() => UA);
-  j.state = 'done';
   await j.ctx.close().catch(() => {});
+  j.state = 'done';
 }
 
 export async function start({ cid, email, password, proxy }) {
@@ -34,15 +33,24 @@ export async function start({ cid, email, password, proxy }) {
   jobs.set(t, j);
   (async () => {
     try {
-      j.ctx = await chromium.launchPersistentContext(`/data/of/${cid}`, {
-        headless: false,
-        ...(proxy ? { proxy: { server: proxy } } : {}),
-        locale: 'fr-FR', timezoneId: 'Europe/Paris', userAgent: UA,
-        viewport: { width: 1280, height: 900 },
-        args: ['--disable-blink-features=AutomationControlled'],
-      });
+      const dir = `/data/of/${cid}`;
+      for (let i = 0; i < 6 && !j.ctx; i++) {
+        try {
+          j.ctx = await chromium.launchPersistentContext(dir, {
+            headless: false,
+            ...(proxy ? { proxy: { server: proxy } } : {}),
+            locale: 'fr-FR', timezoneId: 'Europe/Paris', userAgent: UA,
+            viewport: { width: 1280, height: 900 },
+            args: ['--disable-blink-features=AutomationControlled'],
+          });
+        } catch {
+          for (const f of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) await rm(`${dir}/${f}`, { force: true }).catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      if (!j.ctx) throw new Error('Profil de navigateur verrouillé.');
       j.page = j.ctx.pages()[0] || (await j.ctx.newPage());
-j.page.on('request', (r) => {
+      j.page.on('request', (r) => {
         if (!/\/api2\//.test(r.url())) return;
         const h = r.headers();
         j.last = { url: r.url().replace('https://onlyfans.com', '').slice(0, 90), keys: Object.keys(h).join(',') };

@@ -1,5 +1,6 @@
 // Exécute des appels dans la page OnlyFans du modèle : le site signe lui-même ses requêtes.
 import { chromium } from 'playwright';
+import { rm } from 'node:fs/promises';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
 const open = new Map();
@@ -34,12 +35,22 @@ async function pageOf(cid, proxy) {
     cur.timer = setTimeout(() => shut(cid), IDLE);
     return cur.page;
   }
-  const ctx = await chromium.launchPersistentContext(`/data/of/${cid}`, {
-    headless: false,
-    ...(proxy ? { proxy: { server: proxy } } : {}),
-    locale: 'fr-FR', timezoneId: 'Europe/Paris', userAgent: UA,
-    viewport: { width: 1280, height: 900 },
-  });
+const dir = `/data/of/${cid}`;
+  let ctx = null;
+  for (let i = 0; i < 6 && !ctx; i++) {
+    try {
+      ctx = await chromium.launchPersistentContext(dir, {
+        headless: false,
+        ...(proxy ? { proxy: { server: proxy } } : {}),
+        locale: 'fr-FR', timezoneId: 'Europe/Paris', userAgent: UA,
+        viewport: { width: 1280, height: 900 },
+      });
+    } catch {
+      for (const f of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) await rm(`${dir}/${f}`, { force: true }).catch(() => {});
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  if (!ctx) throw new Error('Profil de navigateur verrouillé.');
   const page = ctx.pages()[0] || (await ctx.newPage());
   page.on('request', (r) => {
     if (/\/api2\//.test(r.url())) page.__last = { url: r.url().slice(28, 120), keys: Object.keys(r.headers()).join(',') };
