@@ -17,6 +17,7 @@ const errText = async (page) => {
 };
 
 async function done(j) {
+  await j.page.goto('https://onlyfans.com/my/notifications', { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
   let uid = null;
   for (let i = 0; i < 20 && !uid; i++) {
     uid = await j.page.evaluate(() => window.__of?.uid || null).catch(() => null);
@@ -52,14 +53,25 @@ export async function start({ cid, email, password, proxy }) {
         args: ['--disable-blink-features=AutomationControlled'],
       });
       j.page = j.ctx.pages()[0] || (await j.ctx.newPage());
-      await j.ctx.addInitScript(() => {
+await j.ctx.addInitScript(() => {
+        const X = XMLHttpRequest.prototype;
+        const setH = X.setRequestHeader;
+        X.setRequestHeader = function (k, v) {
+          try { if (String(k).toLowerCase() === 'user-id') this.__uid = v; } catch {}
+          return setH.apply(this, arguments);
+        };
+        const snd = X.send;
+        X.send = function () {
+          try { if (this.__uid) window.__of = { uid: this.__uid }; } catch {}
+          return snd.apply(this, arguments);
+        };
         const orig = window.fetch;
         window.fetch = function (input, init) {
           try {
             const h = init?.headers;
             const g = (n) => (h instanceof Headers ? h.get(n) : h ? h[n] ?? h[n.toLowerCase()] : null);
             const uid = g('user-id');
-            if (uid) window.__of = { uid, sign: g('sign') };
+            if (uid) window.__of = { uid };
           } catch {}
           return orig.apply(this, arguments);
         };
