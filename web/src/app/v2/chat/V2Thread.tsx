@@ -334,8 +334,8 @@ export function V2Thread({ conv, me, model, aiWriting, onBack, onSent, onNext, a
         {lockedBy ? <span className="hidden items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold sm:flex" style={{ background: "rgb(59 130 246 / 0.14)", color: "var(--v2-sky)" }}><Lock className="size-3" /> {lockedBy} est dessus</span> : null}
         {waiting !== null ? <span className="v2-wait hidden sm:inline-flex" data-tone={tone ?? "bad"}>attend {durSec(waiting)}</span> : null}
         {hasAi ? (
-          <button onClick={toggleAi} title={ai ? "L’IA répond à ce fan. Clique pour la couper et répondre toi-même." : "L’IA est coupée sur ce fan. Clique pour la rallumer."} className="v2-ai flex h-9 shrink-0 items-center gap-2 rounded-xl border px-2.5 text-[12px] font-semibold" data-on={ai}>
-            <Sparkles className="size-3.5" /><span className="hidden lg:inline">IA</span><i><b /></i>
+          <button onClick={toggleAi} title={ai ? "L’IA de Substy répond à ce fan. Clique pour la couper et répondre toi-même." : "L’IA de Substy est coupée sur ce fan. Clique pour la rallumer."} className="v2-ai flex h-9 shrink-0 items-center gap-2 rounded-xl border px-2.5 text-[12px] font-semibold" data-on={ai}>
+            <Sparkles className="size-3.5" /><span className="hidden sm:inline">Substy</span><i><b /></i>
           </button>
         ) : null}
         <div className="flex shrink-0 items-center">

@@ -166,7 +166,8 @@ export function computeQueue(u, list, o = {}) {
       const row = { c, m, cid, at, reply, todo, boxIdx: box, box: box != null ? boxName(box) : null };
       row.isNew = !!c.since && Date.parse(c.since) >= now - 3 * 24 * HOUR;
       // MYM en direct : le fan est en ligne sur MYM ; sinon (Substy) : il a écrit il y a moins de 10 minutes.
-      row.active = c.mym ? !!c.online : !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
+      // OnlyFans en direct : vu en ligne par OnlyFans il y a moins de 10 minutes.
+      row.active = c.mym ? !!c.online : c.ofd && c.seenAt ? Date.parse(c.seenAt) >= now - 10 * MIN : !!c.last && !c.last.fromCreator && at >= now - 10 * MIN;
       counts.all++;
       if (reply) counts.reply++;
       if (todo) counts.todo++;

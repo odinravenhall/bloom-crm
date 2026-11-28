@@ -73,7 +73,7 @@ function ofSign(path, uid) {
 }
 
 /** Requête directe à l’API d’OnlyFans, signée comme le fait l’application. */
-async function ofFetch(cid, path, { method = 'GET', query, form } = {}) {
+async function ofFetch(cid, path, { method = 'GET', query, form, json } = {}) {
   const l = one('SELECT cookies, user_agent FROM of_links WHERE creator_id = ?', cid);
   if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
   const jar = open(l.cookies);
@@ -94,10 +94,11 @@ async function ofFetch(cid, path, { method = 'GET', query, form } = {}) {
     cookie: jar,
   };
   if (form) headers['content-type'] = 'application/x-www-form-urlencoded';
+  if (json) headers['content-type'] = 'application/json';
   const proxy = proxyOf(cid);
   const r = await fetch('https://onlyfans.com' + path + qs, {
     method, headers,
-    body: form ? new URLSearchParams(form).toString() : undefined,
+    body: json ? JSON.stringify(json) : form ? new URLSearchParams(form).toString() : undefined,
     dispatcher: proxy ? await agentFor(proxy) : undefined,
   });
   return { status: r.status, text: await r.text() };

@@ -7,6 +7,7 @@ import { balanced, computeQueue, metaMap, tagsOf, waiting } from './inbox.mjs';
 import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymDelete, mymDirect, mymRead, mymSend, mymTyping } from './mymchat.mjs';
 import { pinFan } from './lists.mjs';
+import { ofAuthor, ofChatMessages, ofDirect, ofSend } from './ofchat.mjs';
 import { listMembers, listsOfCreator, mymGroups } from './fanlists.mjs';
 import { parisDay, revenue } from './revenue.mjs';
 import { canChat, canSee, isBoss, platformOfCreator } from './team.mjs';
@@ -56,7 +57,8 @@ function convOf(cid, c, m, extra = {}) {
     totalSpent: cents(c.paid ?? c.spent),
     // Substy ne dit pas si le fan est en ligne : on prend l'heure de son dernier message.
     // MYM en direct : en ligne maintenant, sinon sa dernière connexion à MYM.
-    lastSeenAt: c.mym ? (c.online ? new Date().toISOString() : c.seenAt || null) : fromFan ? last.at : null,
+    // OnlyFans en direct : la dernière connexion du fan, donnée par OnlyFans.
+    lastSeenAt: c.mym ? (c.online ? new Date().toISOString() : c.seenAt || null) : c.ofd && c.seenAt ? c.seenAt : fromFan ? last.at : null,
     lastMessageAt: last?.at || null,
     preview: last ? last.text || (last.media ? '📷 Média' : '') : '',
     lastFromFan: fromFan,
@@ -333,6 +335,19 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           return send(res, 200, { data, pageInfo: d.nextCursor ? { hasNextPage: true, endCursor: d.nextCursor } : { hasNextPage: false, endCursor: '' }, memberLastReadAt: readAt, sentBy, source: 'mym' });
         }
       }
+      // Modèle OnlyFans reliée : les messages viennent d'OnlyFans en direct (mêmes identifiants que chez Substy, donc
+      // l'auteur noté par Substy se recolle). Si OnlyFans ne répond pas, on retombe sur Substy.
+      if (ofDirect(x.cid)) {
+        const d = await ofChatMessages(x.cid, x.fanId, { cursor }).catch((e) => (console.warn('[bloom] messages OnlyFans en direct :', e.message), null));
+        if (d) {
+          for (const v of d.views) if (!v.fromFan) v.by = ofAuthor(x.cid, x.fanId, v);
+          const sentBy = Object.fromEntries(d.views.filter((v) => v.by?.kind === 'bloom').map((v) => [v.id, v.by.name]));
+          const data = d.views.map((v) => liveMsg(v, x.fanId, c?.name || 'Fan'));
+          data.sort((a, b) => Date.parse(b.message.createdAt) - Date.parse(a.message.createdAt));
+          const readAt = d.views.filter((v) => !v.fromFan && v.read).map((v) => v.at).sort().pop() || null;
+          return send(res, 200, { data, pageInfo: d.nextCursor ? { hasNextPage: true, endCursor: d.nextCursor } : { hasNextPage: false, endCursor: '' }, memberLastReadAt: readAt, sentBy, source: 'of' });
+        }
+      }
       // Substy échoue parfois sur certains fans (« Failed to get messages ») : on retente avec moins de messages.
       let r = null;
       let lastErr = null;
@@ -404,8 +419,28 @@ export function rvRoutes({ substy, userFrom, send, body, creators }) {
           setSetting('mym_send_last_refusal', `${new Date().toISOString()} · ${mymRefusal}`);
         }
       }
+      // Modèle OnlyFans reliée : un message TEXTE part directement chez OnlyFans. Les PPV (médias + prix) restent sur
+      // Substy tant que leur format n'est pas vérifié. Refus net d'OnlyFans (4xx : rien n'est parti) → Substy ; panne ou
+      // délai dépassé → on ne renvoie RIEN (pas de double envoi) et on affiche l'erreur.
+      let ofRefusal = null;
+      if (ofDirect(x.cid) && !medias.length && !b.replyToId) {
+        try {
+          const mid = await ofSend(x.cid, x.fanId, message);
+          if (mid) run('UPDATE sent_log SET message_id = ? WHERE id = ?', mid, Number(logged.lastInsertRowid));
+          patchInboxChat(x.cid, x.fanId, { unread: 0, handoff: false, last: { id: mid || `sent-${Date.now()}`, text: message, at: new Date().toISOString(), fromCreator: true, media: 0 } });
+          return send(res, 200, { message: { id: mid || `sent-${Date.now()}` }, waitedMs, via: 'of' });
+        } catch (e) {
+          console.warn('[bloom] envoi OnlyFans en direct refusé :', e.status, e.message);
+          if (!(e.status >= 400 && e.status < 500) || e.status === 401) {
+            run('DELETE FROM sent_log WHERE id = ?', Number(logged.lastInsertRowid));
+            return send(res, 502, { error: `OnlyFans n’a pas confirmé l’envoi (${e.message}). Vérifie dans la conversation avant de renvoyer.` });
+          }
+          ofRefusal = `${e.status} · ${String(e.message).slice(0, 200)}`;
+          setSetting('of_send_last_refusal', `${new Date().toISOString()} · ${ofRefusal}`);
+        }
+      }
       const r = await substy.send(x.cid, x.fanId, { message, medias, price: price || undefined, replyId: b.replyToId || null });
-      send(res, 200, { message: { id: String(r?.id || r?.message?.id || r?.messageId || `sent-${Date.now()}`) }, waitedMs, via: 'substy', ...(mymRefusal ? { mymRefusal } : {}) });
+      send(res, 200, { message: { id: String(r?.id || r?.message?.id || r?.messageId || `sent-${Date.now()}`) }, waitedMs, via: 'substy', ...(mymRefusal ? { mymRefusal } : {}), ...(ofRefusal ? { ofRefusal } : {}) });
     }],
     ['POST', /^\/api\/rv\/conversations\/([^/]+)\/action$/, async (req, res, id) => {
       const x = conv(req, res, decodeURIComponent(id));

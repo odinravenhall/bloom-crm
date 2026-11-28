@@ -16,6 +16,7 @@ import { sentRoutes } from './sentlog.mjs';
 import { fanListRoutes } from './fanlists.mjs';
 import { ofBrowserRoutes } from './ofbrowser.mjs';
 import { ofRoutes, ofVnc, ofVncUpgrade } from './of.mjs';
+import { ofChatRoutes } from './ofchat.mjs';
 import { ofDashRoutes } from './ofdash.mjs';
 import { ofReportRoutes } from './ofreports.mjs';
 import { ofEmployeeRoutes } from './ofemployees.mjs';
@@ -502,6 +503,7 @@ Object.assign(routes, nudgeRoutes({ substy, userFrom, send, body, creators: () =
 Object.assign(routes, staffRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
 Object.assign(routes, ofDashRoutes({ userFrom, send, creators: () => state.creators }));
 Object.assign(routes, ofRoutes({ userFrom, send, body, creators: () => state.creators || [] }));
+Object.assign(routes, ofChatRoutes({ userFrom, send }));
 const ofb = ofBrowserRoutes({ substy, userFrom, send });
 Object.assign(routes, ofb.routes);
 Object.assign(routes, fanListRoutes({ userFrom, send, body, creators: () => state.creators }));

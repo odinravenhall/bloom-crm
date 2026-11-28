@@ -5,6 +5,7 @@ import { enrichMessage } from './sentlog.mjs';
 import { libItemOf } from './library.mjs';
 import { mymAuthor, mymChatMessages, mymChatPage, mymDirect, twinOf } from './mymchat.mjs';
 import { isNative, nativeCreators } from './mym.mjs';
+import { ofAuthor, ofChatMessages, ofChatPage, ofDirect } from './ofchat.mjs';
 import { canChat, canEditAccess, canSee, creatorsOf, isBoss, onCreator, onVisible, ping, seesAll, setAccess, setActive, teamView, mymHidden } from './team.mjs';
 import { refuseBanned } from './journal.mjs';
 
@@ -125,6 +126,8 @@ export function broadcast(creatorId, type, data) {
   // Créatrice MYM reliée : les messages arrivent de MYM en direct (plus bas). Ce que Substy annonce ne sert plus qu'à
   // savoir si c'est son IA qui a écrit ; rien n'est envoyé aux navigateurs depuis Substy.
   if (kind === 'new_message' && data?.data && mymDirect(creatorId)) return void substyShadow(creatorId, data.data);
+  // Modèle OnlyFans reliée : pareil, les messages viennent d'OnlyFans ; Substy sert à noter l'auteur et à relire tout de suite.
+  if (kind === 'new_message' && data?.data && ofDirect(creatorId)) return void ofShadow(creatorId, data.data);
   const payload = { creatorId, type: kind };
   if (kind === 'new_message' && data?.data) {
     payload.fanId = data.data.fanId != null ? String(data.data.fanId) : null;
@@ -149,6 +152,103 @@ function substyShadow(cid, raw) {
   } else logMessage(cid, fanId, v);
   onMessageAlert(cid, fanId, v);
   if (!v.fromFan && v.by?.kind === 'creator') confirmSender(cid, fanId);
+}
+
+/** Message annoncé par Substy pour une modèle OnlyFans reliée : mêmes identifiants qu'OnlyFans. */
+function ofShadow(cid, raw) {
+  const fanId = raw.fanId != null ? String(raw.fanId) : null;
+  const v = messageView(raw, bloomSenderOf(raw));
+  logMessage(cid, fanId, v);
+  // Filet : si OnlyFans ne l'a pas montré 8 s plus tard (conversation sortie du haut de la liste relu), on passe la
+  // version de Substy (même identifiant) à la liste et aux navigateurs.
+  setTimeout(() => {
+    if (ofSeen.has(String(v.id))) return;
+    ofSeen.add(String(v.id));
+    onLiveMessage(cid, fanId, v);
+    const line = `data: ${JSON.stringify({ creatorId: cid, type: 'new_message', fanId, message: v, via: 'substy' })}\n\n`;
+    for (const [c, u] of clients) if (canSee(u, cid)) c.write(line);
+  }, 8000);
+  if (v.by && v.by.kind !== 'creator') run("UPDATE msg_log SET kind = ?, by_name = ? WHERE id = ? AND kind = 'creator'", v.by.kind, v.by.kind === 'bloom' || v.by.kind === 'employee' ? v.by.name : null, String(v.id));
+  onMessageAlert(cid, fanId, v);
+  if (!v.fromFan && v.by?.kind === 'creator') confirmSender(cid, fanId);
+  // Substy a vu passer un message : on relit OnlyFans tout de suite plutôt qu'au prochain tour.
+  const st = ofLiveOf(cid);
+  if (Date.now() - st.at > 1500) setTimeout(() => ofLiveTick(cid), 800);
+}
+
+// ---------------------------------------------------------------- temps réel OnlyFans (modèles reliées)
+// Comme pour MYM : Bloom relit le haut de la liste des conversations chez OnlyFans (toutes les 10 s si quelqu'un regarde
+// la modèle, 45 s sinon, et tout de suite quand Substy annonce un message), puis les derniers messages d'une
+// conversation qui a bougé. Rythme plus lent que MYM : chaque appel passe par le proxy de la modèle.
+const ofLive = new Map();
+// Messages déjà montrés aux navigateurs (par OnlyFans ou, à défaut, par Substy) : jamais deux fois.
+const ofSeen = new Set();
+setInterval(() => ofSeen.size > 5000 && ofSeen.clear(), 600_000);
+const ofLiveOf = (cid) => ofLive.get(cid) || (ofLive.set(cid, { busy: false, primed: false, at: 0, ok: 0, err: null, events: 0 }), ofLive.get(cid));
+export const ofLiveState = () => Object.fromEntries([...ofLive].map(([cid, s]) => [cid, { live: !!s.ok && Date.now() - s.ok < 120_000, lastOk: s.ok || null, error: s.err, events: s.events }]));
+/** Une conversation lue chez OnlyFans, par-dessus ce que Substy en sait (IA, dépense, nom). */
+const ofMerge = (old, m) => {
+  const base = old ? strip(old) : { name: m.ofName || m.username || 'Fan', avatar: m.ofAvatar || null, ai: false, handoff: false, spent: 0, paid: 0, subscribed: m.sub ? 'active' : null, since: null };
+  const { ofName, ofAvatar, ...rest } = m;
+  return { ...base, ...rest, name: base.name || ofName || m.username || 'Fan', avatar: base.avatar || ofAvatar || null, ofd: true };
+};
+async function ofLiveTick(cid) {
+  const st = ofLiveOf(cid);
+  if (st.busy) return;
+  st.busy = true;
+  st.at = Date.now();
+  try {
+    const b = inboxOf(cid);
+    const r = await ofChatPage(cid, 0, 20);
+    const changed = [];
+    for (const m of r.items) {
+      const old = b.map.get(m.fanId);
+      if (st.primed && m.last && m.last.id !== old?.last?.id && !(old?.last?.at && Date.parse(old.last.at) > Date.parse(m.last.at))) changed.push([m, old?.last || null]);
+      put(b, ofMerge(old, m));
+    }
+    st.primed = true;
+    st.ok = Date.now();
+    st.err = null;
+    for (const [m, prev] of changed.slice(0, 10)) {
+      const d = await ofChatMessages(cid, m.fanId, { limit: 10 }).catch(() => null);
+      const since = prev?.at ? Date.parse(prev.at) : Infinity;
+      let fresh = (d?.views || []).filter((v) => v.id !== prev?.id && Date.parse(v.at) > since).reverse();
+      if (!fresh.length) fresh = (d?.views || []).slice(0, 1);
+      for (const v of fresh) {
+        if (ofSeen.has(v.id)) continue;
+        ofSeen.add(v.id);
+        v.by = ofAuthor(cid, m.fanId, v);
+        logMessage(cid, m.fanId, v);
+        st.events++;
+        const line = `data: ${JSON.stringify({ creatorId: cid, type: 'new_message', fanId: m.fanId, message: v, via: 'of' })}\n\n`;
+        for (const [c, u] of clients) if (canSee(u, cid)) c.write(line);
+      }
+    }
+  } catch (e) {
+    st.err = e.message;
+  } finally {
+    st.busy = false;
+  }
+}
+setInterval(() => {
+  const watched = (cid) => [...clients.values()].some((u) => canSee(u, cid));
+  for (const cid of INBOX.keys()) {
+    if (!ofDirect(cid)) continue;
+    const st = ofLiveOf(cid);
+    if (Date.now() - st.at >= (watched(cid) ? 10_000 : 45_000)) ofLiveTick(cid);
+  }
+}, 1_000);
+/** Relit `pages` pages de conversations chez OnlyFans (les plus récentes d'abord). */
+async function overlayOf(cid, pages) {
+  if (!ofDirect(cid)) return;
+  const b = inboxOf(cid);
+  let offset = 0;
+  for (let i = 0; i < pages && offset != null; i++) {
+    const r = await ofChatPage(cid, offset, 20);
+    for (const m of r.items) put(b, ofMerge(b.map.get(m.fanId), m));
+    offset = r.items.length ? r.next : null;
+    if (pages > 1) await mymSleep(400);
+  }
 }
 
 // ---------------------------------------------------------------- temps réel MYM (créatrices reliées)
@@ -314,7 +414,7 @@ const mymSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Une conversation vue par Substy : si elle est déjà lue chez MYM, Substy ne met à jour que l'IA et la dépense. */
 const fromSubsty = (b, c) => {
   const old = b.map.get(c.fanId);
-  return old?.mym ? { ...strip(old), ai: c.ai, handoff: c.handoff, spent: c.spent, paid: c.paid, name: c.name || old.name, avatar: c.avatar || old.avatar, subscribed: c.subscribed ?? old.subscribed, since: c.since ?? old.since } : c;
+  return old?.mym || old?.ofd ? { ...strip(old), ai: c.ai, handoff: c.handoff, spent: c.spent, paid: c.paid, name: c.name || old.name, avatar: c.avatar || old.avatar, subscribed: c.subscribed ?? old.subscribed, since: c.since ?? old.since } : c;
 };
 async function overlayMym(cid, pages) {
   if (!mymDirect(cid)) return;
@@ -363,6 +463,8 @@ async function crawl(cid) {
     b.resume = undefined;
     // MYM en direct par-dessus (tour complet : toutes les conversations, y compris celles que Substy ne connaît pas).
     await overlayMym(cid, 400).catch((e) => console.warn('[bloom] conversations MYM en direct :', e.message));
+    // OnlyFans en direct : seulement le haut de la liste (Substy a déjà toutes les conversations, avec les mêmes fans).
+    await overlayOf(cid, 10).catch((e) => console.warn('[bloom] conversations OnlyFans en direct :', e.message));
     b.complete = true;
     b.crawledAt = Date.now();
     setSetting(`inbox_done:${cid}`, String(b.crawledAt));
@@ -388,6 +490,7 @@ async function refreshTop(cid) {
     b.mymFull = true;
     overlayMym(cid, 400).catch((e) => ((b.mymFull = false), console.warn('[bloom] conversations MYM en direct :', e.message)));
   } else await overlayMym(cid, 2).catch(() => {});
+  // OnlyFans en direct : le haut de la liste est relu par `ofLiveTick` (qui prévient aussi les navigateurs).
 }
 /** Relit le haut de la liste d'une créatrice (nouvelle vente, nouveau fan…). */
 export const refreshInboxTop = (cid) => refreshTop(cid);

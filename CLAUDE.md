@@ -254,6 +254,28 @@ Paramètres de chacun (thème, langue) : `/app/parametres`.
 - Accueil et Performances (`revenue()`, `performance()`) : pour une créatrice MYM lue en direct, les ventes viennent
   de `rv_live` (`directMym`) et son compte MyPulse rapproché est laissé de côté (24/11/2026).
 
+## OnlyFans en direct : la messagerie (28/11/2026) — `app/ofchat.mjs`
+
+- Pour une modèle OnlyFans reliée dans Créatrices (`of_links`, `of.mjs`), la messagerie lit OnlyFans directement par
+  `of()` : haut de la liste des conversations (`ofLiveTick` de chat.mjs, 10 s si quelqu'un regarde la modèle, 45 s
+  sinon, et tout de suite quand Substy annonce un message), messages d'un fan (`/api/rv/conversations/:id/messages`,
+  `source: 'of'`, plus anciens par `id=`). Substy garde la liste complète (même fans), l'IA, la dépense ; Substy sert de
+  filet si OnlyFans ne répond pas.
+- Les identifiants de FANS et de MESSAGES sont les mêmes chez OnlyFans et chez Substy : l'auteur noté par Substy
+  (`msg_log`, IA / employé / automatisation) se recolle par l'identifiant (`ofAuthor`).
+- ⚠️ La requête doit être DANS le chemin passé à `of()` (« /api2/v2/chats?limit=10&offset=0 ») : avec l'option `query`,
+  la signature ne couvre pas la requête et OnlyFans répond « Please refresh the page ». OnlyFans rend 10 conversations
+  par page quel que soit `limit`.
+- Médias : ceux de la modèle (vault) par le relais de Substy par identifiant (`/media?p=/api/creators/<id>/medias/<id>/thumb|full`) ;
+  ceux des fans par `GET /api/of/cdn` (CDN d'OnlyFans relu par le proxy de la modèle : ses adresses ne s'ouvrent que
+  depuis l'adresse qui les a demandées). Bande passante du proxy : seulement pour les médias de fans.
+- Envoi : un message TEXTE part chez OnlyFans (`ofSend`, ⚠️ format lu dans le site, pas vérifié sur un vrai envoi au
+  28/11/2026) ; refus net (4xx) → Substy, panne → rien n'est renvoyé. Les PPV, réponses à un message, lu / non lu et
+  suppression restent sur Substy.
+- Interrupteur « Substy » dans l'en-tête de chaque conversation (`V2Thread`) = IA de Substy on / off sur ce fan.
+- La partie signature / proxy / captcha d'`of.mjs` est maintenue à part par l'agence (pas par Claude) : si OnlyFans
+  change de version et que tout se met à échouer, c'est là qu'il faut regarder.
+
 ## MYM → Envois groupés : Push, MoDs, Mass DM (24/11/2026) — `app/mymbulk.mjs`
 
 - Pages `/app/mym/push`, `/app/mym/mods`, `/app/mym/massdm` (copies de MyPulse ; studios plein écran : `MymStudioKit.tsx`).
