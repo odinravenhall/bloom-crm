@@ -1,8 +1,18 @@
 // Exécute des appels dans la page OnlyFans du modèle : le site signe lui-même ses requêtes.
 import { chromium } from 'playwright';
 import { rm } from 'node:fs/promises';
+import { bridgeFor, warm } from './socksbridge.mjs';
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36';
+
+async function proxyCfg(url) {
+  if (!url) return {};
+  const u = new URL(url);
+  if (u.protocol === 'socks5:' || u.protocol === 'socks:') { const port = await bridgeFor(url); await warm(url); return { proxy: { server: `http://127.0.0.1:${port}` } }; }
+  const p = { server: `${u.protocol}//${u.host}` };
+  if (u.username) { p.username = decodeURIComponent(u.username); p.password = decodeURIComponent(u.password); }
+  return { proxy: p };
+}
 const open = new Map();
 const IDLE = 5 * 60_000;
 const KEEP = ['time', 'sign', 'x-bc', 'app-token', 'x-of-rev', 'x-hash'];
@@ -43,9 +53,10 @@ const dir = `/data/of/${cid}`;
     try {
       ctx = await chromium.launchPersistentContext(dir, {
         headless: false,
-        ...(proxy ? { proxy: { server: proxy } } : {}),
+        ...(await proxyCfg(proxy)),
         locale: 'fr-FR', timezoneId: 'Europe/Paris', userAgent: UA,
         viewport: { width: 1280, height: 900 },
+        args: ['--disable-blink-features=AutomationControlled'],
       });
     } catch {
       for (const f of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) await rm(`${dir}/${f}`, { force: true }).catch(() => {});
@@ -82,7 +93,11 @@ async function freshAuth(page) {
 export async function call(cid, { path, method = 'GET', query, form, proxy, headers = {}, cookies }) {
   const page = await pageOf(cid, proxy);
   await inject(page, cookies);
-  const auth = await freshAuth(page);
+  let auth = null;
+  for (let i = 0; i < 4 && !auth; i++) {
+    auth = await freshAuth(page).catch(() => null);
+    if (!auth) await page.waitForTimeout(2000);
+  }
   if (!auth) throw new Error('Le site n’a pas signé de requête.');
   const picked = Object.fromEntries(KEEP.filter((k) => auth[k]).map((k) => [k, auth[k]]));
   const qs = query ? `?${new URLSearchParams(query)}` : '';

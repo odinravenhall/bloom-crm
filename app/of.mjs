@@ -32,10 +32,14 @@ export class OFError extends Error { constructor(s, m) { super(m); this.status =
 
 /** Proxy résidentiel FIXE de la modèle. `null` tant qu'IPRoyal n'est pas réglé (test seulement). */
 export function proxyOf(cid) {
-  const host = getSetting('iproyal_host'), user = getSetting('iproyal_user'), pass = getSetting('iproyal_pass');
-  if (!host || !user || !pass) return null;
+  const own = getSetting('of_proxy:' + cid);
+  if (own) return own;
+  const host = getSetting('nm_host'), user = getSetting('nm_user');
+  const sealed = getSetting('nm_pass');
+  if (!host || !user || !sealed) return null;
+  const pass = open(sealed);
   const sid = createHash('sha1').update(`bloom-of:${cid}`).digest('hex').slice(0, 12);
-  return `http://${encodeURIComponent(user)}:${encodeURIComponent(`${pass}_session-${sid}_lifetime-24h`)}@${host}`;
+  return `socks5://${encodeURIComponent(`${user}-country-fr-sid-${sid}`)}:${encodeURIComponent(pass)}@${host}:${getSetting('nm_port') || '1080'}`;
 }
 
 const RULES = ['app-token', 'user-id', 'x-bc', 'time', 'user-agent', 'path'];
@@ -46,46 +50,88 @@ function sign(path, userId, xbc, ua, query) {
   return createHash('md5').update(s).digest('hex');
 }
 
-/** Appel à l'API d'OnlyFans au nom d'une modèle, par son proxy. */
-export async function of(cid, path, { method = 'GET', query, form } = {}) {
- const l = one('SELECT * FROM of_links WHERE creator_id = ?', cid); if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
- const r = await browser('/call', { cid, path, method, query, form, proxy: proxyOf(cid), cookies: open(l.cookies) }).catch((e) => {
-    throw new OFError(502, `Navigateur : ${e.message}`);
+const SIGN_STATIC = 'IOtkCISFShmFVwT4iyJ7v4SyOUUyQlW9';
+const SIGN_PREFIX = '68816', SIGN_SUFFIX = '6b09a5d9', SIGN_SUM = 1088;
+const SIGN_IDX = [0,0,0,3,8,8,8,13,15,19,20,21,22,23,23,23,24,25,28,28,28,29,29,30,30,31,32,33,35,35,35,39];
+const OF_REV = '202611271546-053fafb120';
+const OF_TOKEN = '33d57ade8c02dbc5a333db99ff9ae26a';
+
+const agents = new Map();
+async function agentFor(proxy) {
+  if (!agents.has(proxy)) {
+    const { ProxyAgent } = await import('undici');
+    agents.set(proxy, new ProxyAgent(proxy));
+  }
+  return agents.get(proxy);
+}
+
+function ofSign(path, uid) {
+  const time = Date.now();
+  const sha = createHash('sha1').update(SIGN_STATIC + '\n' + time + '\n' + path + '\n' + uid).digest('hex');
+  const sum = SIGN_IDX.reduce((a, i) => a + sha.charCodeAt(i), 0);
+  return { time, sign: SIGN_PREFIX + ':' + sha + ':' + Math.abs(sum - SIGN_SUM).toString(16) + ':' + SIGN_SUFFIX };
+}
+
+/** Requête directe à l’API d’OnlyFans, signée comme le fait l’application. */
+async function ofFetch(cid, path, { method = 'GET', query, form } = {}) {
+  const l = one('SELECT cookies, user_agent FROM of_links WHERE creator_id = ?', cid);
+  if (!l) throw new OFError(409, 'Ce compte OnlyFans n’est pas relié à Bloom.');
+  const jar = open(l.cookies);
+  const uid = /(?:^|;\s*)auth_id=([^;\s]+)/.exec(jar)?.[1] || '';
+  const fp = /(?:^|;\s*)fp=([^;\s]+)/.exec(jar)?.[1] || '';
+  const { time, sign } = ofSign(path, uid);
+  const qs = query ? '?' + new URLSearchParams(query) : '';
+  const headers = {
+    accept: 'application/json, text/plain, */*',
+    'app-token': OF_TOKEN,
+    'user-agent': l.user_agent || UA,
+    'x-bc': fp,
+    'x-of-rev': OF_REV,
+    time: String(time),
+    sign,
+    'user-id': uid,
+    referer: 'https://onlyfans.com/my/chats/',
+    cookie: jar,
+  };
+  if (form) headers['content-type'] = 'application/x-www-form-urlencoded';
+  const proxy = proxyOf(cid);
+  const r = await fetch('https://onlyfans.com' + path + qs, {
+    method, headers,
+    body: form ? new URLSearchParams(form).toString() : undefined,
+    dispatcher: proxy ? await agentFor(proxy) : undefined,
   });
- if (r.last && !r.last.keys.includes('sign')) throw new OFError(502, 'Le site n’a pas signé la requête.');
-  if (!r) throw new OFError(502, 'Navigateur injoignable.');
-  if (!r.status) throw new OFError(502, 'OnlyFans ne répond pas.');
-  let data = r.body;
-  try { data = r.body ? JSON.parse(r.body) : null; } catch {}
-  if (r.status === 401 || r.status === 403 || (r.status === 200 && /^\s*</.test(String(r.body || '')))) {
+  return { status: r.status, text: await r.text() };
+}
+
+/** Appel à l’API d’OnlyFans au nom d’une modèle, par son proxy. */
+export async function of(cid, path, opts = {}) {
+  const r = await ofFetch(cid, path, opts);
+  let data = r.text;
+  try { data = r.text ? JSON.parse(r.text) : null; } catch { }
+  if (r.status === 401 || r.status === 403 || (r.status === 200 && /^\s*</.test(String(r.text || '')))) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', 'Session refusée par OnlyFans : il faut relier le compte à nouveau.', Date.now(), cid);
     throw new OFError(401, 'Session OnlyFans refusée : relie le compte à nouveau.');
   }
-  if (r.status >= 400 || data?.error) throw new OFError(r.status, `OnlyFans ${r.status} : ${data?.error?.message || String(r.body || '').slice(0, 140)}${r.last ? ` [${r.last.url} | ${r.last.keys}]` : ''}`);
+  if (r.status >= 400 || data?.error) throw new OFError(r.status, 'OnlyFans ' + r.status + ' : ' + (data?.error?.message || String(r.text || '').slice(0, 140)));
   run('UPDATE of_links SET error = NULL, checked_at = ? WHERE creator_id = ?', Date.now(), cid);
   return data;
 }
 
 /** Vérifie la session (relit le profil) et note le résultat. */
-/** Vérifie la session (relit le profil) et note le résultat. */
 export async function check(cid) {
   try {
-    const l = one('SELECT cookies FROM of_links WHERE creator_id = ?', cid);
-    if (!l) throw new Error('Compte non relié.');
-    const r = await browser('/call', { cid, path: '/api2/v2/users/me', proxy: proxyOf(cid), cookies: open(l.cookies) });
-    if (!r) throw new Error('OnlyFans ne répond pas.');
+    const r = await ofFetch(cid, '/api2/v2/users/me');
     if (r.status === 401 || r.status === 403) throw new Error('Session refusée par OnlyFans : relie le compte à nouveau.');
     let d = null;
-    try { d = JSON.parse(r.body || ''); } catch { throw new Error('Réponse illisible du site.'); }
+    try { d = JSON.parse(r.text || ''); } catch { throw new Error('Réponse illisible du site.'); }
     const me = (d && (d.id ? d : Object.values(d || {})[0])) || {};
     const id = String(me.id || '');
     if (!id || !me.username) throw new Error('Profil illisible dans la réponse du site.');
-    run('UPDATE of_links SET of_id = ?, username = ?, display_name = ?, avatar = ?, error = NULL, checked_at = ? WHERE creator_id = ?',
-      id, me.username, me.name || null, me.avatar || null, Date.now(), cid);
+    run('UPDATE of_links SET of_id = ?, username = ?, display_name = ?, avatar = ?, error = NULL, checked_at = ? WHERE creator_id = ?', id, me.username, me.name || null, me.avatar || null, Date.now(), cid);
     return { ok: true, username: me.username };
   } catch (e) {
     run('UPDATE of_links SET error = ?, checked_at = ? WHERE creator_id = ?', e.message, Date.now(), cid);
-    return { ok: false, error: `${e.message} @ ${(e.stack || '').split('\n')[1] || ''}` };
+    return { ok: false, error: e.message + ' @ ' + ((e.stack || '').split('\n')[1] || '') };
   }
 }
 

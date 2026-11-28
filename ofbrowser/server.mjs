@@ -13,7 +13,7 @@ createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/result') {
       const j = job(t);
       if (!j) return json(res, 404, { state: 'error', error: 'Connexion inconnue' });
-     return json(res, 200, { state: j.state, posts: j.posts, cookies: j.cookies, userAgent: j.userAgent, ofId: j.ofId, last: j.last, text: j.text, url: j.url, error: j.error });
+     return json(res, 200, { state: j.state, posts: j.posts, reqs: j.reqs, cookies: j.cookies, userAgent: j.userAgent, ofId: j.ofId, last: j.last, text: j.text, url: j.url, error: j.error });
     }
     if (req.method === 'GET' && u.pathname === '/shot') {
       const j = job(t);
